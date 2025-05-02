@@ -1,0 +1,5 @@
+backend/openai_apikey.py
+backend/__pycache__/
+backend/flask_session/
+instructions.txt
+.venv/
