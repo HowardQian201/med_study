@@ -10,6 +10,9 @@ import os
 import re
 from datetime import timedelta
 import shutil
+import atexit
+import glob
+import threading
 
 
 app = Flask(__name__)
@@ -23,11 +26,53 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_PERMANENT'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
+app.config['SESSION_FILE_THRESHOLD'] = 100  # Maximum number of sessions to store
+app.config['SESSION_FILE_DIR'] = 'flask_session'
+app.config['CLEANUP_INTERVAL'] = 300  # Cleanup every 5 minutes
 
 # Store active temp directories
 active_temp_dirs = {}
 
 Session(app)
+
+def cleanup_expired_sessions():
+    """Clean up expired session files"""
+    try:
+        session_dir = app.config['SESSION_FILE_DIR']
+        if not os.path.exists(session_dir):
+            return
+
+        current_time = time.time()
+        for session_file in glob.glob(os.path.join(session_dir, 'session_*')):
+            try:
+                # Check file modification time
+                file_time = os.path.getmtime(session_file)
+                # If file is older than session lifetime, delete it
+                if current_time - file_time > app.config['PERMANENT_SESSION_LIFETIME'].total_seconds():
+                    os.remove(session_file)
+                    print(f"Cleaned up expired session: {session_file}")
+            except Exception as e:
+                print(f"Error cleaning up session file {session_file}: {str(e)}")
+    except Exception as e:
+        print(f"Error in session cleanup: {str(e)}")
+
+def run_cleanup_periodically():
+    """Run cleanup at regular intervals"""
+    while True:
+        cleanup_expired_sessions()
+        time.sleep(app.config['CLEANUP_INTERVAL'])
+
+# Start cleanup thread
+cleanup_thread = threading.Thread(target=run_cleanup_periodically, daemon=True)
+cleanup_thread.start()
+
+# Cleanup on application exit
+@atexit.register
+def cleanup_on_exit():
+    cleanup_expired_sessions()
+    # Clean up any remaining temp directories
+    for user_id, temp_dir in list(active_temp_dirs.items()):
+        cleanup_temp_dir(user_id)
 
 # Mock user database (replace with actual database in production)
 USERS = {
