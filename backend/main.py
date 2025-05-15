@@ -3,7 +3,7 @@ from flask_cors import CORS
 import tempfile
 from pathlib import Path
 import traceback
-from logic import extract_text_from_pdf, gpt_summarize_transcript, set_process_priority, save_uploaded_file
+from logic import extract_text_from_pdf, gpt_summarize_transcript, set_process_priority, save_uploaded_file, generate_quiz_questions, generate_focused_questions
 import time
 from flask_session import Session
 import os
@@ -126,6 +126,7 @@ def login():
         
         # Ensure PDF results are empty on fresh login
         session['pdf_results'] = {}
+        session['summary'] = ""
         
         return jsonify({'success': True})
 
@@ -166,7 +167,7 @@ def check_auth():
                     'email': email,
                     'id': session.get('user_id')
                 },
-                'pdf_results': session.get('pdf_results', {})
+                'summary': session.get('summary', '')
             })
         return jsonify({'authenticated': False})
     except Exception as e:
@@ -203,6 +204,7 @@ def upload_multiple():
             raise Exception("No files selected")
         
         results = session['pdf_results']
+        total_extracted_text = ""
         
         # Process each file
         for file in files:
@@ -224,6 +226,7 @@ def upload_multiple():
             extracted_text = extract_text_from_pdf(input_path)
             if extracted_text:
                 results[filename] = extracted_text
+                
         
         if not results:
             raise Exception("No text could be extracted from any of the PDFs")
@@ -231,12 +234,21 @@ def upload_multiple():
         print(results.keys())
         print(f"Extraction completed for {len(results)} files in {time.time() - start_time:.2f} seconds")
         
+        filenames = ""
+        for key, value in results.items():
+            filenames += key + " "
+            total_extracted_text += value
+        filenames = filenames.strip()
+        summary = gpt_summarize_transcript(total_extracted_text)
+        summary = f"Summary of: {filenames}\n\n{summary}"
+                
         # Store results in session
+        session['summary'] = summary
         session['pdf_results'] = results
         
         return jsonify({
             'success': True,
-            'results': results
+            'results': summary
         })
 
     except Exception as e:
@@ -269,11 +281,106 @@ def clear_results():
     """Endpoint to clear PDF results from session"""
     try:
         if 'user_id' in session:
-            if 'pdf_results' in session:
+            if 'summary' in session:
                 session['pdf_results'] = {}
+                session['summary'] = ""
             return jsonify({'success': True})
         return jsonify({'error': 'Unauthorized'}), 401
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/generate-quiz', methods=['GET'])
+def generate_quiz():
+    """Endpoint to generate quiz questions from the stored summary"""
+    try:
+        # Check if user is authenticated
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+            
+        # Check if there's a summary to work with
+        summary = session.get('summary', '')
+        if not summary:
+            return jsonify({'error': 'No summary available. Please upload PDFs first.'}), 400
+            
+        # Generate questions
+        questions = generate_quiz_questions(summary)
+        
+        return jsonify({
+            'success': True,
+            'questions': questions
+        })
+    except Exception as e:
+        print(f"Error generating quiz questions: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/generate-more-questions', methods=['POST'])
+def generate_more_questions():
+    """Endpoint to generate additional questions based on user performance"""
+    try:
+        # Check if user is authenticated
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+            
+        # Check if there's a summary to work with
+        summary = session.get('summary', '')
+        if not summary:
+            return jsonify({'error': 'No summary available. Please upload PDFs first.'}), 400
+            
+        # Get the request data
+        data = request.json
+        incorrect_question_ids = data.get('incorrectQuestionIds', [])
+        previous_questions = data.get('previousQuestions', [])
+        print(incorrect_question_ids)
+        print(previous_questions)
+        
+        # Generate new questions
+        new_questions = generate_focused_questions(summary, incorrect_question_ids, previous_questions)
+        
+        return jsonify({
+            'success': True,
+            'questions': new_questions
+        })
+    except Exception as e:
+        print(f"Error generating more questions: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/regenerate-summary', methods=['POST'])
+def regenerate_summary():
+    """Endpoint to regenerate the summary from stored PDF text"""
+    try:
+        # Check if user is authenticated
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+            
+        # Check if there's PDF text to work with
+        pdf_results = session.get('pdf_results', {})
+        if not pdf_results:
+            return jsonify({'error': 'No PDF text available. Please upload PDFs first.'}), 400
+        
+        # Combine all PDF text
+        total_extracted_text = ""
+        filenames = ""
+        for key, value in pdf_results.items():
+            filenames += key + " "
+            total_extracted_text += value
+        filenames = filenames.strip()
+        
+        # Generate new summary
+        summary = gpt_summarize_transcript(total_extracted_text)
+        summary = f"Summary of: {filenames}\n\n{summary}"
+        
+        # Update session
+        session['summary'] = summary
+        
+        return jsonify({
+            'success': True,
+            'summary': summary
+        })
+    except Exception as e:
+        print(f"Error regenerating summary: {str(e)}")
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

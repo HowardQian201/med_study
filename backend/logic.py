@@ -10,6 +10,7 @@ import io
 from PIL import Image
 import pytesseract
 import shutil
+import json
 
 
 
@@ -18,15 +19,16 @@ openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 pytesseract.pytesseract.tesseract_cmd = os.getenv("TESSERACT_PATH")
 
 def gpt_summarize_transcript(text):
-    prompt = f"Provide me with detailed and concise notes on this transcript, and include relevant headers for each topic. Be sure to include the mentioned clinical correlates. Transcript:{text}"
+    print("Summarizing transcript")
+    prompt = f"Provide me with detailed and thorough study guide using full sentences based on this transcript. Include relevant headers for each topic. Be sure to include the mentioned clinical correlates. Transcript:{text}"
 
     completion = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a helpful teaching assistant \
-             (TA) for US medical school. You are extremely knowledgable and \
-             want your students to succeed. You also double check your responses \
-             for accuracy."},
+             for US medical school. You are extremely knowledgable and \
+             want your students to succeed by providing them with extremely detailed and thorough study guides. \
+             You also double check all your responses for accuracy."},
             {"role": "user", "content": prompt},
         ],
     )
@@ -35,6 +37,215 @@ def gpt_summarize_transcript(text):
     text = completion.choices[0].message.content.strip()
     return text
 
+def generate_quiz_questions(summary_text):
+    """Generate quiz questions from a summary text using OpenAI's API"""
+    try:
+        raise Exception("Test error")
+        print("Generating quiz questions based on summary")
+        
+        prompt = f"""
+        Based on the following medical text summary, create 5 multiple-choice questions to test the reader's understanding. 
+        
+        For each question:
+        1. Create a clear, specific question about key concepts in the text
+        2. Provide exactly 4 answer choices labeled A, B, C, and D
+        3. Indicate which answer is correct
+        4. Include a brief explanation for why the correct answer is right
+        
+        Format the response as a JSON array of question objects. Each question object should have these fields:
+        - id: a unique number (1-5)
+        - text: the question text
+        - options: array of 4 answer choices
+        - correctAnswer: index of correct answer (0-3)
+        - reason: explanation for the correct answer
+        
+        Summary:
+        {summary_text}
+        
+        Return ONLY the valid JSON array with no other text.
+        """
+
+        completion = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful medical education assistant that creates accurate, challenging multiple choice questions. You respond ONLY with the requested JSON format."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+
+        # Get JSON response
+        response_text = completion.choices[0].message.content.strip()
+        
+        # Sometimes the API returns markdown json blocks, so let's clean that up
+        if response_text.startswith("```json"):
+            response_text = response_text.replace("```json", "", 1)
+        if response_text.endswith("```"):
+            response_text = response_text.rsplit("```", 1)[0]
+            
+        response_text = response_text.strip()
+            
+        # Parse JSON
+        questions = json.loads(response_text)
+        
+        # Validate the response has the expected structure
+        if not isinstance(questions, list) or len(questions) == 0:
+            raise Exception("Invalid response format: not a list or empty list")
+            
+        # Ensure each question has the required fields
+        for q in questions:
+            required_fields = ['id', 'text', 'options', 'correctAnswer', 'reason']
+            for field in required_fields:
+                if field not in q:
+                    raise Exception(f"Question missing required field: {field}")
+            
+            # Ensure options is a list with exactly 4 items
+            if not isinstance(q['options'], list) or len(q['options']) != 4:
+                raise Exception(f"Question options must be a list with exactly 4 items")
+                
+            # Ensure correctAnswer is an integer between 0-3
+            if not isinstance(q['correctAnswer'], int) or q['correctAnswer'] < 0 or q['correctAnswer'] > 3:
+                raise Exception(f"Question correctAnswer must be an integer between 0-3")
+        
+        return questions
+    except Exception as e:
+        print(f"Error generating quiz questions: {str(e)}")
+        # Return some default questions if there's an error
+        return [
+            {
+                "id": 1,
+                "text": "What is the main purpose of this document?",
+                "options": [
+                    "To provide medical information",
+                    "To give financial advice",
+                    "To describe laboratory procedures",
+                    "To explain treatment options"
+                ],
+                "correctAnswer": 0,
+                "reason": "This is a fallback question generated when the API request failed."
+            },
+            {
+                "id": 2,
+                "text": "Which of the following best describes the content?",
+                "options": [
+                    "Research findings",
+                    "Patient cases",
+                    "Medical guidelines",
+                    "Educational material"
+                ],
+                "correctAnswer": 3,
+                "reason": "This is a fallback question generated when the API request failed."
+            }
+        ]
+
+def generate_focused_questions(summary_text, incorrect_question_ids, previous_questions):
+    """Generate more targeted quiz questions focusing on areas where the user had difficulty"""
+    try:
+        raise Exception("Test error")
+        print("Generating focused quiz questions based on performance")
+        
+        # Extract incorrect questions
+        incorrect_questions = []
+        if previous_questions and incorrect_question_ids:
+            incorrect_questions = [q for q in previous_questions if q['id'] in incorrect_question_ids]
+        
+        # Create a prompt with more focus on areas the user missed
+        prompt = f"""
+        Based on the following medical text summary, create 5 new multiple-choice questions.
+        
+        The user previously struggled with these specific concepts:
+        {json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"}
+        
+        For each question:
+        1. Create challenging but fair questions that test understanding of key concepts
+        2. If the user struggled with specific areas above, focus at least 3 questions on similar topics
+        3. Provide exactly 4 answer choices
+        4. Indicate which answer is correct
+        5. Include a thorough explanation for why the correct answer is right and why others are wrong
+        
+        Format the response as a JSON array of question objects. Each question object should have these fields:
+        - id: a unique number (1-5)
+        - text: the question text
+        - options: array of 4 answer choices
+        - correctAnswer: index of correct answer (0-3)
+        - reason: explanation for the correct answer
+        
+        Summary:
+        {summary_text}
+        
+        Return ONLY the valid JSON array with no other text.
+        """
+
+        completion = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful medical education assistant that creates accurate, challenging multiple choice questions to help students improve in areas they struggled with. You respond ONLY with the requested JSON format."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+
+        # Get JSON response
+        response_text = completion.choices[0].message.content.strip()
+        
+        # Clean up markdown formatting if present
+        if response_text.startswith("```json"):
+            response_text = response_text.replace("```json", "", 1)
+        if response_text.endswith("```"):
+            response_text = response_text.rsplit("```", 1)[0]
+            
+        response_text = response_text.strip()
+            
+        # Parse JSON
+        questions = json.loads(response_text)
+        
+        # Validate the response has the expected structure
+        if not isinstance(questions, list) or len(questions) == 0:
+            raise Exception("Invalid response format: not a list or empty list")
+            
+        # Ensure each question has the required fields
+        for q in questions:
+            required_fields = ['id', 'text', 'options', 'correctAnswer', 'reason']
+            for field in required_fields:
+                if field not in q:
+                    raise Exception(f"Question missing required field: {field}")
+            
+            # Ensure options is a list with exactly 4 items
+            if not isinstance(q['options'], list) or len(q['options']) != 4:
+                raise Exception(f"Question options must be a list with exactly 4 items")
+                
+            # Ensure correctAnswer is an integer between 0-3
+            if not isinstance(q['correctAnswer'], int) or q['correctAnswer'] < 0 or q['correctAnswer'] > 3:
+                raise Exception(f"Question correctAnswer must be an integer between 0-3")
+        
+        return questions
+    except Exception as e:
+        print(f"Error generating focused questions: {str(e)}")
+        # Return some default questions if there's an error
+        return [
+            {
+                "id": 1,
+                "text": "What aspect of the content needs further review?",
+                "options": [
+                    "Key terminology",
+                    "Core concepts",
+                    "Practical applications",
+                    "All of the above"
+                ],
+                "correctAnswer": 3,
+                "reason": "This is a fallback question generated when the API request failed."
+            },
+            {
+                "id": 2,
+                "text": "Which learning strategy might help reinforce this material?",
+                "options": [
+                    "Flashcard review",
+                    "Practice problems",
+                    "Discussion with peers",
+                    "Creating concept maps"
+                ],
+                "correctAnswer": 1,
+                "reason": "This is a fallback question generated when the API request failed."
+            }
+        ]
 
 def extract_text_with_pytesseract(image):
     """Extract text from an image using pytesseract"""
@@ -91,7 +302,7 @@ def extract_text_from_pdf(pdf_path):
     PyPDF2_combined_text = ""
     pytesseract_combined_text = ""
     final_text = ""
-    min_text_length = 100  # Minimum characters to consider text sufficient
+    min_text_length = 50  # Minimum characters to consider text sufficient
     
     try:
         # Get direct text extraction first
@@ -107,6 +318,7 @@ def extract_text_from_pdf(pdf_path):
                 # Check if the extracted text is too short
                 if len(page_text.strip()) < min_text_length:
                     # Text is too short, use OCR instead
+                    print(f"Text is too short, using OCR for page {page_num + 1}")
                     image = convert_pdf_page_to_image(pdf_path, page_num)
                     if image:
                         ocr_text = extract_text_with_pytesseract(image)
@@ -115,7 +327,7 @@ def extract_text_from_pdf(pdf_path):
                             final_text += f"[Page {page_num + 1}]:\n{ocr_text}\n\n"
                             pytesseract_combined_text += f"[OCR Page {page_num + 1}]:\n{ocr_text}\n\n"
                             continue
-                
+                print(f"Using PyPDF2 for page {page_num + 1}")
                 # If we didn't use OCR or OCR failed, use the PyPDF2 text
                 final_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
                                 

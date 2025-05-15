@@ -3,12 +3,13 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import './App.css'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import Quiz from './pages/Quiz'
 import axios from 'axios'
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
-  const [pdfResults, setPdfResults] = useState({});
+  const [summary, setSummary] = useState('');
 
   const checkAuth = async () => {
     try {
@@ -18,17 +19,17 @@ function App() {
       if (response.data.authenticated) {
         setIsAuthenticated(true);
         setUser(response.data.user);
-        setPdfResults(response.data.pdf_results || {});
+        setSummary(response.data.summary || '');
       } else {
         setIsAuthenticated(false);
         setUser(null);
-        setPdfResults({});
+        setSummary('');
       }
     } catch (error) {
       console.error('Auth check failed:', error);
       setIsAuthenticated(false);
       setUser(null);
-      setPdfResults({});
+      setSummary('');
     }
   };
 
@@ -49,7 +50,7 @@ function App() {
               <Login 
                 setIsAuthenticated={setIsAuthenticated} 
                 setUser={setUser} 
-                setPdfResults={setPdfResults}
+                setSummary={setSummary}
               />
             )
           } 
@@ -61,8 +62,22 @@ function App() {
               <Dashboard 
                 setIsAuthenticated={setIsAuthenticated} 
                 user={user}
-                pdfResults={pdfResults}
-                setPdfResults={setPdfResults}
+                summary={summary}
+                setSummary={setSummary}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        <Route 
+          path="/quiz" 
+          element={
+            isAuthenticated ? (
+              <Quiz 
+                setIsAuthenticated={setIsAuthenticated} 
+                user={user}
+                summary={summary}
               />
             ) : (
               <Navigate to="/login" replace />

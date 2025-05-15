@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const Dashboard = ({ setIsAuthenticated, user, pdfResults, setPdfResults }) => {
+const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const navigate = useNavigate();
   const [files, setFiles] = useState([]);
   const [progress, setProgress] = useState(0);
@@ -30,10 +30,10 @@ const Dashboard = ({ setIsAuthenticated, user, pdfResults, setPdfResults }) => {
 
   // Display existing results if available
   useEffect(() => {
-    if (Object.keys(pdfResults).length > 0) {
-      console.log("Loading existing PDF results from session");
+    if (summary) {
+      console.log("Loading existing summary from session");
     }
-  }, [pdfResults]);
+  }, [summary]);
 
   const handleFileSelect = (e) => {
     console.log("selecting files");
@@ -63,6 +63,7 @@ const Dashboard = ({ setIsAuthenticated, user, pdfResults, setPdfResults }) => {
       setIsUploading(true);
       setProgress(0);
       setError('');
+      setSummary('');
       
       abortController.current = new AbortController();
   
@@ -88,7 +89,8 @@ const Dashboard = ({ setIsAuthenticated, user, pdfResults, setPdfResults }) => {
   
       if (response.data.success) {
         console.log("extraction success");
-        setPdfResults(response.data.results);
+        // Update to handle the new response format (text instead of dictionary)
+        setSummary(response.data.results);
       } else {
         setError('Text extraction failed');
       }
@@ -122,13 +124,40 @@ const Dashboard = ({ setIsAuthenticated, user, pdfResults, setPdfResults }) => {
 
   const clearResults = async () => {
     try {
-      setPdfResults({});
+      setSummary('');
       await axios.post('/api/clear-results', {}, {
         withCredentials: true
       });
     } catch (err) {
       console.error('Failed to clear results:', err);
     }
+  };
+  
+  const regenerateSummary = async () => {
+    try {
+      setIsUploading(true); // Reuse the loading state
+      setError('');
+      
+      const response = await axios.post('/api/regenerate-summary', {}, {
+        withCredentials: true
+      });
+      
+      if (response.data.success) {
+        console.log("Summary regenerated successfully");
+        setSummary(response.data.summary);
+      } else {
+        setError('Failed to regenerate summary');
+      }
+    } catch (err) {
+      console.error('Failed to regenerate summary:', err);
+      setError(err.response?.data?.error || 'Failed to regenerate summary');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  
+  const goToQuiz = () => {
+    navigate('/quiz');
   };
 
   const handleLogout = async () => {
@@ -228,7 +257,7 @@ const Dashboard = ({ setIsAuthenticated, user, pdfResults, setPdfResults }) => {
                     />
                   </div>
                   <div className="flex justify-between text-sm text-gray-600">
-                    <span>{progress}% complete</span>
+                    <span>Upload {progress}% complete. Summarizing...</span>
                     <button 
                       onClick={cancelUpload}
                       className="text-red-500 hover:text-red-700"
@@ -246,33 +275,67 @@ const Dashboard = ({ setIsAuthenticated, user, pdfResults, setPdfResults }) => {
                 </div>
               )}
 
-              {/* Results */}
-              {Object.keys(pdfResults).length > 0 && (
+              {/* Results - Updated to show summary text */}
+              {summary && (
                 <div className="mt-8">
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="text-lg font-semibold text-gray-800">
-                      Extracted Text:
+                      Summary:
                     </h3>
-                    <button
-                      onClick={clearResults}
-                      className="text-sm text-red-600 hover:text-red-800"
-                    >
-                      Clear Results
-                    </button>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={regenerateSummary}
+                        disabled={isUploading}
+                        className={`text-sm px-4 py-2 font-medium text-white bg-blue-600 rounded hover:bg-blue-700 flex items-center ${isUploading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        {isUploading ? 'Regenerating...' : 'Regenerate Summary'}
+                      </button>
+                      <button
+                        onClick={goToQuiz}
+                        className="text-sm px-4 py-2 font-medium text-white bg-green-600 rounded hover:bg-green-700 flex items-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        Quiz Me
+                      </button>
+                      <button
+                        onClick={clearResults}
+                        className="text-sm text-red-600 hover:text-red-800"
+                      >
+                        Clear Results
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-4">
-                    {Object.entries(pdfResults).map(([filename, text], index) => (
-                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                          <h4 className="font-medium text-gray-700">{filename}</h4>
-                        </div>
-                        <div className="p-4 bg-white">
-                          <p className="whitespace-pre-wrap text-gray-700 max-h-60 overflow-y-auto">
-                            {text}
-                          </p>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="p-4 bg-white">
+                      <p className="whitespace-pre-wrap text-gray-700 max-h-96 overflow-y-auto">
+                        {summary}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* New Quiz Feature Callout */}
+                  <div className="mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-indigo-800">
+                          Enhanced Quiz Feature
+                        </h3>
+                        <div className="mt-1 text-sm text-indigo-700">
+                          <p>Our quiz now includes a detailed results page that shows your performance statistics and provides explanations for each question.</p>
+                          <p className="mt-1">If you miss any questions, you can generate targeted follow-up questions to reinforce areas where you need more practice.</p>
                         </div>
                       </div>
-                    ))}
+                    </div>
                   </div>
                 </div>
               )}
