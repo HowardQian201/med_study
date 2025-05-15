@@ -90,6 +90,9 @@ def extract_text_from_pdf(pdf_path):
     """Extract text from a PDF file using both PyPDF2 and pytesseract OCR"""
     PyPDF2_combined_text = ""
     pytesseract_combined_text = ""
+    final_text = ""
+    min_text_length = 100  # Minimum characters to consider text sufficient
+    
     try:
         # Get direct text extraction first
         with open(pdf_path, 'rb') as file:
@@ -101,12 +104,22 @@ def extract_text_from_pdf(pdf_path):
                 page_text = page.extract_text()
                 PyPDF2_combined_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
                 
-                # image = convert_pdf_page_to_image(pdf_path, page_num)
-                # if image:
-                #     ocr_text = extract_text_with_pytesseract(image)
-                #     pytesseract_combined_text += f"[OCR Page {page_num + 1}]:\n{ocr_text}\n\n"
+                # Check if the extracted text is too short
+                if len(page_text.strip()) < min_text_length:
+                    # Text is too short, use OCR instead
+                    image = convert_pdf_page_to_image(pdf_path, page_num)
+                    if image:
+                        ocr_text = extract_text_with_pytesseract(image)
+                        if ocr_text:
+                            # Use OCR text for this page
+                            final_text += f"[Page {page_num + 1}]:\n{ocr_text}\n\n"
+                            pytesseract_combined_text += f"[OCR Page {page_num + 1}]:\n{ocr_text}\n\n"
+                            continue
+                
+                # If we didn't use OCR or OCR failed, use the PyPDF2 text
+                final_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
                                 
-        return PyPDF2_combined_text.strip()
+        return final_text.strip()
     except Exception as e:
         print(f"Error extracting text from PDF: {str(e)}")
         return ""

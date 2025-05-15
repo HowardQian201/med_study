@@ -41,7 +41,6 @@ USERS = {
         'id': 1
     }
 }
-
 # Email validation regex
 EMAIL_REGEX = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
@@ -225,11 +224,11 @@ def upload_multiple():
             extracted_text = extract_text_from_pdf(input_path)
             if extracted_text:
                 results[filename] = extracted_text
-                print(results.keys())
         
         if not results:
             raise Exception("No text could be extracted from any of the PDFs")
 
+        print(results.keys())
         print(f"Extraction completed for {len(results)} files in {time.time() - start_time:.2f} seconds")
         
         # Store results in session
@@ -271,7 +270,7 @@ def clear_results():
     try:
         if 'user_id' in session:
             if 'pdf_results' in session:
-                del session['pdf_results']
+                session['pdf_results'] = {}
             return jsonify({'success': True})
         return jsonify({'error': 'Unauthorized'}), 401
     except Exception as e:
