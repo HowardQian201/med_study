@@ -3,7 +3,7 @@ from flask_cors import CORS
 import tempfile
 from pathlib import Path
 import traceback
-from logic import process_audio, gpt_summarize_transcript, set_process_priority, save_uploaded_file, transcribe_audio
+from logic import extract_text_from_pdf, gpt_summarize_transcript, set_process_priority, save_uploaded_file
 import time
 from flask_session import Session
 import os
@@ -19,7 +19,7 @@ app = Flask(__name__)
 CORS(app, supports_credentials=True)  # Enable credentials for CORS
 
 # Configure session
-app.config['SECRET_KEY'] = os.urandom(24)  # Generate a random secret key
+app.config['SECRET_KEY'] = 'your-fixed-secret-key-for-development'  # Use environment variable in production
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -32,6 +32,18 @@ app.config['CLEANUP_INTERVAL'] = 300  # Cleanup every 5 minutes
 
 # Store active temp directories
 active_temp_dirs = {}
+
+# Mock user database (replace with actual database in production)
+USERS = {
+    'test@example.com': {
+        'name': 'Test User',
+        'password': 'password123',  # In production, store hashed passwords
+        'id': 1
+    }
+}
+
+# Email validation regex
+EMAIL_REGEX = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
 Session(app)
 
@@ -74,17 +86,6 @@ def cleanup_on_exit():
     for user_id, temp_dir in list(active_temp_dirs.items()):
         cleanup_temp_dir(user_id)
 
-# Mock user database (replace with actual database in production)
-USERS = {
-    'test@example.com': {
-        'name': 'Test User',
-        'password': 'password123',  # In production, store hashed passwords
-        'id': 1
-    }
-}
-
-# Email validation regex
-EMAIL_REGEX = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
 def cleanup_temp_dir(user_id):
     """Clean up temporary directory for a user"""
@@ -116,10 +117,16 @@ def login():
         if not user or user['password'] != password:
             return jsonify({'message': 'Invalid credentials'}), 401
 
-        # Set session
+        # Clear any existing session data
+        session.clear()
+        
+        # Set new session data
         session['user_id'] = user['id']
         session['name'] = user['name']
         session['email'] = email
+        
+        # Ensure PDF results are empty on fresh login
+        session['pdf_results'] = {}
         
         return jsonify({'success': True})
 
@@ -133,7 +140,14 @@ def logout():
         # Clean up temp directory before clearing session
         if 'user_id' in session:
             cleanup_temp_dir(session['user_id'])
+        
+        # Explicitly clear PDF results and all session data
+        session.pop('pdf_results', None)
+        session.pop('user_id', None)
+        session.pop('name', None)
+        session.pop('email', None)
         session.clear()
+        
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'message': str(e)}), 500
@@ -153,15 +167,16 @@ def check_auth():
                     'email': email,
                     'id': session.get('user_id')
                 },
-                'transcription': session.get('transcription', ''),
+                'pdf_results': session.get('pdf_results', {})
             })
         return jsonify({'authenticated': False})
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/upload-and-extract', methods=['POST'])
-def upload_and_extract():
-    print("Starting upload and extract process")
+
+@app.route('/api/upload-multiple', methods=['POST'])
+def upload_multiple():
+    print("Starting multiple file upload and extract process")
     temp_dir = None
     try:
         # Check if user is authenticated
@@ -176,39 +191,53 @@ def upload_and_extract():
         # Create new temp directory
         temp_dir = tempfile.mkdtemp()
         active_temp_dirs[session['user_id']] = temp_dir
+        temp_dir = Path(temp_dir)
 
         set_process_priority()
-        temp_dir = Path(temp_dir)
-        input_path = temp_dir / "input.mp4"
-        processed_path = temp_dir / "processed.wav"
+        
+        # Check if files were uploaded
+        if 'files' not in request.files:
+            raise Exception("No files part in the request")
+        
+        files = request.files.getlist('files')
+        if len(files) == 0:
+            raise Exception("No files selected")
+        
+        results = session['pdf_results']
+        
+        # Process each file
+        for file in files:
+            if file.filename == '':
+                continue
+                
+            # Create a unique filename for each file
+            filename = file.filename
+            input_path = temp_dir / filename
+            
+            # Save the file
+            total_bytes = save_uploaded_file(file, input_path)
+            if total_bytes == 0:
+                continue
+            
+            print(f"File received: {filename}, {total_bytes / (1024*1024):.1f} MB")
+            
+            # Extract text from PDF
+            extracted_text = extract_text_from_pdf(input_path)
+            if extracted_text:
+                results[filename] = extracted_text
+                print(results.keys())
+        
+        if not results:
+            raise Exception("No text could be extracted from any of the PDFs")
 
-        # Validate and save uploaded file
-        if 'file' not in request.files:
-            raise Exception("No file part in the request")
+        print(f"Extraction completed for {len(results)} files in {time.time() - start_time:.2f} seconds")
         
-        file = request.files['file']
-        if file.filename == '':
-            raise Exception("No selected file")
+        # Store results in session
+        session['pdf_results'] = results
         
-        total_bytes = save_uploaded_file(file, input_path)
-        if total_bytes == 0:
-            raise Exception("Received empty file")
-        
-        print(f"File received: {total_bytes / (1024*1024):.1f} MB")
-
-        process_audio(input_path, processed_path)
-        
-        # Transcribe
-        transcription = transcribe_audio(processed_path)
-        if not transcription:
-            raise Exception("No transcription produced")
-
-        print("Transcription result:", transcription)
-        print("Transcription time:", time.time() - start_time)
-        session['transcription'] = transcription
         return jsonify({
             'success': True,
-            'transcription': transcription
+            'results': results
         })
 
     except Exception as e:
@@ -231,6 +260,18 @@ def cleanup():
     try:
         if 'user_id' in session:
             cleanup_temp_dir(session['user_id'])
+            return jsonify({'success': True})
+        return jsonify({'error': 'Unauthorized'}), 401
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/clear-results', methods=['POST'])
+def clear_results():
+    """Endpoint to clear PDF results from session"""
+    try:
+        if 'user_id' in session:
+            if 'pdf_results' in session:
+                del session['pdf_results']
             return jsonify({'success': True})
         return jsonify({'error': 'Unauthorized'}), 401
     except Exception as e:

@@ -1,19 +1,26 @@
 from dotenv import load_dotenv
 from openai import OpenAI
-import whisper
 import psutil
-import subprocess
 import platform
 import os
+import PyPDF2
+import tempfile
+from pdf2image import convert_from_path
+import io
+from PIL import Image
+import pytesseract
+import shutil
+
+
 
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-model = whisper.load_model("small")
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+pytesseract.pytesseract.tesseract_cmd = os.getenv("TESSERACT_PATH")
 
 def gpt_summarize_transcript(text):
     prompt = f"Provide me with detailed and concise notes on this transcript, and include relevant headers for each topic. Be sure to include the mentioned clinical correlates. Transcript:{text}"
 
-    completion = client.chat.completions.create(
+    completion = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a helpful teaching assistant \
@@ -27,6 +34,82 @@ def gpt_summarize_transcript(text):
     # Parse the response into lines
     text = completion.choices[0].message.content.strip()
     return text
+
+
+def extract_text_with_pytesseract(image):
+    """Extract text from an image using pytesseract"""
+    try:
+        # Use pytesseract to extract text
+        text = pytesseract.image_to_string(image, lang='eng')
+        return text
+    except Exception as e:
+        print(f"Error with pytesseract OCR: {str(e)}")
+        return ""
+
+def convert_pdf_page_to_image(pdf_path, page_num):
+    """Convert a specific PDF page to an image"""
+    try:
+        # Instead of using a context manager, create a temp directory that persists
+        temp_dir = tempfile.mkdtemp()
+        
+        try:
+            # Convert PDF page to image with maximum quality settings
+            images = convert_from_path(
+                pdf_path, 
+                first_page=page_num + 1,  # PDF pages are 1-indexed
+                last_page=page_num + 1,
+                dpi=600,  # Higher DPI for maximum quality
+                output_folder=temp_dir,
+                fmt='png',  # PNG for lossless quality
+            )
+            
+            if not images:
+                return None
+            
+            # Load the image into memory before returning
+            if images:
+                # Open the image with PIL and create an in-memory copy
+                img = images[0]
+                in_memory_img = Image.new(img.mode, img.size)
+                in_memory_img.paste(img)
+                return in_memory_img
+            return None
+            
+        finally:
+            # Clean up the temp directory
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception as e:
+                print(f"Error cleaning up temp directory: {str(e)}")
+                
+    except Exception as e:
+        print(f"Error converting PDF to image: {str(e)}")
+        return None
+
+def extract_text_from_pdf(pdf_path):
+    """Extract text from a PDF file using both PyPDF2 and pytesseract OCR"""
+    PyPDF2_combined_text = ""
+    pytesseract_combined_text = ""
+    try:
+        # Get direct text extraction first
+        with open(pdf_path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            num_pages = len(pdf_reader.pages)
+            
+            for page_num in range(num_pages):
+                page = pdf_reader.pages[page_num]
+                page_text = page.extract_text()
+                PyPDF2_combined_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
+                
+                # image = convert_pdf_page_to_image(pdf_path, page_num)
+                # if image:
+                #     ocr_text = extract_text_with_pytesseract(image)
+                #     pytesseract_combined_text += f"[OCR Page {page_num + 1}]:\n{ocr_text}\n\n"
+                                
+        return PyPDF2_combined_text.strip()
+    except Exception as e:
+        print(f"Error extracting text from PDF: {str(e)}")
+        return ""
     
 
 def set_process_priority():
@@ -64,35 +147,3 @@ def save_uploaded_file(file, input_path):
     return total_bytes
 
 
-def process_audio(input_path, output_path):
-    """Single-pass audio extraction and normalization"""
-    ffmpeg_command = [
-        'ffmpeg', '-y',
-        '-f', 'mp4',
-        '-i', str(input_path),
-        '-vn',
-        '-acodec', 'pcm_s16le',
-        '-ar', '16000',
-        '-ac', '1',
-        # Combine filters in one pass
-        '-filter:a', 'volume=4.0,loudnorm=I=-16:LRA=11:TP=-1.5,highpass=f=50,lowpass=f=8000',
-        '-f', 'wav',
-        str(output_path)
-    ]
-    return subprocess.run(ffmpeg_command, capture_output=True, text=True)
-
-
-def transcribe_audio(audio_path):
-    """Transcribe audio using Whisper"""
-    result = model.transcribe(
-        str(audio_path),
-        verbose=True,
-        language='en',
-        task='transcribe',
-        condition_on_previous_text=True,
-        temperature=0.0,
-        best_of=1
-    )
-    
-    transcription = result.get("text", "").strip()
-    return transcription

@@ -2,9 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const Dashboard = ({ setIsAuthenticated, user, transcription, setTranscription }) => {
+const Dashboard = ({ setIsAuthenticated, user, pdfResults, setPdfResults }) => {
   const navigate = useNavigate();
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -28,39 +28,51 @@ const Dashboard = ({ setIsAuthenticated, user, transcription, setTranscription }
     };
   }, []);
 
+  // Display existing results if available
+  useEffect(() => {
+    if (Object.keys(pdfResults).length > 0) {
+      console.log("Loading existing PDF results from session");
+    }
+  }, [pdfResults]);
+
   const handleFileSelect = (e) => {
-    console.log("selecting file")
-    const selectedFile = e.target.files[0];
-    if (selectedFile && selectedFile.type === 'video/mp4') {
-      setFile(selectedFile);
+    console.log("selecting files");
+    const selectedFiles = Array.from(e.target.files);
+    
+    // Filter for only PDF files
+    const pdfFiles = selectedFiles.filter(file => file.type === 'application/pdf');
+    
+    if (pdfFiles.length > 0) {
+      setFiles(pdfFiles);
       setError('');
-      console.log("set file success")
+      console.log(`Selected ${pdfFiles.length} PDF files`);
     } else {
-      setError('Please select an MP4 file');
-      setFile(null);
+      setError('Please select at least one PDF file');
+      setFiles([]);
     }
   };
 
-  const uploadVideo = async () => {
-    if (!file) {
-      setError('Please select a file first');
+  const uploadPDFs = async () => {
+    if (files.length === 0) {
+      setError('Please select at least one file first');
       return;
     }
   
     try {
-      console.log("uploading video");
+      console.log(`Uploading ${files.length} PDFs`);
       setIsUploading(true);
       setProgress(0);
       setError('');
-      setTranscription('');
       
       abortController.current = new AbortController();
   
-      // Create FormData and append the file
+      // Create FormData and append all files
       const formData = new FormData();
-      formData.append('file', file);
+      files.forEach(file => {
+        formData.append('files', file);
+      });
   
-      const response = await axios.post('/api/upload-and-extract', formData, {
+      const response = await axios.post('/api/upload-multiple', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -75,11 +87,10 @@ const Dashboard = ({ setIsAuthenticated, user, transcription, setTranscription }
       });
   
       if (response.data.success) {
-        console.log("transcription success")
-        console.log(response.data.transcription)
-        setTranscription(response.data.transcription);
+        console.log("extraction success");
+        setPdfResults(response.data.results);
       } else {
-        setError('Transcription failed');
+        setError('Text extraction failed');
       }
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -106,6 +117,17 @@ const Dashboard = ({ setIsAuthenticated, user, transcription, setTranscription }
       setError('Upload cancelled');
       setIsUploading(false);
       await cleanup(); // Cleanup on manual cancel
+    }
+  };
+
+  const clearResults = async () => {
+    try {
+      setPdfResults({});
+      await axios.post('/api/clear-results', {}, {
+        withCredentials: true
+      });
+    } catch (err) {
+      console.error('Failed to clear results:', err);
     }
   };
 
@@ -150,7 +172,7 @@ const Dashboard = ({ setIsAuthenticated, user, transcription, setTranscription }
         <div className="px-4 py-6 sm:px-0">
           <div className="w-full max-w-3xl mx-auto p-8 bg-white rounded-xl shadow-lg">
             <h2 className="text-2xl font-bold text-center mb-8 text-gray-800">
-              Video Transcription
+              PDF Text Extraction
             </h2>
 
             {/* File Selection Area */}
@@ -158,8 +180,9 @@ const Dashboard = ({ setIsAuthenticated, user, transcription, setTranscription }
               <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-8 bg-gray-50 hover:bg-gray-100 transition-colors">
                 <input
                   type="file"
-                  accept="video/mp4"
+                  accept="application/pdf"
                   onChange={handleFileSelect}
+                  multiple
                   className="block w-full text-sm text-gray-500
                     file:mr-4 file:py-2 file:px-4
                     file:rounded-full file:border-0
@@ -168,9 +191,14 @@ const Dashboard = ({ setIsAuthenticated, user, transcription, setTranscription }
                     hover:file:bg-blue-100
                     cursor-pointer"
                 />
-                {file && (
+                {files.length > 0 && (
                   <div className="mt-4 text-sm text-gray-600">
-                    Selected: {file.name}
+                    Selected: {files.length} file(s)
+                    <ul className="mt-2 list-disc pl-5">
+                      {files.map((file, index) => (
+                        <li key={index}>{file.name}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </div>
@@ -178,15 +206,15 @@ const Dashboard = ({ setIsAuthenticated, user, transcription, setTranscription }
               {/* Submit Button */}
               <div className="flex justify-center">
                 <button
-                  onClick={uploadVideo}
-                  disabled={!file || isUploading}
+                  onClick={uploadPDFs}
+                  disabled={files.length === 0 || isUploading}
                   className={`px-6 py-3 rounded-lg font-medium text-white 
-                    ${!file || isUploading 
+                    ${files.length === 0 || isUploading 
                       ? 'bg-gray-400 cursor-not-allowed' 
                       : 'bg-blue-500 hover:bg-blue-600 transition-colors'
                     }`}
                 >
-                  {isUploading ? 'Transcribing...' : 'Start Transcription'}
+                  {isUploading ? 'Extracting Text...' : 'Extract Text'}
                 </button>
               </div>
 
@@ -218,16 +246,33 @@ const Dashboard = ({ setIsAuthenticated, user, transcription, setTranscription }
                 </div>
               )}
 
-              {/* Transcription Result */}
-              {transcription && (
+              {/* Results */}
+              {Object.keys(pdfResults).length > 0 && (
                 <div className="mt-8">
-                  <h3 className="text-lg font-semibold mb-3 text-gray-800">
-                    Transcription Result:
-                  </h3>
-                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <p className="whitespace-pre-wrap text-gray-700">
-                      {transcription}
-                    </p>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Extracted Text:
+                    </h3>
+                    <button
+                      onClick={clearResults}
+                      className="text-sm text-red-600 hover:text-red-800"
+                    >
+                      Clear Results
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    {Object.entries(pdfResults).map(([filename, text], index) => (
+                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                          <h4 className="font-medium text-gray-700">{filename}</h4>
+                        </div>
+                        <div className="p-4 bg-white">
+                          <p className="whitespace-pre-wrap text-gray-700 max-h-60 overflow-y-auto">
+                            {text}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

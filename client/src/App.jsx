@@ -8,7 +8,7 @@ import axios from 'axios'
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
-  const [transcription, setTranscription] = useState('');
+  const [pdfResults, setPdfResults] = useState({});
 
   const checkAuth = async () => {
     try {
@@ -18,17 +18,17 @@ function App() {
       if (response.data.authenticated) {
         setIsAuthenticated(true);
         setUser(response.data.user);
-        setTranscription(response.data.transcription || '');
+        setPdfResults(response.data.pdf_results || {});
       } else {
         setIsAuthenticated(false);
         setUser(null);
-        setTranscription('');
+        setPdfResults({});
       }
     } catch (error) {
       console.error('Auth check failed:', error);
       setIsAuthenticated(false);
       setUser(null);
-      setTranscription('');
+      setPdfResults({});
     }
   };
 
@@ -46,7 +46,11 @@ function App() {
             isAuthenticated ? (
               <Navigate to="/dashboard" replace />
             ) : (
-              <Login setIsAuthenticated={setIsAuthenticated} setUser={setUser} />
+              <Login 
+                setIsAuthenticated={setIsAuthenticated} 
+                setUser={setUser} 
+                setPdfResults={setPdfResults}
+              />
             )
           } 
         />
@@ -56,9 +60,9 @@ function App() {
             isAuthenticated ? (
               <Dashboard 
                 setIsAuthenticated={setIsAuthenticated} 
-                user={user} 
-                transcription={transcription}
-                setTranscription={setTranscription}
+                user={user}
+                pdfResults={pdfResults}
+                setPdfResults={setPdfResults}
               />
             ) : (
               <Navigate to="/login" replace />

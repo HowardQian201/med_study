@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const Login = ({ setIsAuthenticated, setUser }) => {
+const Login = ({ setIsAuthenticated, setUser, setPdfResults }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -29,6 +29,10 @@ const Login = ({ setIsAuthenticated, setUser }) => {
         if (authCheck.data.authenticated && authCheck.data.user) {
           setUser(authCheck.data.user);
           setIsAuthenticated(true);
+          
+          // Ensure we start with empty PDF results on fresh login
+          setPdfResults({});
+          
           navigate('/dashboard');
         }
       }
