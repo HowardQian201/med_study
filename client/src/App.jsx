@@ -10,8 +10,10 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const [summary, setSummary] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   const checkAuth = async () => {
+    setIsLoading(true);
     try {
       const response = await axios.get('/api/auth/check', {
         withCredentials: true
@@ -30,6 +32,8 @@ function App() {
       setIsAuthenticated(false);
       setUser(null);
       setSummary('');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -37,6 +41,10 @@ function App() {
     checkAuth();
   }, []);
 
+  // Don't render routes until authentication check is complete
+  if (isLoading) {
+    return <div className="loading">Loading...</div>;
+  }
 
   return (
     <Router>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const Quiz = ({ user, summary, setIsAuthenticated }) => {
+const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
   const navigate = useNavigate();
   const [questions, setQuestions] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -12,11 +12,47 @@ const Quiz = ({ user, summary, setIsAuthenticated }) => {
   const [error, setError] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [isGeneratingMoreQuestions, setIsGeneratingMoreQuestions] = useState(false);
+  const [summary, setSummary] = useState(propSummary || '');
+  const [showAllPreviousQuestions, setShowAllPreviousQuestions] = useState(false);
+  const [allPreviousQuestions, setAllPreviousQuestions] = useState([]);
+  const [isLoadingPreviousQuestions, setIsLoadingPreviousQuestions] = useState(false);
+
+  // Check auth and fetch summary if needed
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await axios.get('/api/auth/check', {
+          withCredentials: true
+        });
+        
+        if (response.data.authenticated) {
+          // If we have summary from props, use it
+          if (propSummary) {
+            setSummary(propSummary);
+          } 
+          // Otherwise use summary from the auth check response
+          else if (response.data.summary) {
+            setSummary(response.data.summary);
+          }
+        } else {
+          // If not authenticated, redirect to login
+          setIsAuthenticated(false);
+          navigate('/login');
+        }
+      } catch (err) {
+        console.error('Auth check failed:', err);
+        navigate('/login');
+      }
+    };
+
+    if (!propSummary) {
+      checkAuth();
+    }
+  }, [propSummary, navigate, setIsAuthenticated]);
 
   // Fetch questions from the API when the component mounts
   useEffect(() => {
     if (!summary) {
-      setError('No document summary available. Please upload PDFs first.');
       setIsLoading(false);
       return;
     }
@@ -26,12 +62,25 @@ const Quiz = ({ user, summary, setIsAuthenticated }) => {
         setIsLoading(true);
         setError('');
         
+        // First try to get existing questions
+        const existingResponse = await axios.get('/api/get-quiz', {
+          withCredentials: true
+        });
+        
+        if (existingResponse.data.success && existingResponse.data.questions.length > 0) {
+          console.log("Retrieved existing quiz questions");
+          setQuestions(existingResponse.data.questions);
+          setIsLoading(false);
+          return;
+        }
+        
+        // If no existing questions, generate new ones
         const response = await axios.get('/api/generate-quiz', {
           withCredentials: true
         });
         
         if (response.data.success && response.data.questions) {
-          console.log("Quiz questions loaded successfully");
+          console.log("Generated new quiz questions");
           setQuestions(response.data.questions);
         } else {
           setError('Failed to generate quiz questions');
@@ -110,6 +159,10 @@ const Quiz = ({ user, summary, setIsAuthenticated }) => {
       
       if (response.data.success && response.data.questions) {
         setQuestions(response.data.questions);
+        // Clear cached previous questions so they get refetched
+        setAllPreviousQuestions([]);
+        // Always show current quiz after generating new questions
+        setShowAllPreviousQuestions(false);
         resetQuiz();
       } else {
         setError('Failed to generate more questions');
@@ -173,6 +226,42 @@ const Quiz = ({ user, summary, setIsAuthenticated }) => {
   // Combine the functions to complete the quiz and show results
   const completeQuiz = () => {
     setShowResults(true);
+    setShowAllPreviousQuestions(false);
+  };
+
+  // Function to fetch all previous questions
+  const fetchAllPreviousQuestions = async () => {
+    try {
+      setIsLoadingPreviousQuestions(true);
+      setError('');
+      
+      const response = await axios.get('/api/get-all-quiz-questions', {
+        withCredentials: true
+      });
+      
+      if (response.data.success && response.data.questions) {
+        console.log('Fetched previous questions:', response.data.questions);
+        console.log('Number of question sets:', response.data.questions.length);
+        setAllPreviousQuestions(response.data.questions);
+        setShowAllPreviousQuestions(true);
+      } else {
+        setError('Failed to retrieve previous questions');
+      }
+    } catch (err) {
+      console.error('Error fetching previous questions:', err);
+      setError(err.response?.data?.error || 'Failed to retrieve previous questions');
+    } finally {
+      setIsLoadingPreviousQuestions(false);
+    }
+  };
+
+  // Function to toggle view between results and all previous questions
+  const togglePreviousQuestions = async () => {
+    if (!showAllPreviousQuestions && allPreviousQuestions.length === 0) {
+      await fetchAllPreviousQuestions();
+    } else {
+      setShowAllPreviousQuestions(!showAllPreviousQuestions);
+    }
   };
 
   return (
@@ -291,77 +380,154 @@ const Quiz = ({ user, summary, setIsAuthenticated }) => {
                           )}
                           Generate New Questions
                         </button>
+                        <button
+                          onClick={togglePreviousQuestions}
+                          disabled={isLoadingPreviousQuestions}
+                          className={`px-5 py-2 font-medium text-white bg-purple-600 rounded hover:bg-purple-700 flex items-center ${isLoadingPreviousQuestions ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        >
+                          {isLoadingPreviousQuestions && (
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                          )}
+                          {showAllPreviousQuestions ? 'Show Current Quiz' : 'View All Previous Questions'}
+                        </button>
                       </div>
                     </div>
                     
-                    <div className="mt-8">
-                      <h4 className="text-xl font-semibold mb-4">Question Review</h4>
-                      <div className="space-y-6">
-                        {stats.questionsWithStatus.map((question) => (
-                          <div 
-                            key={question.id} 
-                            className={`p-4 border rounded-lg ${
-                              question.isAnswered 
-                                ? (question.isCorrect 
-                                  ? 'border-green-200 bg-green-50' 
-                                  : 'border-red-200 bg-red-50')
-                                : 'border-gray-200'
-                            }`}
-                          >
-                            <div className="flex items-start mb-2">
-                              <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 mt-1 ${
-                                question.isAnswered
+                    {/* Current quiz results view */}
+                    {!showAllPreviousQuestions && (
+                      <div className="mt-8">
+                        <h4 className="text-xl font-semibold mb-4">Question Review</h4>
+                        <div className="space-y-6">
+                          {stats.questionsWithStatus.map((question) => (
+                            <div 
+                              key={question.id} 
+                              className={`p-4 border rounded-lg ${
+                                question.isAnswered 
                                   ? (question.isCorrect 
-                                    ? 'bg-green-500 text-white' 
-                                    : 'bg-red-500 text-white')
-                                  : 'bg-gray-300 text-white'
-                              }`}>
-                                {question.isAnswered
-                                  ? (question.isCorrect 
-                                    ? '✓' 
-                                    : '✗')
-                                  : '?'
-                                }
-                              </span>
-                              <h5 className="text-lg font-medium">{question.text}</h5>
-                            </div>
-                            
-                            <div className="ml-8 space-y-2">
-                              {question.options.map((option, index) => (
-                                <div 
-                                  key={index}
-                                  className={`p-2 rounded ${
-                                    question.isAnswered
-                                      ? (index === question.correctAnswer
-                                        ? 'bg-green-100 border-l-4 border-green-500' 
-                                        : question.userAnswer === index
-                                          ? 'bg-red-100 border-l-4 border-red-500'
-                                          : 'text-gray-600')
-                                      : question.userAnswer === index
-                                        ? 'bg-indigo-50 border-l-4 border-indigo-500'
-                                        : 'text-gray-600'
-                                  }`}
-                                >
-                                  {option}
-                                  {question.isAnswered && index === question.correctAnswer && (
-                                    <span className="ml-2 text-green-600 font-medium">(Correct answer)</span>
-                                  )}
-                                  {question.isAnswered && question.userAnswer === index && question.userAnswer !== question.correctAnswer && (
-                                    <span className="ml-2 text-red-600 font-medium">(Your answer)</span>
-                                  )}
-                                </div>
-                              ))}
+                                    ? 'border-green-200 bg-green-50' 
+                                    : 'border-red-200 bg-red-50')
+                                  : 'border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-start mb-2">
+                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 mt-1 ${
+                                  question.isAnswered
+                                    ? (question.isCorrect 
+                                      ? 'bg-green-500 text-white' 
+                                      : 'bg-red-500 text-white')
+                                    : 'bg-gray-300 text-white'
+                                }`}>
+                                  {question.isAnswered
+                                    ? (question.isCorrect 
+                                      ? '✓' 
+                                      : '✗')
+                                    : '?'
+                                  }
+                                </span>
+                                <h5 className="text-lg font-medium">{question.text}</h5>
+                              </div>
                               
-                              {question.isAnswered && (
-                                <div className="mt-3 p-3 bg-gray-50 rounded border border-gray-200">
-                                  <p className="text-gray-700"><span className="font-medium">Explanation:</span> {question.reason}</p>
-                                </div>
-                              )}
+                              <div className="ml-8 space-y-2">
+                                {question.options.map((option, index) => (
+                                  <div 
+                                    key={index}
+                                    className={`p-2 rounded ${
+                                      question.isAnswered
+                                        ? (index === question.correctAnswer
+                                          ? 'bg-green-100 border-l-4 border-green-500' 
+                                          : question.userAnswer === index
+                                            ? 'bg-red-100 border-l-4 border-red-500'
+                                            : 'text-gray-600')
+                                        : question.userAnswer === index
+                                          ? 'bg-indigo-50 border-l-4 border-indigo-500'
+                                          : 'text-gray-600'
+                                    }`}
+                                  >
+                                    {option}
+                                    {question.isAnswered && index === question.correctAnswer && (
+                                      <span className="ml-2 text-green-600 font-medium">(Correct answer)</span>
+                                    )}
+                                    {question.isAnswered && question.userAnswer === index && question.userAnswer !== question.correctAnswer && (
+                                      <span className="ml-2 text-red-600 font-medium">(Your answer)</span>
+                                    )}
+                                  </div>
+                                ))}
+                                
+                                {question.isAnswered && (
+                                  <div className="mt-3 p-3 bg-gray-50 rounded border border-gray-200">
+                                    <p className="text-gray-700"><span className="font-medium">Explanation:</span> {question.reason}</p>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
+                    
+                    {/* All previous questions view */}
+                    {showAllPreviousQuestions && (
+                      <div className="mt-8">
+                        <div className="flex justify-between items-center mb-4">
+                          <h4 className="text-xl font-semibold">All Previous Questions</h4>
+                          <span className="text-sm text-gray-500">                            Showing {allPreviousQuestions.length} quiz set{allPreviousQuestions.length !== 1 ? 's' : ''} from previous sessions                          </span>
+                        </div>
+                        
+                        {allPreviousQuestions.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            {isLoadingPreviousQuestions ? (
+                              <div className="flex justify-center items-center">
+                                <svg className="animate-spin h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span className="ml-2">Loading previous questions...</span>
+                              </div>
+                            ) : (
+                              <p>No previous questions found</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-6">
+                            {allPreviousQuestions.map((questionSet, setIndex) => (
+                              <div key={setIndex} className="border border-gray-200 rounded-lg p-4">
+                                <h5 className="font-medium text-lg mb-3">Quiz Set #{setIndex + 1}</h5>
+                                {questionSet.map((question, qIndex) => (
+                                  <div key={`${setIndex}-${qIndex}`} className="mb-4 p-4 bg-gray-50 rounded-lg">
+                                    <h6 className="font-medium text-gray-800 mb-2">
+                                      Question {qIndex + 1}: {question.text}
+                                    </h6>
+                                    <div className="ml-4 space-y-2 mt-2">
+                                      {question.options.map((option, optIndex) => (
+                                        <div 
+                                          key={optIndex}
+                                          className={`p-2 rounded ${
+                                            optIndex === question.correctAnswer
+                                              ? 'bg-green-100 border-l-4 border-green-500' 
+                                              : 'text-gray-600'
+                                          }`}
+                                        >
+                                          {option}
+                                          {optIndex === question.correctAnswer && (
+                                            <span className="ml-2 text-green-600 font-medium">(Correct answer)</span>
+                                          )}
+                                        </div>
+                                      ))}
+                                      <div className="mt-3 p-3 bg-gray-100 rounded border border-gray-200">
+                                        <p className="text-gray-700"><span className="font-medium">Explanation:</span> {question.reason}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>

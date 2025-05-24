@@ -46,44 +46,28 @@ EMAIL_REGEX = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
 Session(app)
 
-def cleanup_expired_sessions():
-    """Clean up expired session files"""
-    try:
-        session_dir = app.config['SESSION_FILE_DIR']
-        if not os.path.exists(session_dir):
-            return
-
-        current_time = time.time()
-        for session_file in glob.glob(os.path.join(session_dir, 'session_*')):
-            try:
-                # Check file modification time
-                file_time = os.path.getmtime(session_file)
-                # If file is older than session lifetime, delete it
-                if current_time - file_time > app.config['PERMANENT_SESSION_LIFETIME'].total_seconds():
-                    os.remove(session_file)
-                    print(f"Cleaned up expired session: {session_file}")
-            except Exception as e:
-                print(f"Error cleaning up session file {session_file}: {str(e)}")
-    except Exception as e:
-        print(f"Error in session cleanup: {str(e)}")
-
-def run_cleanup_periodically():
-    """Run cleanup at regular intervals"""
-    while True:
-        cleanup_expired_sessions()
-        time.sleep(app.config['CLEANUP_INTERVAL'])
-
-# Start cleanup thread
-cleanup_thread = threading.Thread(target=run_cleanup_periodically, daemon=True)
-cleanup_thread.start()
 
 # Cleanup on application exit
 @atexit.register
 def cleanup_on_exit():
-    cleanup_expired_sessions()
-    # Clean up any remaining temp directories
-    for user_id, temp_dir in list(active_temp_dirs.items()):
-        cleanup_temp_dir(user_id)
+    print("cleanup_on_exit()")
+    try:
+        # Clean up any remaining temp directories
+        for user_id, temp_dir in list(active_temp_dirs.items()):
+            cleanup_temp_dir(user_id)
+            
+        # Clean up all session files
+        session_dir = app.config['SESSION_FILE_DIR']
+        if os.path.exists(session_dir):
+            print(f"Cleaning up all session files in {session_dir}")
+            for session_file in glob.glob(os.path.join(session_dir, '*')):
+                try:
+                    print(f"Removing session file: {session_file}")
+                    os.remove(session_file)
+                except Exception as e:
+                    print(f"Error removing session file {session_file}: {str(e)}")
+    except Exception as e:
+        print(f"Error during cleanup: {str(e)}")
 
 
 def cleanup_temp_dir(user_id):
@@ -127,6 +111,7 @@ def login():
         # Ensure PDF results are empty on fresh login
         session['pdf_results'] = {}
         session['summary'] = ""
+        session['quiz_questions'] = []
         
         return jsonify({'success': True})
 
@@ -142,10 +127,6 @@ def logout():
             cleanup_temp_dir(session['user_id'])
         
         # Explicitly clear PDF results and all session data
-        session.pop('pdf_results', None)
-        session.pop('user_id', None)
-        session.pop('name', None)
-        session.pop('email', None)
         session.clear()
         
         return jsonify({'success': True})
@@ -284,6 +265,7 @@ def clear_results():
             if 'summary' in session:
                 session['pdf_results'] = {}
                 session['summary'] = ""
+                session['quiz_questions'] = []
             return jsonify({'success': True})
         return jsonify({'error': 'Unauthorized'}), 401
     except Exception as e:
@@ -304,6 +286,12 @@ def generate_quiz():
             
         # Generate questions
         questions = generate_quiz_questions(summary)
+        
+        # Store questions in session
+        quiz_questions = session.get('quiz_questions', [])
+        quiz_questions.append(questions)
+        session['quiz_questions'] = quiz_questions
+        session.modified = True
         
         return jsonify({
             'success': True,
@@ -337,12 +325,66 @@ def generate_more_questions():
         # Generate new questions
         new_questions = generate_focused_questions(summary, incorrect_question_ids, previous_questions)
         
+        # Store new questions in session
+        quiz_questions = session.get('quiz_questions', [])
+        quiz_questions.append(new_questions)
+        session['quiz_questions'] = quiz_questions
+        session.modified = True
+        
+        print(f"Added new question set. Total sets now: {len(quiz_questions)}")
+        print(f"New set has {len(new_questions)} questions")
+        
         return jsonify({
             'success': True,
             'questions': new_questions
         })
     except Exception as e:
         print(f"Error generating more questions: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/get-quiz', methods=['GET'])
+def get_quiz():
+    """Endpoint to retrieve stored quiz questions"""
+    try:
+        # Check if user is authenticated
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+            
+        # Get stored questions
+        questions = session.get('quiz_questions', [])
+        questions = questions[-1] if questions else []
+        
+        return jsonify({
+            'success': True,
+            'questions': questions
+        })
+    except Exception as e:
+        print(f"Error retrieving quiz questions: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/get-all-quiz-questions', methods=['GET'])
+def get_all_quiz_questions():
+    """Endpoint to retrieve all stored quiz questions from previous sessions"""
+    try:
+        # Check if user is authenticated
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+            
+        # Get all stored questions
+        all_questions = session.get('quiz_questions', [])
+        
+        print(f"Retrieved {len(all_questions)} question sets from session")
+        for i, question_set in enumerate(all_questions):
+            print(f"  Set {i+1}: {len(question_set)} questions")
+        
+        return jsonify({
+            'success': True,
+            'questions': all_questions
+        })
+    except Exception as e:
+        print(f"Error retrieving all quiz questions: {str(e)}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
