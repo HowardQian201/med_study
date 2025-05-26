@@ -12,14 +12,12 @@ from datetime import timedelta
 import shutil
 import atexit
 import glob
-import threading
 
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)  # Enable credentials for CORS
 
 # Configure session
-app.config['SECRET_KEY'] = 'your-fixed-secret-key-for-development'  # Use environment variable in production
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-dev-key')
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
