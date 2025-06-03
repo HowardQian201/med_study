@@ -1,0 +1,8 @@
+.git
+.vscode
+node_modules/
+frontend/node_modules/
+frontend/build/  # If you build locally for testing sometimes
+*.pyc
+__pycache__/
+.DS_Store
