@@ -15,7 +15,9 @@ import json
 
 load_dotenv()
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-pytesseract.pytesseract.tesseract_cmd = os.getenv("TESSERACT_PATH")
+tesseract_custom_path = os.getenv("TESSERACT_PATH")
+if tesseract_custom_path:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_custom_path
 
 def gpt_summarize_transcript(text):
     print("Summarizing transcript")

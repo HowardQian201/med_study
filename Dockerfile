@@ -39,7 +39,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
 
 # Copy built frontend static assets from the frontend-builder stage
-COPY --from=frontend-builder /app/client/build ./static/
+COPY --from=frontend-builder /app/client/dist ./static/
 
 # Expose the port Flask will run on
 EXPOSE 5000
