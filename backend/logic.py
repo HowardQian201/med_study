@@ -6,7 +6,6 @@ import os
 import PyPDF2
 import tempfile
 from pdf2image import convert_from_path
-import io
 from PIL import Image
 import pytesseract
 import shutil
