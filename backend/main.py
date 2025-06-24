@@ -159,6 +159,7 @@ def check_auth():
 @app.route('/api/upload-multiple', methods=['POST'])
 def upload_multiple():
     print("Starting multiple file upload and extract process")
+    print("upload_multiple()")
     temp_dir = None
     try:
         # Check if user is authenticated
@@ -250,6 +251,7 @@ def upload_multiple():
 @app.route('/api/cleanup', methods=['POST'])
 def cleanup():
     """Endpoint to manually trigger cleanup"""
+    print("cleanup()")
     try:
         if 'user_id' in session:
             cleanup_temp_dir(session['user_id'])
@@ -261,6 +263,7 @@ def cleanup():
 @app.route('/api/clear-results', methods=['POST'])
 def clear_results():
     """Endpoint to clear PDF results from session"""
+    print("clear_results()")
     try:
         if 'user_id' in session:
             if 'summary' in session:
@@ -275,6 +278,7 @@ def clear_results():
 @app.route('/api/generate-quiz', methods=['GET'])
 def generate_quiz():
     """Endpoint to generate quiz questions from the stored summary"""
+    print("generate_quiz()")
     try:
         # Check if user is authenticated
         if 'user_id' not in session:
@@ -306,6 +310,7 @@ def generate_quiz():
 @app.route('/api/generate-more-questions', methods=['POST'])
 def generate_more_questions():
     """Endpoint to generate additional questions based on user performance"""
+    print("generate_more_questions()")
     try:
         # Check if user is authenticated
         if 'user_id' not in session:
@@ -347,6 +352,7 @@ def generate_more_questions():
 @app.route('/api/get-quiz', methods=['GET'])
 def get_quiz():
     """Endpoint to retrieve stored quiz questions"""
+    print("get_quiz()")
     try:
         # Check if user is authenticated
         if 'user_id' not in session:
@@ -368,6 +374,7 @@ def get_quiz():
 @app.route('/api/get-all-quiz-questions', methods=['GET'])
 def get_all_quiz_questions():
     """Endpoint to retrieve all stored quiz questions from previous sessions"""
+    print("get_all_quiz_questions()")
     try:
         # Check if user is authenticated
         if 'user_id' not in session:
@@ -392,6 +399,7 @@ def get_all_quiz_questions():
 @app.route('/api/regenerate-summary', methods=['POST'])
 def regenerate_summary():
     """Endpoint to regenerate the summary from stored PDF text"""
+    print("regenerate_summary()")
     try:
         # Check if user is authenticated
         if 'user_id' not in session:
@@ -430,6 +438,7 @@ def regenerate_summary():
 @app.route("/")
 def serve():
     """Serve the main React app"""
+    print(f"Serving main React app from: {app.static_folder}")
     return send_from_directory(app.static_folder, 'index.html')
 
 # Catch-all route for client-side routing (React Router)
