@@ -14,7 +14,9 @@ import atexit
 import glob
 
 
-app = Flask(__name__, static_folder='../client/dist', static_url_path='/')
+# Try absolute path resolution
+static_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'client', 'dist')
+app = Flask(__name__, static_folder=static_folder, static_url_path='/')
 CORS(app)
 
 # Configure session
@@ -433,9 +435,11 @@ def serve():
 # Catch-all route for client-side routing (React Router)
 @app.route("/<path:path>")
 def serve_static(path):
-    """Serve static files or fallback to index.html for client-side routing"""
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+    print(f"Serving static file: {path}")
+    # If it's an asset file (CSS, JS), serve it
+    if path.startswith('assets/'):
         return send_from_directory(app.static_folder, path)
+    # For all other routes, serve index.html (let React Router handle it)
     else:
         return send_from_directory(app.static_folder, 'index.html')
     
