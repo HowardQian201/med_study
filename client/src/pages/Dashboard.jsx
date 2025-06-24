@@ -317,26 +317,6 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       </p>
                     </div>
                   </div>
-                  
-                  {/* New Quiz Feature Callout */}
-                  <div className="mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <div className="ml-3">
-                        <h3 className="text-sm font-medium text-indigo-800">
-                          Enhanced Quiz Feature
-                        </h3>
-                        <div className="mt-1 text-sm text-indigo-700">
-                          <p>Our quiz now includes a detailed results page that shows your performance statistics and provides explanations for each question.</p>
-                          <p className="mt-1">If you miss any questions, you can generate targeted follow-up questions to reinforce areas where you need more practice.</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               )}
             </div>

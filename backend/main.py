@@ -15,6 +15,7 @@ import glob
 
 
 app = Flask(__name__)
+# app = Flask(__name__, static_folder='../client/dist', static_url_path='/')
 
 # Configure session
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-dev-key')
@@ -425,3 +426,4 @@ def regenerate_summary():
 
 if __name__ == '__main__':
     app.run(debug=True)
+    # app.run()
