@@ -14,7 +14,8 @@ import atexit
 import glob
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../client/dist', static_url_path='/')
+CORS(app)
 
 # Configure session
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-dev-key')
@@ -423,7 +424,22 @@ def regenerate_summary():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     
+# Serve the React frontend
+@app.route("/")
+def serve():
+    """Serve the main React app"""
+    return send_from_directory(app.static_folder, 'index.html')
 
+# Catch-all route for client-side routing (React Router)
+@app.route("/<path:path>")
+def serve_static(path):
+    """Serve static files or fallback to index.html for client-side routing"""
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
+    
+    
 # if __name__ == '__main__':
 #     # app.run(debug=True)
 #     app.run(host='0.0.0.0', port=5000)
