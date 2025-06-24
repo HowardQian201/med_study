@@ -14,8 +14,7 @@ import atexit
 import glob
 
 
-# app = Flask(__name__)
-app = Flask(__name__, static_folder='../client/dist', static_url_path='/')
+app = Flask(__name__)
 
 # Configure session
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-dev-key')
@@ -424,11 +423,6 @@ def regenerate_summary():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     
-
-@app.route("/")
-def serve():
-    return send_from_directory(app.static_folder, "index.html")
-
 
 if __name__ == '__main__':
     # app.run(debug=True)
