@@ -3,7 +3,7 @@ from flask_cors import CORS
 import tempfile
 from pathlib import Path
 import traceback
-from .logic import extract_text_from_pdf, gpt_summarize_transcript, set_process_priority, save_uploaded_file, generate_quiz_questions, generate_focused_questions
+from logic import extract_text_from_pdf, gpt_summarize_transcript, set_process_priority, save_uploaded_file, generate_quiz_questions, generate_focused_questions
 import time
 from flask_session import Session
 import os
@@ -424,6 +424,6 @@ def regenerate_summary():
         return jsonify({'error': str(e)}), 500
     
 
-if __name__ == '__main__':
-    # app.run(debug=True)
-    app.run(host='0.0.0.0', port=5000)
+# if __name__ == '__main__':
+#     # app.run(debug=True)
+#     app.run(host='0.0.0.0', port=5000)
