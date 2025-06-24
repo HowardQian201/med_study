@@ -16,7 +16,7 @@ import glob
 
 # Try absolute path resolution
 static_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'client', 'dist')
-app = Flask(__name__, static_folder=static_folder, static_url_path='/')
+app = Flask(__name__, static_folder=static_folder, static_url_path='/static')
 CORS(app)
 
 # Configure session
