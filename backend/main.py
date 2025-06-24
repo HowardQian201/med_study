@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, send_from_directory
 from flask_cors import CORS
 import tempfile
 from pathlib import Path
@@ -14,8 +14,8 @@ import atexit
 import glob
 
 
-app = Flask(__name__)
-# app = Flask(__name__, static_folder='../client/dist', static_url_path='/')
+# app = Flask(__name__)
+app = Flask(__name__, static_folder='../client/dist', static_url_path='/')
 
 # Configure session
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-dev-key')
@@ -423,7 +423,13 @@ def regenerate_summary():
         print(f"Error regenerating summary: {str(e)}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+    
+
+@app.route("/")
+def serve():
+    return send_from_directory(app.static_folder, "index.html")
+
 
 if __name__ == '__main__':
-    app.run(debug=True)
-    # app.run()
+    # app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)
