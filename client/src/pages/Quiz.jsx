@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -16,6 +16,11 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
   const [showAllPreviousQuestions, setShowAllPreviousQuestions] = useState(false);
   const [allPreviousQuestions, setAllPreviousQuestions] = useState([]);
   const [isLoadingPreviousQuestions, setIsLoadingPreviousQuestions] = useState(false);
+
+  // Use refs to prevent duplicate calls
+  const hasFetchedQuiz = useRef(false);
+  const currentSummary = useRef('');
+  const isFetching = useRef(false);
 
   // Check auth and fetch summary if needed
   useEffect(() => {
@@ -56,9 +61,15 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
       setIsLoading(false);
       return;
     }
+    
+    // Don't start a new fetch if we already have questions for this summary or are currently fetching
+    if ((hasFetchedQuiz.current && currentSummary.current === summary) || isFetching.current) {
+      return;
+    }
 
     const fetchQuiz = async () => {
       try {
+        isFetching.current = true;
         setIsLoading(true);
         setError('');
         
@@ -68,9 +79,9 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
         });
         
         if (existingResponse.data.success && existingResponse.data.questions.length > 0) {
-          console.log("Retrieved existing quiz questions");
           setQuestions(existingResponse.data.questions);
-          setIsLoading(false);
+          hasFetchedQuiz.current = true;
+          currentSummary.current = summary;
           return;
         }
         
@@ -80,16 +91,21 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
         });
         
         if (response.data.success && response.data.questions) {
-          console.log("Generated new quiz questions");
           setQuestions(response.data.questions);
+          hasFetchedQuiz.current = true;
+          currentSummary.current = summary;
         } else {
           setError('Failed to generate quiz questions');
         }
       } catch (err) {
         console.error('Error fetching quiz questions:', err);
         setError(err.response?.data?.error || 'Failed to generate quiz questions');
+        // Reset the flags on error so user can retry
+        hasFetchedQuiz.current = false;
+        currentSummary.current = '';
       } finally {
         setIsLoading(false);
+        isFetching.current = false;
       }
     };
 
@@ -240,8 +256,6 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
       });
       
       if (response.data.success && response.data.questions) {
-        console.log('Fetched previous questions:', response.data.questions);
-        console.log('Number of question sets:', response.data.questions.length);
         setAllPreviousQuestions(response.data.questions);
         setShowAllPreviousQuestions(true);
       } else {

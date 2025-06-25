@@ -10,6 +10,8 @@ from PIL import Image
 import pytesseract
 import shutil
 import json
+import time
+import uuid
 
 
 
@@ -20,7 +22,6 @@ if tesseract_custom_path:
     pytesseract.pytesseract.tesseract_cmd = tesseract_custom_path
 
 def gpt_summarize_transcript(text):
-    print("Summarizing transcript")
     prompt = f"Provide me with detailed and thorough study guide using full sentences based on this transcript. Include relevant headers for each topic. Be sure to include the mentioned clinical correlates. Transcript:{text}"
 
     completion = openai_client.chat.completions.create(
@@ -38,12 +39,12 @@ def gpt_summarize_transcript(text):
     text = completion.choices[0].message.content.strip()
     return text
 
-def generate_quiz_questions(summary_text):
+def generate_quiz_questions(summary_text, request_id=None):
     """Generate quiz questions from a summary text using OpenAI's API"""
+    if request_id is None:
+        request_id = str(uuid.uuid4())[:8]
+    
     try:
-        raise Exception("Test error")
-        print("Generating quiz questions based on summary")
-        
         prompt = f"""
         Based on the following medical text summary, create 5 multiple-choice questions to test the reader's understanding. 
         
@@ -76,6 +77,8 @@ def generate_quiz_questions(summary_text):
 
         # Get JSON response
         response_text = completion.choices[0].message.content.strip()
+        print("response_text")
+        print(response_text)
         
         # Sometimes the API returns markdown json blocks, so let's clean that up
         if response_text.startswith("```json"):
@@ -84,7 +87,6 @@ def generate_quiz_questions(summary_text):
             response_text = response_text.rsplit("```", 1)[0]
             
         response_text = response_text.strip()
-            
         # Parse JSON
         questions = json.loads(response_text)
         
@@ -111,7 +113,7 @@ def generate_quiz_questions(summary_text):
     except Exception as e:
         print(f"Error generating quiz questions: {str(e)}")
         # Return some default questions if there's an error
-        return [
+        fallback_questions = [
             {
                 "id": 1,
                 "text": "What is the main purpose of this document?",
@@ -137,17 +139,15 @@ def generate_quiz_questions(summary_text):
                 "reason": "This is a fallback question generated when the API request failed."
             }
         ]
+        return fallback_questions
 
 def generate_focused_questions(summary_text, incorrect_question_ids, previous_questions):
     """Generate more targeted quiz questions focusing on areas where the user had difficulty"""
     try:
-        raise Exception("Test error")
-        print("Generating focused quiz questions based on performance")
-        
         # Extract incorrect questions
         incorrect_questions = []
         if previous_questions and incorrect_question_ids:
-            incorrect_questions = [q for q in previous_questions if q['id'] in incorrect_question_ids]
+            incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
         
         # Create a prompt with more focus on areas the user missed
         prompt = f"""
@@ -186,6 +186,8 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
 
         # Get JSON response
         response_text = completion.choices[0].message.content.strip()
+        print("response_text")
+        print(response_text)
         
         # Clean up markdown formatting if present
         if response_text.startswith("```json"):
@@ -316,19 +318,19 @@ def extract_text_from_pdf(pdf_path):
                 page_text = page.extract_text()
                 PyPDF2_combined_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
                 
-                # Check if the extracted text is too short
-                if len(page_text.strip()) < min_text_length:
-                    # Text is too short, use OCR instead
-                    print(f"Text is too short, using OCR for page {page_num + 1}")
-                    image = convert_pdf_page_to_image(pdf_path, page_num)
-                    if image:
-                        ocr_text = extract_text_with_pytesseract(image)
-                        if ocr_text:
-                            # Use OCR text for this page
-                            final_text += f"[Page {page_num + 1}]:\n{ocr_text}\n\n"
-                            pytesseract_combined_text += f"[OCR Page {page_num + 1}]:\n{ocr_text}\n\n"
-                            continue
-                print(f"Using PyPDF2 for page {page_num + 1}")
+                # # OCR causes OOM error
+                # # Check if the extracted text is too short
+                # if len(page_text.strip()) < min_text_length:
+                #     # Text is too short, use OCR instead
+                #     print(f"Text is too short, using OCR for page {page_num + 1}")
+                #     image = convert_pdf_page_to_image(pdf_path, page_num)
+                #     if image:
+                #         ocr_text = extract_text_with_pytesseract(image)
+                #         if ocr_text:
+                #             # Use OCR text for this page
+                #             final_text += f"[Page {page_num + 1}]:\n{ocr_text}\n\n"
+                #             pytesseract_combined_text += f"[OCR Page {page_num + 1}]:\n{ocr_text}\n\n"
+                #             continue
                 # If we didn't use OCR or OCR failed, use the PyPDF2 text
                 final_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
                                 

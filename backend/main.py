@@ -12,6 +12,7 @@ from datetime import timedelta
 import shutil
 import atexit
 import glob
+import uuid
 
 
 # Try absolute path resolution
@@ -158,7 +159,6 @@ def check_auth():
 
 @app.route('/api/upload-multiple', methods=['POST'])
 def upload_multiple():
-    print("Starting multiple file upload and extract process")
     print("upload_multiple()")
     temp_dir = None
     try:
@@ -213,9 +213,6 @@ def upload_multiple():
         
         if not results:
             raise Exception("No text could be extracted from any of the PDFs")
-
-        print(results.keys())
-        print(f"Extraction completed for {len(results)} files in {time.time() - start_time:.2f} seconds")
         
         filenames = ""
         for key, value in results.items():
@@ -282,12 +279,24 @@ def generate_quiz():
     try:
         # Check if user is authenticated
         if 'user_id' not in session:
+            print(f"No user_id in session - returning 401")
             return jsonify({'error': 'Unauthorized'}), 401
             
         # Check if there's a summary to work with
         summary = session.get('summary', '')
         if not summary:
+            print(f"No summary available - returning 400")
             return jsonify({'error': 'No summary available. Please upload PDFs first.'}), 400
+        
+        # Check if we already have questions for this summary (prevent duplicates)
+        existing_questions = session.get('quiz_questions', [])
+        if existing_questions:
+            latest_questions = existing_questions[-1]
+            print(f"Found existing questions ({len(latest_questions)} questions) - returning cached")
+            return jsonify({
+                'success': True,
+                'questions': latest_questions
+            })
             
         # Generate questions
         questions = generate_quiz_questions(summary)
@@ -337,9 +346,6 @@ def generate_more_questions():
         session['quiz_questions'] = quiz_questions
         session.modified = True
         
-        print(f"Added new question set. Total sets now: {len(quiz_questions)}")
-        print(f"New set has {len(new_questions)} questions")
-        
         return jsonify({
             'success': True,
             'questions': new_questions
@@ -356,15 +362,16 @@ def get_quiz():
     try:
         # Check if user is authenticated
         if 'user_id' not in session:
+            print(f"No user_id in session - returning 401")
             return jsonify({'error': 'Unauthorized'}), 401
             
         # Get stored questions
         questions = session.get('quiz_questions', [])
-        questions = questions[-1] if questions else []
+        latest_questions = questions[-1] if questions else []
         
         return jsonify({
             'success': True,
-            'questions': questions
+            'questions': latest_questions
         })
     except Exception as e:
         print(f"Error retrieving quiz questions: {str(e)}")
@@ -424,6 +431,7 @@ def regenerate_summary():
         
         # Update session
         session['summary'] = summary
+        session['quiz_questions'] = []  # Clear questions since summary changed
         
         return jsonify({
             'success': True,
