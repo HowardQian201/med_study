@@ -22,14 +22,17 @@ if tesseract_custom_path:
     pytesseract.pytesseract.tesseract_cmd = tesseract_custom_path
 
 def gpt_summarize_transcript(text):
-    prompt = f"Provide me with detailed and thorough study guide using full sentences based on this transcript. Include relevant headers for each topic. Be sure to include the mentioned clinical correlates. Transcript:{text}"
+    prompt = f"Provide me with detailed, thorough, and comprehensive study guide/summary \
+        using full sentences based on this transcript. Include relevant headers for each \
+            topic and make sure to inlcude all key information. Be sure to include the \
+                mentioned clinical correlates. Transcript:{text}"
 
     completion = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a helpful teaching assistant \
              for US medical school. You are extremely knowledgable and \
-             want your students to succeed by providing them with extremely detailed and thorough study guides. \
+             want your students to succeed by providing them with extremely detailed and thorough study guides/summaries. \
              You also double check all your responses for accuracy."},
             {"role": "user", "content": prompt},
         ],
@@ -46,13 +49,14 @@ def generate_quiz_questions(summary_text, request_id=None):
     
     try:
         prompt = f"""
-        Based on the following medical text summary, create 5 multiple-choice questions to test the reader's understanding. 
+        Based on the following medical text summary, create 5 challenging clinical vignette style \
+            multiple-choice questions to test the student's understanding. 
         
         For each question:
         1. Create a clear, specific question about key concepts in the text
-        2. Provide exactly 4 answer choices
-        3. Indicate which answer is correct
-        4. Include a brief explanation for why the correct answer is right
+        2. Provide exactly 4 answer choices (randomize the order)
+        3. Indicate which answer is correct (index 0-3)
+        4. Include a thorough explanation for why the correct answer is right and why others are wrong
         
         Format the response as a JSON array of question objects. Each question object should have these fields:
         - id: a unique number (1-5)
@@ -70,7 +74,9 @@ def generate_quiz_questions(summary_text, request_id=None):
         completion = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful medical education assistant that creates accurate, challenging multiple choice questions. You respond ONLY with the requested JSON format."},
+                {"role": "system", "content": "You are an expert medical professor that creates \
+                 accurate, challenging multiple choice questions in the style of clinical vignettes. \
+                 You respond ONLY with the requested JSON format."},
                 {"role": "user", "content": prompt},
             ],
         )
@@ -150,17 +156,20 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
             incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
         
         # Create a prompt with more focus on areas the user missed
+        print("incorrect_questions")
+        print({json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"})
+
         prompt = f"""
-        Based on the following medical text summary, create 5 new multiple-choice questions.
-        
+        Based on the following medical text summary and struggled concepts, create 5 clinical vignette style multiple-choice questions.
+
         The user previously struggled with these specific concepts:
         {json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"}
         
         For each question:
         1. Create challenging but fair questions that test understanding of key concepts
-        2. If the user struggled with specific areas above, focus at least 3 questions on similar topics
-        3. Provide exactly 4 answer choices
-        4. Indicate which answer is correct
+        2. If the user struggled with specific areas above, focus at least 3 questions on similar topics, but make sure they are not too similar/repetitive.
+        3. Provide exactly 4 answer choices (randomize the order)
+        4. Indicate which answer is correct (index 0-3)
         5. Include a thorough explanation for why the correct answer is right and why others are wrong
         
         Format the response as a JSON array of question objects. Each question object should have these fields:
@@ -179,7 +188,9 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
         completion = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful medical education assistant that creates accurate, challenging multiple choice questions to help students improve in areas they struggled with. You respond ONLY with the requested JSON format."},
+                {"role": "system", "content": "You are an expert medical professor that creates \
+                 accurate, challenging multiple choice questions in the style of clinical vignettes. \
+                 You respond ONLY with the requested JSON format."},
                 {"role": "user", "content": prompt},
             ],
         )
@@ -314,6 +325,7 @@ def extract_text_from_pdf(pdf_path):
             num_pages = len(pdf_reader.pages)
             
             for page_num in range(num_pages):
+                print(f"Extracting text from page {page_num + 1}")
                 page = pdf_reader.pages[page_num]
                 page_text = page.extract_text()
                 PyPDF2_combined_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"

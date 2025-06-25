@@ -1,2 +1,4 @@
-make pretty
+
+optimize gpt prompts
 use database to store user uploaded documents
+Favicon not showing on deployed version
