@@ -1,4 +1,5 @@
 
 optimize gpt prompts
+Add running total of questions answered
 use database to store user uploaded documents
 Favicon not showing on deployed version

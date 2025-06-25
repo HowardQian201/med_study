@@ -653,68 +653,76 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                     Quiz Set #{setIndex + 1}
                                   </Typography>
                                   <Stack spacing={3}>
-                                    {questionSet.map((question, qIndex) => (
-                                      <Paper key={`${setIndex}-${qIndex}`} elevation={0} sx={{ p: 3, bgcolor: 'action.hover' }}>
-                                        <Typography variant="body1" fontWeight="500" gutterBottom>
-                                          Question {qIndex + 1}: {question.text}
-                                        </Typography>
-                                        <Box ml={2}>
-                                          {question.options.map((option, optIndex) => {
-                                            const isCorrectAnswer = optIndex === question.correctAnswer;
-                                            const isUserAnswer = question.userAnswer === optIndex;
-                                            const wasAnswered = question.isAnswered;
-                                            
-                                            return (
-                                              <Paper
-                                                key={optIndex}
-                                                elevation={0}
-                                                sx={{
-                                                  p: 2,
-                                                  mb: 1,
-                                                  bgcolor: wasAnswered
-                                                    ? (isCorrectAnswer
-                                                        ? 'success.light'
-                                                        : isUserAnswer
-                                                          ? 'error.light'
-                                                          : 'transparent')
-                                                    : (isCorrectAnswer
-                                                        ? 'success.light'
-                                                        : 'transparent'),
-                                                  border: '1px solid',
-                                                  borderColor: wasAnswered
-                                                    ? (isCorrectAnswer
+                                    {questionSet.map((question, qIndex) => {
+                                      // Calculate if the question was answered correctly
+                                      const wasAnsweredCorrectly = question.isAnswered && question.userAnswer === question.correctAnswer;
+                                      
+                                      return (
+                                        <Paper 
+                                          key={`${setIndex}-${qIndex}`} 
+                                          elevation={0} 
+                                          sx={{ 
+                                            p: 3, 
+                                            bgcolor: 'background.paper',
+                                            border: '2px solid',
+                                            borderColor: question.isAnswered 
+                                              ? (wasAnsweredCorrectly ? 'success.main' : 'error.main')
+                                              : 'divider'
+                                          }}
+                                        >
+                                          <Typography variant="body1" fontWeight="500" gutterBottom>
+                                            Question {qIndex + 1}: {question.text}
+                                          </Typography>
+                                          <Box ml={2}>
+                                            {question.options.map((option, optIndex) => {
+                                              const isCorrectAnswer = optIndex === question.correctAnswer;
+                                              const isUserAnswer = question.userAnswer === optIndex;
+                                              const wasAnswered = question.isAnswered;
+                                              
+                                              return (
+                                                <Paper
+                                                  key={optIndex}
+                                                  elevation={0}
+                                                  sx={{
+                                                    p: 2,
+                                                    mb: 1,
+                                                    bgcolor: 'transparent',
+                                                    border: '2px solid',
+                                                    borderColor: wasAnswered
+                                                      ? (isCorrectAnswer
+                                                          ? 'success.main'
+                                                          : isUserAnswer
+                                                            ? 'error.main'
+                                                            : 'divider')
+                                                      : isCorrectAnswer
                                                         ? 'success.main'
-                                                        : isUserAnswer
-                                                          ? 'error.main'
-                                                          : 'divider')
-                                                    : isCorrectAnswer
-                                                      ? 'success.main'
-                                                      : 'divider'
-                                                }}
-                                              >
-                                                <Typography variant="body2">
-                                                  <Box component="span" fontWeight="600" mr={1}>
-                                                    {String.fromCharCode(65 + optIndex)}.
-                                                  </Box>
-                                                  {cleanOptionText(option)}
-                                                  {isCorrectAnswer && (
-                                                    <Chip label="Correct answer" color="success" size="small" sx={{ ml: 1 }} />
-                                                  )}
-                                                  {wasAnswered && isUserAnswer && !isCorrectAnswer && (
-                                                    <Chip label="Your answer" color="error" size="small" sx={{ ml: 1 }} />
-                                                  )}
-                                                </Typography>
-                                              </Paper>
-                                            );
-                                          })}
-                                          <Paper elevation={0} sx={{ p: 2, mt: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
-                                            <Typography variant="body2" color="text.primary">
-                                              <Box component="span" fontWeight="600">Explanation:</Box> {question.reason}
-                                            </Typography>
-                                          </Paper>
-                                        </Box>
-                                      </Paper>
-                                    ))}
+                                                        : 'divider'
+                                                  }}
+                                                >
+                                                  <Typography variant="body2">
+                                                    <Box component="span" fontWeight="600" mr={1}>
+                                                      {String.fromCharCode(65 + optIndex)}.
+                                                    </Box>
+                                                    {cleanOptionText(option)}
+                                                    {isCorrectAnswer && (
+                                                      <Chip label="Correct answer" color="success" size="small" sx={{ ml: 1 }} />
+                                                    )}
+                                                    {wasAnswered && isUserAnswer && !isCorrectAnswer && (
+                                                      <Chip label="Your answer" color="error" size="small" sx={{ ml: 1 }} />
+                                                    )}
+                                                  </Typography>
+                                                </Paper>
+                                              );
+                                            })}
+                                            <Paper elevation={0} sx={{ p: 2, mt: 2, bgcolor: 'action.hover' }}>
+                                              <Typography variant="body2" color="text.primary">
+                                                <Box component="span" fontWeight="600">Explanation:</Box> {question.reason}
+                                              </Typography>
+                                            </Paper>
+                                          </Box>
+                                        </Paper>
+                                      );
+                                    })}
                                   </Stack>
                                 </CardContent>
                               </Card>
