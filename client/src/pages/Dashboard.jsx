@@ -249,7 +249,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
 
       {/* Main Content */}
       <Container maxWidth="xl" sx={{ py: 4 }}>
-        <Card elevation={3} sx={{ maxWidth: 1000, mx: 'auto' }}>
+        <Card elevation={3} sx={{ maxWidth: 1400, mx: 'auto' }}>
           <CardContent sx={{ p: 4 }}>
             <Typography 
               variant="h4" 
@@ -262,9 +262,9 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
               PDF Text Extraction
             </Typography>
 
-            <Grid container spacing={4}>
-              {/* PDF Upload Section */}
-              <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'flex', gap: 4, flexDirection: { xs: 'column', md: 'row' } }}>
+              {/* Left Column - Upload and Text Input */}
+              <Box sx={{ flex: 1 }}>
                 <Stack spacing={3}>
                   {/* File Upload Area */}
                   <Paper
@@ -318,12 +318,8 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       )}
                     </Stack>
                   </Paper>
-                </Stack>
-              </Grid>
 
-              {/* Text Input Section */}
-              <Grid item xs={12} md={6}>
-                <Stack spacing={3}>
+                  {/* Text Input Area */}
                   <Paper
                     elevation={0}
                     sx={{
@@ -331,9 +327,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       borderColor: 'divider',
                       borderRadius: 2,
                       p: 3,
-                      bgcolor: 'background.paper',
-                      height: '100%',
-                      minHeight: 200
+                      bgcolor: 'background.paper'
                     }}
                   >
                     <Typography variant="h6" fontWeight="600" gutterBottom>
@@ -341,7 +335,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                     </Typography>
                     <TextField
                       multiline
-                      rows={8}
+                      rows={6}
                       fullWidth
                       placeholder="Enter any additional text or notes that you want to include with the PDF content for summary and quiz generation..."
                       value={userText}
@@ -356,119 +350,143 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       }}
                     />
                   </Paper>
-                </Stack>
-              </Grid>
-            </Grid>
 
-            <Stack spacing={4} mt={4}>
-              {/* Upload Button */}
-              <Box display="flex" justifyContent="center">
-                <Button
-                  onClick={uploadPDFs}
-                  disabled={(files.length === 0 && !userText.trim()) || isUploading}
-                  variant="contained"
-                  size="large"
-                  startIcon={<CloudUpload />}
-                  sx={{ px: 4, py: 1.5 }}
-                >
-                  {isUploading ? 'Processing...' : 'Generate New Summary'}
-                </Button>
-              </Box>
-
-              {/* Progress Bar */}
-              {isUploading && (
-                <Box>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      Upload {progress}% complete. Summarizing...
-                    </Typography>
+                  {/* Generate Button */}
+                  <Box display="flex" justifyContent="center">
                     <Button
-                      onClick={cancelUpload}
-                      color="error"
-                      size="small"
-                      startIcon={<Cancel />}
+                      onClick={uploadPDFs}
+                      disabled={(files.length === 0 && !userText.trim()) || isUploading}
+                      variant="contained"
+                      size="large"
+                      startIcon={<CloudUpload />}
+                      sx={{ px: 4, py: 1.5 }}
                     >
-                      Cancel
+                      {isUploading ? 'Processing...' : 'Generate Summary'}
                     </Button>
                   </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={progress} 
-                    sx={{ borderRadius: 1, height: 8 }}
-                  />
-                </Box>
-              )}
 
-              {/* Error Message */}
-              {error && (
-                <Alert severity="error" sx={{ borderRadius: 2 }}>
-                  {error}
-                </Alert>
-              )}
+                  {/* Progress Bar */}
+                  {isUploading && (
+                    <Box>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                        <Typography variant="body2" color="text.secondary">
+                          Upload {progress}% complete. Summarizing...
+                        </Typography>
+                        <Button
+                          onClick={cancelUpload}
+                          color="error"
+                          size="small"
+                          startIcon={<Cancel />}
+                        >
+                          Cancel
+                        </Button>
+                      </Box>
+                      <LinearProgress 
+                        variant="determinate" 
+                        value={progress} 
+                        sx={{ borderRadius: 1, height: 8 }}
+                      />
+                    </Box>
+                  )}
 
-              {/* Results Section */}
-              {summary && (
-                <Box>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                  {/* Error Message */}
+                  {error && (
+                    <Alert severity="error" sx={{ borderRadius: 2 }}>
+                      {error}
+                    </Alert>
+                  )}
+                </Stack>
+              </Box>
+
+              {/* Right Column - Summary Results */}
+              <Box sx={{ flex: 1 }}>
+                <Stack spacing={3}>
+                  {/* Summary Action Buttons - Always Visible */}
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
                     <Typography variant="h6" fontWeight="600" color="text.primary">
                       Summary:
                     </Typography>
                     <Stack direction="row" spacing={1}>
                       <Button
                         onClick={regenerateSummary}
-                        disabled={isUploading}
+                        disabled={!summary || isUploading}
                         variant="outlined"
                         size="small"
                         startIcon={<Refresh />}
+                        sx={{ minWidth: 'fit-content' }}
                       >
                         {isUploading ? 'Regenerating...' : 'Regenerate'}
                       </Button>
                       <Button
                         onClick={goToQuiz}
-                        variant="outlined"
-                        color="secondary"
+                        disabled={!summary}
+                        variant="contained"
+                        color="primary"
                         size="small"
                         startIcon={<Quiz />}
+                        sx={{ minWidth: 'fit-content' }}
                       >
                         Quiz Me
                       </Button>
                       <Button
                         onClick={clearResults}
+                        disabled={!summary}
+                        variant="outlined"
                         color="error"
                         size="small"
                         startIcon={<Clear />}
+                        sx={{ minWidth: 'fit-content' }}
                       >
                         Clear
                       </Button>
                     </Stack>
                   </Box>
                   
-                  <Paper 
-                    elevation={1} 
-                    sx={{ 
-                      p: 3, 
-                      maxHeight: 400, 
-                      overflow: 'auto',
-                      bgcolor: 'background.paper',
-                      border: '1px solid',
-                      borderColor: 'divider'
-                    }}
-                  >
-                    <Typography 
-                      variant="body1" 
-                      color="text.primary"
-                      align="left"
+                  {summary ? (
+                    <Paper 
+                      elevation={1} 
                       sx={{ 
-                        whiteSpace: 'pre-wrap',
-                        lineHeight: 1.6
+                        p: 3, 
+                        height: 500, 
+                        overflow: 'auto',
+                        bgcolor: 'background.paper',
+                        border: '1px solid',
+                        borderColor: 'divider'
                       }}
                     >
-                      {summary}
-                    </Typography>
-                  </Paper>
-                </Box>
-              )}
-            </Stack>
+                      <Typography 
+                        variant="body1" 
+                        color="text.primary"
+                        align="left"
+                        sx={{ 
+                          whiteSpace: 'pre-wrap',
+                          lineHeight: 1.6
+                        }}
+                      >
+                        {summary}
+                      </Typography>
+                    </Paper>
+                  ) : (
+                    <Paper 
+                      elevation={1} 
+                      sx={{ 
+                        height: 500,
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        bgcolor: 'action.hover',
+                        border: '2px dashed',
+                        borderColor: 'divider'
+                      }}
+                    >
+                      <Typography variant="h6" color="text.secondary">
+                        Generate a summary to see results here
+                      </Typography>
+                    </Paper>
+                  )}
+                </Stack>
+              </Box>
+            </Box>
           </CardContent>
         </Card>
       </Container>
