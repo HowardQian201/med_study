@@ -390,16 +390,55 @@ def get_all_quiz_questions():
         # Get all stored questions
         all_questions = session.get('quiz_questions', [])
         
-        print(f"Retrieved {len(all_questions)} question sets from session")
-        for i, question_set in enumerate(all_questions):
-            print(f"  Set {i+1}: {len(question_set)} questions")
-        
         return jsonify({
             'success': True,
             'questions': all_questions
         })
     except Exception as e:
         print(f"Error retrieving all quiz questions: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/save-quiz-answers', methods=['POST'])
+def save_quiz_answers():
+    """Endpoint to save user answers for the current quiz set"""
+    print("save_quiz_answers()")
+    try:
+        # Check if user is authenticated
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+            
+        # Get the request data
+        data = request.json
+        user_answers = data.get('userAnswers', {})
+        submitted_answers = data.get('submittedAnswers', {})
+        
+        # Get current quiz questions
+        quiz_questions = session.get('quiz_questions', [])
+        if not quiz_questions:
+            return jsonify({'error': 'No quiz questions found'}), 400
+            
+        # Update the latest question set with user answers
+        latest_question_set = quiz_questions[-1]
+        
+        for question in latest_question_set:
+            question_id = question['id']
+            question_id_str = str(question_id)  # Convert to string for JSON key comparison
+            
+            if question_id_str in user_answers and question_id_str in submitted_answers:
+                question['userAnswer'] = user_answers[question_id_str]
+                question['isAnswered'] = True
+            else:
+                question['userAnswer'] = None
+                question['isAnswered'] = False
+        
+        # Save back to session
+        session['quiz_questions'] = quiz_questions
+        session.modified = True
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error saving quiz answers: {str(e)}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 

@@ -22,6 +22,12 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
   const currentSummary = useRef('');
   const isFetching = useRef(false);
 
+  // Helper function to clean option text and remove existing A), B), C), D) prefixes
+  const cleanOptionText = (option) => {
+    // Remove patterns like "A) ", "B. ", "C) ", "D. ", etc.
+    return option.replace(/^[A-D][.)]\s*/, '').trim();
+  };
+
   // Check auth and fetch summary if needed
   useEffect(() => {
     const checkAuth = async () => {
@@ -128,6 +134,11 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
       ...submittedAnswers,
       [questionId]: true
     });
+    
+    // Save answers to backend immediately (with small delay to ensure state updates)
+    setTimeout(() => {
+      saveUserAnswers();
+    }, 100);
   };
 
   const isAnswerCorrect = (questionId) => {
@@ -160,6 +171,9 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
   const generateMoreQuestions = async () => {
     try {
       setIsGeneratingMoreQuestions(true);
+      
+      // Save current answers before generating new questions
+      await saveUserAnswers();
       
       // Get the IDs of incorrectly answered questions
       const incorrectQuestionIds = questions
@@ -240,7 +254,9 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
   const stats = calculateStats();
 
   // Combine the functions to complete the quiz and show results
-  const completeQuiz = () => {
+  const completeQuiz = async () => {
+    // Save answers before showing results
+    await saveUserAnswers();
     setShowResults(true);
     setShowAllPreviousQuestions(false);
   };
@@ -271,10 +287,32 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
 
   // Function to toggle view between results and all previous questions
   const togglePreviousQuestions = async () => {
-    if (!showAllPreviousQuestions && allPreviousQuestions.length === 0) {
-      await fetchAllPreviousQuestions();
+    if (!showAllPreviousQuestions) {
+      // Save current answers before switching to previous questions view
+      await saveUserAnswers();
+      
+      if (allPreviousQuestions.length === 0) {
+        await fetchAllPreviousQuestions();
+      } else {
+        setShowAllPreviousQuestions(true);
+      }
     } else {
-      setShowAllPreviousQuestions(!showAllPreviousQuestions);
+      setShowAllPreviousQuestions(false);
+    }
+  };
+
+  // Function to save user answers to the backend
+  const saveUserAnswers = async () => {
+    try {
+      await axios.post('/api/save-quiz-answers', {
+        userAnswers: selectedAnswers,
+        submittedAnswers: submittedAnswers
+      }, {
+        withCredentials: true
+      });
+    } catch (err) {
+      console.error('Error saving quiz answers:', err);
+      // Don't show error to user as this is background functionality
     }
   };
 
@@ -460,12 +498,23 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                           : 'text-gray-600'
                                     }`}
                                   >
-                                    {option}
+                                    <span className={`transition-colors duration-200 ${
+                                      question.isAnswered
+                                        ? (index === question.correctAnswer
+                                          ? 'font-medium text-green-700'
+                                          : question.userAnswer === index
+                                            ? 'font-medium text-red-700'
+                                            : 'text-gray-700')
+                                        : 'text-gray-700'
+                                    }`}>
+                                      <span className="font-medium mr-2">{String.fromCharCode(65 + index)}. </span>
+                                      {cleanOptionText(option)}
+                                    </span>
                                     {question.isAnswered && index === question.correctAnswer && (
-                                      <span className="ml-2 text-green-600 font-medium">(Correct answer)</span>
+                                      <span className="ml-2 text-green-600 font-medium"> (Correct answer)</span>
                                     )}
                                     {question.isAnswered && question.userAnswer === index && question.userAnswer !== question.correctAnswer && (
-                                      <span className="ml-2 text-red-600 font-medium">(Your answer)</span>
+                                      <span className="ml-2 text-red-600 font-medium"> (Your answer)</span>
                                     )}
                                   </div>
                                 ))}
@@ -515,21 +564,37 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                       Question {qIndex + 1}: {question.text}
                                     </h6>
                                     <div className="ml-4 space-y-2 mt-2">
-                                      {question.options.map((option, optIndex) => (
-                                        <div 
-                                          key={optIndex}
-                                          className={`p-2 rounded ${
-                                            optIndex === question.correctAnswer
-                                              ? 'bg-green-100 border-l-4 border-green-500' 
-                                              : 'text-gray-600'
-                                          }`}
-                                        >
-                                          {option}
-                                          {optIndex === question.correctAnswer && (
-                                            <span className="ml-2 text-green-600 font-medium">(Correct answer)</span>
-                                          )}
-                                        </div>
-                                      ))}
+                                      {question.options.map((option, optIndex) => {
+                                        const isCorrectAnswer = optIndex === question.correctAnswer;
+                                        const isUserAnswer = question.userAnswer === optIndex;
+                                        const wasAnswered = question.isAnswered;
+                                        
+                                        return (
+                                          <div 
+                                            key={optIndex}
+                                            className={`p-2 rounded ${
+                                              wasAnswered
+                                                ? (isCorrectAnswer
+                                                    ? 'bg-green-100 border-l-4 border-green-500' 
+                                                    : isUserAnswer
+                                                      ? 'bg-red-100 border-l-4 border-red-500'
+                                                      : 'text-gray-600')
+                                                : (isCorrectAnswer
+                                                    ? 'bg-green-100 border-l-4 border-green-500'
+                                                    : 'text-gray-600')
+                                            }`}
+                                          >
+                                            <span className="font-medium mr-2">{String.fromCharCode(65 + optIndex)}. </span>
+                                            {cleanOptionText(option)}
+                                            {isCorrectAnswer && (
+                                              <span className="ml-2 text-green-600 font-medium"> (Correct answer)</span>
+                                            )}
+                                            {wasAnswered && isUserAnswer && !isCorrectAnswer && (
+                                              <span className="ml-2 text-red-600 font-medium"> (Your answer)</span>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
                                       <div className="mt-3 p-3 bg-gray-100 rounded border border-gray-200">
                                         <p className="text-gray-700"><span className="font-medium">Explanation:</span> {question.reason}</p>
                                       </div>
@@ -647,7 +712,8 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                             : 'text-gray-700'
                                           )
                                     }`}>
-                                      {option}
+                                      <span className="font-medium mr-2">{String.fromCharCode(65 + index)}. </span>
+                                      {cleanOptionText(option)}
                                     </span>
                                   </div>
                                 </div>

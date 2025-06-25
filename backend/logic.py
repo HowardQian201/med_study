@@ -50,7 +50,7 @@ def generate_quiz_questions(summary_text, request_id=None):
         
         For each question:
         1. Create a clear, specific question about key concepts in the text
-        2. Provide exactly 4 answer choices labeled A, B, C, and D
+        2. Provide exactly 4 answer choices
         3. Indicate which answer is correct
         4. Include a brief explanation for why the correct answer is right
         
