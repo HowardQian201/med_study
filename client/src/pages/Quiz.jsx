@@ -1,6 +1,44 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import {
+  Box,
+  AppBar,
+  Toolbar,
+  Typography,
+  Button,
+  Container,
+  Card,
+  CardContent,
+  LinearProgress,
+  Alert,
+  Stack,
+  Paper,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormControl,
+  Chip,
+  CircularProgress,
+  Divider,
+  IconButton,
+  Collapse
+} from '@mui/material';
+import {
+  ArrowBack,
+  ArrowForward,
+  Check,
+  Close,
+  Refresh,
+  Add,
+  History,
+  Dashboard as DashboardIcon,
+  Logout,
+  CheckCircle,
+  Cancel,
+  HelpOutline
+} from '@mui/icons-material';
+import ThemeToggle from '../components/ThemeToggle';
 
 const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
   const navigate = useNavigate();
@@ -317,486 +355,563 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">Quiz</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-700">Welcome, {user?.name}</span>
-              <button
-                onClick={handleLogout}
-                className="ml-4 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      {/* App Bar */}
+      <AppBar position="static" color="default" elevation={1}>
+        <Container maxWidth="xl">
+          <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
+            <Toolbar>
+              <Typography variant="h6" component="h1" sx={{ flexGrow: 1, fontWeight: 600 }}>
+                Quiz
+              </Typography>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Typography variant="body2" color="text.secondary">
+                  Welcome, {user?.name}
+                </Typography>
+                <ThemeToggle size="small" />
+                <Button
+                  onClick={handleLogout}
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<Logout />}
+                  size="small"
+                >
+                  Logout
+                </Button>
+              </Stack>
+            </Toolbar>
+          </Box>
+        </Container>
+      </AppBar>
 
-      <main className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="w-full p-8 bg-white rounded-xl shadow-lg">
-            <div className="flex justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-800">
+      {/* Main Content */}
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Card elevation={3} sx={{ maxWidth: 1000, mx: 'auto' }}>
+          <CardContent sx={{ p: 4 }}>
+            {/* Header */}
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+              <Typography 
+                variant="h4" 
+                component="h2" 
+                fontWeight="bold"
+                color="text.primary"
+              >
                 {showResults ? "Quiz Results" : "Quiz Questions"}
-              </h2>
-              <button
+              </Typography>
+              <Button
                 onClick={handleBack}
-                className="px-4 py-2 text-sm font-medium text-indigo-600 border border-indigo-600 rounded hover:bg-indigo-50"
+                variant="outlined"
+                startIcon={<DashboardIcon />}
+                size="small"
               >
                 Back to Dashboard
-              </button>
-            </div>
+              </Button>
+            </Box>
 
+            {/* Loading State */}
             {isLoading ? (
-              <div className="flex justify-center items-center h-64">
-                <div className="text-gray-600">
-                  <svg className="animate-spin -ml-1 mr-3 h-8 w-8 text-indigo-500 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span className="text-lg">Generating quiz questions...</span>
-                </div>
-              </div>
+              <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight={300}>
+                <CircularProgress size={48} sx={{ mb: 2 }} />
+                <Typography variant="h6" color="text.secondary">
+                  Generating quiz questions...
+                </Typography>
+              </Box>
             ) : error ? (
-              <div className="text-red-500 text-center p-4 border border-red-200 rounded bg-red-50">
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
                 {error}
-              </div>
+              </Alert>
             ) : (
-              <div>
-                {/* Show results screen */}
+              <Box>
+                {/* Results Screen */}
                 {showResults ? (
-                  <div className="py-6">
-                    <div className="mb-8 text-center">
-                      <h3 className="text-2xl font-bold mb-4">Quiz Complete!</h3>
+                  <Box sx={{ py: 3 }}>
+                    {/* Quiz Statistics */}
+                    <Box textAlign="center" mb={4}>
+                      <Typography variant="h5" fontWeight="600" gutterBottom>
+                        Quiz Complete!
+                      </Typography>
+                      
                       {allQuestionsAnswered ? (
-                        <div className="inline-block bg-gray-100 rounded-lg px-8 py-6 mb-6">
-                          <div className="flex items-center justify-center">
-                            <div className="relative w-32 h-32">
-                              <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 100 100">
-                                <circle 
-                                  className="text-gray-200" 
-                                  strokeWidth="8" 
-                                  stroke="currentColor" 
-                                  fill="transparent" 
-                                  r="40" 
-                                  cx="50" 
-                                  cy="50" 
-                                />
-                                <circle 
-                                  className={`${stats.percentage >= 70 ? 'text-green-500' : stats.percentage >= 40 ? 'text-yellow-500' : 'text-red-500'}`}
-                                  strokeWidth="8" 
-                                  strokeDasharray={`${stats.percentage * 2.51} 251`}
-                                  strokeLinecap="round" 
-                                  stroke="currentColor" 
-                                  fill="transparent" 
-                                  r="40" 
-                                  cx="50" 
-                                  cy="50" 
-                                />
-                              </svg>
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="text-3xl font-bold">{stats.percentage}%</span>
-                              </div>
-                            </div>
-                          </div>
-                          <p className="text-lg mt-2">{stats.correct} correct out of {stats.total} questions</p>
-                        </div>
+                        <Paper elevation={1} sx={{ display: 'inline-block', p: 4, mb: 3, borderRadius: 3 }}>
+                          <Box display="flex" alignItems="center" justifyContent="center">
+                            <Box position="relative" display="inline-flex">
+                              <CircularProgress
+                                variant="determinate"
+                                value={100}
+                                size={120}
+                                thickness={4}
+                                sx={{ color: 'grey.300' }}
+                              />
+                              <CircularProgress
+                                variant="determinate"
+                                value={stats.percentage}
+                                size={120}
+                                thickness={4}
+                                sx={{
+                                  color: stats.percentage >= 70 ? 'success.main' : 
+                                         stats.percentage >= 40 ? 'warning.main' : 'error.main',
+                                  position: 'absolute',
+                                  left: 0,
+                                }}
+                              />
+                              <Box
+                                sx={{
+                                  top: 0,
+                                  left: 0,
+                                  bottom: 0,
+                                  right: 0,
+                                  position: 'absolute',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Typography variant="h4" component="div" fontWeight="bold">
+                                  {stats.percentage}%
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                          <Typography variant="body1" color="text.secondary" mt={2}>
+                            {stats.correct} correct out of {stats.total} questions
+                          </Typography>
+                        </Paper>
                       ) : (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-                          <p className="text-yellow-800">You haven't answered all questions yet. Your current score is based on the questions you've completed.</p>
-                        </div>
+                        <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+                          You haven't answered all questions yet. Your current score is based on the questions you've completed.
+                        </Alert>
                       )}
                       
-                      <div className="flex justify-center space-x-4 mt-4">
-                        <button
+                      {/* Action Buttons */}
+                      <Stack direction="row" spacing={2} justifyContent="center">
+                        <Button
                           onClick={resetQuiz}
-                          className="px-5 py-2 font-medium text-indigo-600 border border-indigo-600 rounded hover:bg-indigo-50"
+                          variant="outlined"
+                          startIcon={<Refresh />}
                         >
                           Try Again
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={generateMoreQuestions}
                           disabled={isGeneratingMoreQuestions}
-                          className={`px-5 py-2 font-medium text-white bg-green-600 rounded hover:bg-green-700 flex items-center ${isGeneratingMoreQuestions ? 'opacity-70 cursor-not-allowed' : ''}`}
+                          variant="outlined"
+                          color="secondary"
+                          startIcon={isGeneratingMoreQuestions ? <CircularProgress size={16} color="inherit" /> : <Add />}
                         >
-                          {isGeneratingMoreQuestions && (
-                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                          )}
-                          Generate New Questions
-                        </button>
-                        <button
+                          {isGeneratingMoreQuestions ? 'Generating...' : 'Generate New Questions'}
+                        </Button>
+                        <Button
                           onClick={togglePreviousQuestions}
                           disabled={isLoadingPreviousQuestions}
-                          className={`px-5 py-2 font-medium text-white bg-purple-600 rounded hover:bg-purple-700 flex items-center ${isLoadingPreviousQuestions ? 'opacity-70 cursor-not-allowed' : ''}`}
+                          variant="outlined"
+                          startIcon={isLoadingPreviousQuestions ? <CircularProgress size={16} color="inherit" /> : <History />}
                         >
-                          {isLoadingPreviousQuestions && (
-                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                          )}
-                          {showAllPreviousQuestions ? 'Show Current Quiz' : 'View All Previous Questions'}
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Current quiz results view */}
+                          {isLoadingPreviousQuestions 
+                            ? 'Loading...' 
+                            : showAllPreviousQuestions 
+                              ? 'Show Current Quiz' 
+                              : 'View All Previous Questions'
+                          }
+                        </Button>
+                      </Stack>
+                    </Box>
+
+                    {/* Current Quiz Results */}
                     {!showAllPreviousQuestions && (
-                      <div className="mt-8">
-                        <h4 className="text-xl font-semibold mb-4">Question Review</h4>
-                        <div className="space-y-6">
+                      <Box>
+                        <Typography variant="h6" fontWeight="600" gutterBottom>
+                          Question Review
+                        </Typography>
+                        <Stack spacing={3}>
                           {stats.questionsWithStatus.map((question) => (
-                            <div 
-                              key={question.id} 
-                              className={`p-4 border rounded-lg ${
-                                question.isAnswered 
-                                  ? (question.isCorrect 
-                                    ? 'border-green-200 bg-green-50' 
-                                    : 'border-red-200 bg-red-50')
-                                  : 'border-gray-200'
-                              }`}
+                            <Card 
+                              key={question.id}
+                              elevation={1}
+                              sx={{
+                                border: '1px solid',
+                                borderColor: question.isAnswered 
+                                  ? (question.isCorrect ? 'success.main' : 'error.main')
+                                  : 'divider'
+                              }}
                             >
-                              <div className="flex items-start mb-2">
-                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 mt-1 ${
-                                  question.isAnswered
-                                    ? (question.isCorrect 
-                                      ? 'bg-green-500 text-white' 
-                                      : 'bg-red-500 text-white')
-                                    : 'bg-gray-300 text-white'
-                                }`}>
-                                  {question.isAnswered
-                                    ? (question.isCorrect 
-                                      ? '✓' 
-                                      : '✗')
-                                    : '?'
-                                  }
-                                </span>
-                                <h5 className="text-lg font-medium">{question.text}</h5>
-                              </div>
-                              
-                              <div className="ml-8 space-y-2">
-                                {question.options.map((option, index) => (
-                                  <div 
-                                    key={index}
-                                    className={`p-2 rounded ${
-                                      question.isAnswered
-                                        ? (index === question.correctAnswer
-                                          ? 'bg-green-100 border-l-4 border-green-500' 
-                                          : question.userAnswer === index
-                                            ? 'bg-red-100 border-l-4 border-red-500'
-                                            : 'text-gray-600')
-                                        : question.userAnswer === index
-                                          ? 'bg-indigo-50 border-l-4 border-indigo-500'
-                                          : 'text-gray-600'
-                                    }`}
-                                  >
-                                    <span className={`transition-colors duration-200 ${
-                                      question.isAnswered
-                                        ? (index === question.correctAnswer
-                                          ? 'font-medium text-green-700'
-                                          : question.userAnswer === index
-                                            ? 'font-medium text-red-700'
-                                            : 'text-gray-700')
-                                        : 'text-gray-700'
-                                    }`}>
-                                      <span className="font-medium mr-2">{String.fromCharCode(65 + index)}. </span>
-                                      {cleanOptionText(option)}
-                                    </span>
-                                    {question.isAnswered && index === question.correctAnswer && (
-                                      <span className="ml-2 text-green-600 font-medium"> (Correct answer)</span>
-                                    )}
-                                    {question.isAnswered && question.userAnswer === index && question.userAnswer !== question.correctAnswer && (
-                                      <span className="ml-2 text-red-600 font-medium"> (Your answer)</span>
-                                    )}
-                                  </div>
-                                ))}
+                              <CardContent>
+                                <Box display="flex" alignItems="flex-start" mb={2}>
+                                  <Chip
+                                    icon={question.isAnswered
+                                      ? (question.isCorrect ? <CheckCircle /> : <Cancel />)
+                                      : <HelpOutline />
+                                    }
+                                    label={question.isAnswered
+                                      ? (question.isCorrect ? 'Correct' : 'Incorrect')
+                                      : 'Unanswered'
+                                    }
+                                    color={question.isAnswered
+                                      ? (question.isCorrect ? 'success' : 'error')
+                                      : 'default'
+                                    }
+                                    size="small"
+                                    sx={{ mr: 2 }}
+                                  />
+                                  <Typography variant="body1" fontWeight="500">
+                                    {question.text}
+                                  </Typography>
+                                </Box>
                                 
-                                {question.isAnswered && (
-                                  <div className="mt-3 p-3 bg-gray-50 rounded border border-gray-200">
-                                    <p className="text-gray-700"><span className="font-medium">Explanation:</span> {question.reason}</p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                                <Box ml={2}>
+                                  {question.options.map((option, index) => (
+                                    <Paper
+                                      key={index}
+                                      elevation={0}
+                                      onClick={() => handleAnswerSelect(question.id, index)}
+                                      sx={{
+                                        p: 2,
+                                        mb: 1,
+                                        border: '2px solid',
+                                        borderColor: submittedAnswers[question.id] 
+                                          ? (index === question.correctAnswer 
+                                              ? 'success.main' 
+                                              : (selectedAnswers[question.id] === index && selectedAnswers[question.id] !== question.correctAnswer)
+                                                ? 'error.main'
+                                                : 'divider')
+                                          : (selectedAnswers[question.id] === index ? 'primary.main' : 'divider'),
+                                        bgcolor: submittedAnswers[question.id] 
+                                          ? 'transparent'
+                                          : (selectedAnswers[question.id] === index ? 'primary.light' : 'transparent'),
+                                        cursor: submittedAnswers[question.id] ? 'default' : 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        '&:hover': submittedAnswers[question.id] ? {} : {
+                                          borderColor: 'primary.main',
+                                          bgcolor: 'action.hover'
+                                        }
+                                      }}
+                                    >
+                                      <Typography
+                                        variant="body2"
+                                        color={submittedAnswers[question.id]
+                                          ? (index === question.correctAnswer ? 'success.dark' : 'text.primary')
+                                          : (selectedAnswers[question.id] === index ? 'primary.dark' : 'text.primary')
+                                        }
+                                      >
+                                        <Box component="span" fontWeight="600" mr={1}>
+                                          {String.fromCharCode(65 + index)}.
+                                        </Box>
+                                        {cleanOptionText(option)}
+                                        {submittedAnswers[question.id] && index === question.correctAnswer && (
+                                          <Chip label="Correct answer" color="success" size="small" sx={{ ml: 1 }} />
+                                        )}
+                                        {submittedAnswers[question.id] && selectedAnswers[question.id] === index && selectedAnswers[question.id] !== question.correctAnswer && (
+                                          <Chip label="Your answer" color="error" size="small" sx={{ ml: 1 }} />
+                                        )}
+                                      </Typography>
+                                    </Paper>
+                                  ))}
+                                  
+                                  {submittedAnswers[question.id] && (
+                                    <Paper elevation={0} sx={{ p: 2, mt: 2, bgcolor: 'action.hover' }}>
+                                      <Typography variant="body2" color="text.primary">
+                                        <Box component="span" fontWeight="600">Explanation:</Box> {question.reason}
+                                      </Typography>
+                                    </Paper>
+                                  )}
+                                </Box>
+                              </CardContent>
+                            </Card>
                           ))}
-                        </div>
-                      </div>
+                        </Stack>
+                      </Box>
                     )}
-                    
-                    {/* All previous questions view */}
+
+                    {/* All Previous Questions View */}
                     {showAllPreviousQuestions && (
-                      <div className="mt-8">
-                        <div className="flex justify-between items-center mb-4">
-                          <h4 className="text-xl font-semibold">All Previous Questions</h4>
-                          <span className="text-sm text-gray-500">                            Showing {allPreviousQuestions.length} quiz set{allPreviousQuestions.length !== 1 ? 's' : ''} from previous sessions                          </span>
-                        </div>
+                      <Box>
+                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                          <Typography variant="h6" fontWeight="600">
+                            All Previous Questions
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Showing {allPreviousQuestions.length} quiz set{allPreviousQuestions.length !== 1 ? 's' : ''} from previous sessions
+                          </Typography>
+                        </Box>
                         
                         {allPreviousQuestions.length === 0 ? (
-                          <div className="text-center py-8 text-gray-500">
+                          <Box textAlign="center" py={4}>
                             {isLoadingPreviousQuestions ? (
-                              <div className="flex justify-center items-center">
-                                <svg className="animate-spin h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span className="ml-2">Loading previous questions...</span>
-                              </div>
+                              <Box display="flex" justifyContent="center" alignItems="center">
+                                <CircularProgress size={32} sx={{ mr: 2 }} />
+                                <Typography color="text.secondary">Loading previous questions...</Typography>
+                              </Box>
                             ) : (
-                              <p>No previous questions found</p>
+                              <Typography color="text.secondary">No previous questions found</Typography>
                             )}
-                          </div>
+                          </Box>
                         ) : (
-                          <div className="space-y-6">
+                          <Stack spacing={4}>
                             {allPreviousQuestions.map((questionSet, setIndex) => (
-                              <div key={setIndex} className="border border-gray-200 rounded-lg p-4">
-                                <h5 className="font-medium text-lg mb-3">Quiz Set #{setIndex + 1}</h5>
-                                {questionSet.map((question, qIndex) => (
-                                  <div key={`${setIndex}-${qIndex}`} className="mb-4 p-4 bg-gray-50 rounded-lg">
-                                    <h6 className="font-medium text-gray-800 mb-2">
-                                      Question {qIndex + 1}: {question.text}
-                                    </h6>
-                                    <div className="ml-4 space-y-2 mt-2">
-                                      {question.options.map((option, optIndex) => {
-                                        const isCorrectAnswer = optIndex === question.correctAnswer;
-                                        const isUserAnswer = question.userAnswer === optIndex;
-                                        const wasAnswered = question.isAnswered;
-                                        
-                                        return (
-                                          <div 
-                                            key={optIndex}
-                                            className={`p-2 rounded ${
-                                              wasAnswered
-                                                ? (isCorrectAnswer
-                                                    ? 'bg-green-100 border-l-4 border-green-500' 
-                                                    : isUserAnswer
-                                                      ? 'bg-red-100 border-l-4 border-red-500'
-                                                      : 'text-gray-600')
-                                                : (isCorrectAnswer
-                                                    ? 'bg-green-100 border-l-4 border-green-500'
-                                                    : 'text-gray-600')
-                                            }`}
-                                          >
-                                            <span className="font-medium mr-2">{String.fromCharCode(65 + optIndex)}. </span>
-                                            {cleanOptionText(option)}
-                                            {isCorrectAnswer && (
-                                              <span className="ml-2 text-green-600 font-medium"> (Correct answer)</span>
-                                            )}
-                                            {wasAnswered && isUserAnswer && !isCorrectAnswer && (
-                                              <span className="ml-2 text-red-600 font-medium"> (Your answer)</span>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                      <div className="mt-3 p-3 bg-gray-100 rounded border border-gray-200">
-                                        <p className="text-gray-700"><span className="font-medium">Explanation:</span> {question.reason}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
+                              <Card key={setIndex} elevation={2}>
+                                <CardContent>
+                                  <Typography variant="h6" fontWeight="600" gutterBottom>
+                                    Quiz Set #{setIndex + 1}
+                                  </Typography>
+                                  <Stack spacing={3}>
+                                    {questionSet.map((question, qIndex) => (
+                                      <Paper key={`${setIndex}-${qIndex}`} elevation={0} sx={{ p: 3, bgcolor: 'action.hover' }}>
+                                        <Typography variant="body1" fontWeight="500" gutterBottom>
+                                          Question {qIndex + 1}: {question.text}
+                                        </Typography>
+                                        <Box ml={2}>
+                                          {question.options.map((option, optIndex) => {
+                                            const isCorrectAnswer = optIndex === question.correctAnswer;
+                                            const isUserAnswer = question.userAnswer === optIndex;
+                                            const wasAnswered = question.isAnswered;
+                                            
+                                            return (
+                                              <Paper
+                                                key={optIndex}
+                                                elevation={0}
+                                                sx={{
+                                                  p: 2,
+                                                  mb: 1,
+                                                  bgcolor: wasAnswered
+                                                    ? (isCorrectAnswer
+                                                        ? 'success.light'
+                                                        : isUserAnswer
+                                                          ? 'error.light'
+                                                          : 'transparent')
+                                                    : (isCorrectAnswer
+                                                        ? 'success.light'
+                                                        : 'transparent'),
+                                                  border: '1px solid',
+                                                  borderColor: wasAnswered
+                                                    ? (isCorrectAnswer
+                                                        ? 'success.main'
+                                                        : isUserAnswer
+                                                          ? 'error.main'
+                                                          : 'divider')
+                                                    : isCorrectAnswer
+                                                      ? 'success.main'
+                                                      : 'divider'
+                                                }}
+                                              >
+                                                <Typography variant="body2">
+                                                  <Box component="span" fontWeight="600" mr={1}>
+                                                    {String.fromCharCode(65 + optIndex)}.
+                                                  </Box>
+                                                  {cleanOptionText(option)}
+                                                  {isCorrectAnswer && (
+                                                    <Chip label="Correct answer" color="success" size="small" sx={{ ml: 1 }} />
+                                                  )}
+                                                  {wasAnswered && isUserAnswer && !isCorrectAnswer && (
+                                                    <Chip label="Your answer" color="error" size="small" sx={{ ml: 1 }} />
+                                                  )}
+                                                </Typography>
+                                              </Paper>
+                                            );
+                                          })}
+                                          <Paper elevation={0} sx={{ p: 2, mt: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
+                                            <Typography variant="body2" color="text.primary">
+                                              <Box component="span" fontWeight="600">Explanation:</Box> {question.reason}
+                                            </Typography>
+                                          </Paper>
+                                        </Box>
+                                      </Paper>
+                                    ))}
+                                  </Stack>
+                                </CardContent>
+                              </Card>
                             ))}
-                          </div>
+                          </Stack>
                         )}
-                      </div>
+                      </Box>
                     )}
-                  </div>
+                  </Box>
                 ) : (
-                  <>
+                  /* Quiz Taking Interface */
+                  <Box>
+                    {/* Progress Bar */}
                     {questions.length > 0 && (
-                      <div className="mb-6">
-                        <div className="mb-2 text-sm font-medium text-gray-500">
+                      <Box mb={4}>
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
                           Question {currentQuestion + 1} of {questions.length}
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-indigo-600 h-2 rounded-full" 
-                            style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
-                          />
-                        </div>
-                      </div>
+                        </Typography>
+                        <LinearProgress 
+                          variant="determinate" 
+                          value={((currentQuestion + 1) / questions.length) * 100}
+                          sx={{ borderRadius: 1, height: 8 }}
+                        />
+                      </Box>
                     )}
 
+                    {/* Current Question */}
                     {questions.length > 0 && (
-                      <div>
-                        <div className="mb-6">
-                          <h3 className="text-xl font-medium text-gray-800 mb-4">
-                            {questions[currentQuestion].text}
-                          </h3>
-                          <div className="space-y-3">
-                            {questions[currentQuestion].options.map((option, index) => {
-                              const questionId = questions[currentQuestion].id;
-                              const isSelected = selectedAnswers[questionId] === index;
-                              const isSubmitted = submittedAnswers[questionId];
-                              const correctAnswer = questions[currentQuestion].correctAnswer;
-                              const isCorrect = isSelected && index === correctAnswer;
-                              const isIncorrect = isSelected && index !== correctAnswer;
-                              const isCorrectAnswer = index === correctAnswer;
+                      <Box>
+                        <Card elevation={2} sx={{ mb: 4 }}>
+                          <CardContent sx={{ p: 4 }}>
+                            <Typography variant="h5" fontWeight="500" gutterBottom>
+                              {questions[currentQuestion].text}
+                            </Typography>
+                            
+                            <FormControl component="fieldset" sx={{ width: '100%', mt: 3 }}>
+                              <Stack spacing={2}>
+                                {questions[currentQuestion].options.map((option, index) => {
+                                  const questionId = questions[currentQuestion].id;
+                                  const isSelected = selectedAnswers[questionId] === index;
+                                  const isSubmitted = submittedAnswers[questionId];
+                                  const correctAnswer = questions[currentQuestion].correctAnswer;
+                                  const isCorrect = isSelected && index === correctAnswer;
+                                  const isIncorrect = isSelected && index !== correctAnswer;
+                                  const isCorrectAnswer = index === correctAnswer;
 
-                              return (
-                                <div 
-                                  key={index}
-                                  onClick={() => handleAnswerSelect(questionId, index)}
-                                  className={`p-4 border rounded-lg cursor-pointer transition-all duration-200 transform ${
-                                    isSubmitted 
-                                      ? (isCorrect
-                                          ? 'border-green-500 bg-green-50 shadow-md scale-[1.02]'
-                                          : isIncorrect
-                                            ? 'border-red-500 bg-red-50 shadow-md scale-[1.02]'
-                                            : isCorrectAnswer
-                                              ? 'border-green-500 bg-green-50 opacity-70'
-                                              : 'border-gray-200 opacity-70'
-                                        )
-                                      : (isSelected
-                                          ? 'border-indigo-500 bg-indigo-100 shadow-md scale-[1.02]' 
-                                          : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50 hover:scale-[1.01]'
-                                        )
-                                  }`}
-                                >
-                                  <div className="flex items-center">
-                                    <div className={`w-6 h-6 rounded-full border flex items-center justify-center mr-3 transition-all duration-200 ${
-                                      isSubmitted
-                                        ? (isCorrect
-                                            ? 'border-green-500 bg-green-500 text-white'
-                                            : isIncorrect
-                                              ? 'border-red-500 bg-red-500 text-white'
-                                              : isCorrectAnswer
-                                                ? 'border-green-500 bg-green-500 text-white opacity-70'
-                                                : 'border-gray-300'
-                                          )
-                                        : (isSelected
-                                            ? 'border-indigo-500 bg-indigo-500 text-white' 
-                                            : 'border-gray-300'
-                                          )
-                                    }`}>
-                                      {isSelected && !isSubmitted && (
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                        </svg>
-                                      )}
-                                      {isCorrect && (
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                        </svg>
-                                      )}
-                                      {isIncorrect && (
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                        </svg>
-                                      )}
-                                      {isCorrectAnswer && isSubmitted && !isSelected && (
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                        </svg>
-                                      )}
-                                    </div>
-                                    <span className={`transition-colors duration-200 ${
-                                      isSubmitted
-                                        ? (isCorrect
-                                            ? 'font-medium text-green-700'
-                                            : isIncorrect
-                                              ? 'font-medium text-red-700'
-                                              : isCorrectAnswer
-                                                ? 'font-medium text-green-700 opacity-70'
-                                                : 'text-gray-700 opacity-70'
-                                          )
-                                        : (isSelected
-                                            ? 'font-medium text-indigo-700'
-                                            : 'text-gray-700'
-                                          )
-                                    }`}>
-                                      <span className="font-medium mr-2">{String.fromCharCode(65 + index)}. </span>
-                                      {cleanOptionText(option)}
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
+                                  return (
+                                    <Paper
+                                      key={index}
+                                      elevation={0}
+                                      onClick={() => handleAnswerSelect(questionId, index)}
+                                      sx={{
+                                        p: 2,
+                                        mb: 1,
+                                        border: '2px solid',
+                                        borderColor: isSubmitted 
+                                          ? (isCorrect
+                                              ? 'success.main'
+                                              : isIncorrect
+                                                ? 'error.main'
+                                                : isCorrectAnswer
+                                                  ? 'success.main'
+                                                  : 'divider')
+                                          : (isSelected
+                                              ? 'primary.main'
+                                              : 'divider'),
+                                        bgcolor: 'transparent',
+                                        cursor: isSubmitted ? 'default' : 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        '&:hover': isSubmitted ? {} : {
+                                          borderColor: 'primary.main',
+                                          bgcolor: 'action.hover'
+                                        }
+                                      }}
+                                    >
+                                      <Box display="flex" alignItems="center">
+                                        <Box
+                                          sx={{
+                                            width: 24,
+                                            height: 24,
+                                            borderRadius: '50%',
+                                            border: '2px solid',
+                                            borderColor: isSubmitted 
+                                              ? (isCorrect
+                                                  ? 'success.main'
+                                                  : isIncorrect
+                                                    ? 'error.main'
+                                                    : isCorrectAnswer
+                                                      ? 'success.main'
+                                                      : 'divider')
+                                              : (isSelected
+                                                  ? 'primary.main'
+                                                  : 'divider'),
+                                            bgcolor: isSubmitted
+                                              ? (isCorrect || isCorrectAnswer ? 'success.main' : isIncorrect ? 'error.main' : 'transparent')
+                                              : (isSelected ? 'primary.main' : 'transparent'),
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            mr: 2
+                                          }}
+                                        >
+                                          {(isSelected && !isSubmitted) || isCorrect || (isCorrectAnswer && isSubmitted) ? (
+                                            <Check sx={{ fontSize: 16, color: 'white' }} />
+                                          ) : isIncorrect ? (
+                                            <Close sx={{ fontSize: 16, color: 'white' }} />
+                                          ) : null}
+                                        </Box>
+                                        <Typography
+                                          variant="body1"
+                                          color={isSubmitted
+                                            ? (isCorrect || isCorrectAnswer ? 'success.dark' : isIncorrect ? 'error.dark' : 'text.primary')
+                                            : (isSelected ? 'primary.dark' : 'text.primary')
+                                          }
+                                        >
+                                          <Box component="span" fontWeight="600" mr={1}>
+                                            {String.fromCharCode(65 + index)}.
+                                          </Box>
+                                          {cleanOptionText(option)}
+                                        </Typography>
+                                      </Box>
+                                    </Paper>
+                                  );
+                                })}
+                              </Stack>
+                            </FormControl>
+                          </CardContent>
+                        </Card>
 
-                        {/* Explanation section that appears after submission */}
-                        {submittedAnswers[questions[currentQuestion].id] && (
-                          <div className={`mt-4 p-4 rounded-lg border ${
-                            isAnswerCorrect(questions[currentQuestion].id) 
-                              ? 'border-green-200 bg-green-50' 
-                              : 'border-red-200 bg-red-50'
-                          }`}>
-                            <h4 className={`font-bold ${
-                              isAnswerCorrect(questions[currentQuestion].id) 
-                                ? 'text-green-700' 
-                                : 'text-red-700'
-                            }`}>
-                              {isAnswerCorrect(questions[currentQuestion].id) 
-                                ? 'Correct!' 
-                                : 'Incorrect!'}
-                            </h4>
-                            <p className="mt-2">
-                              {questions[currentQuestion].reason}
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="flex justify-between mt-8">
-                          <button
+                        {/* Navigation Buttons */}
+                        <Box display="flex" justifyContent="space-between" mb={4}>
+                          <Button
                             onClick={moveToPreviousQuestion}
                             disabled={currentQuestion === 0}
-                            className={`px-4 py-2 border rounded ${
-                              currentQuestion === 0 
-                                ? 'border-gray-200 text-gray-400 cursor-not-allowed' 
-                                : 'border-indigo-500 text-indigo-600 hover:bg-indigo-50'
-                            }`}
+                            variant="outlined"
+                            startIcon={<ArrowBack />}
                           >
                             Previous
-                          </button>
+                          </Button>
                           
                           {!submittedAnswers[questions[currentQuestion].id] ? (
-                            <button
+                            <Button
                               onClick={() => handleSubmitAnswer(questions[currentQuestion].id)}
                               disabled={selectedAnswers[questions[currentQuestion].id] === undefined}
-                              className={`px-4 py-2 rounded ${
-                                selectedAnswers[questions[currentQuestion].id] === undefined
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                              }`}
+                              variant="contained"
+                              color="primary"
                             >
                               Submit Answer
-                            </button>
+                            </Button>
                           ) : (
                             currentQuestion >= questions.length - 1 ? (
-                              <button
+                              <Button
                                 onClick={completeQuiz}
-                                className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700"
+                                variant="contained"
+                                color="secondary"
+                                startIcon={<CheckCircle />}
                               >
                                 Complete Quiz
-                              </button>
+                              </Button>
                             ) : (
-                              <button
+                              <Button
                                 onClick={moveToNextQuestion}
-                                className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700"
+                                variant="contained"
+                                color="secondary"
+                                endIcon={<ArrowForward />}
                               >
                                 Next Question
-                              </button>
+                              </Button>
                             )
                           )}
-                        </div>
-                      </div>
+                        </Box>
+
+                        {/* Explanation after submission */}
+                        <Collapse in={submittedAnswers[questions[currentQuestion].id]}>
+                          <Alert
+                            severity={isAnswerCorrect(questions[currentQuestion].id) ? 'success' : 'error'}
+                            sx={{ mb: 2 }}
+                            icon={isAnswerCorrect(questions[currentQuestion].id) ? <CheckCircle /> : <Cancel />}
+                          >
+                            <Typography variant="h6" gutterBottom>
+                              {isAnswerCorrect(questions[currentQuestion].id) ? 'Correct!' : 'Incorrect!'}
+                            </Typography>
+                            <Typography variant="body2">
+                              {questions[currentQuestion].reason}
+                            </Typography>
+                          </Alert>
+                        </Collapse>
+                      </Box>
                     )}
-                  </>
+                  </Box>
                 )}
-              </div>
+              </Box>
             )}
-          </div>
-        </div>
-      </main>
-    </div>
+          </CardContent>
+        </Card>
+      </Container>
+    </Box>
   );
 };
 

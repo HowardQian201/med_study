@@ -112,6 +112,7 @@ def login():
         
         # Ensure PDF results are empty on fresh login
         session['pdf_results'] = {}
+        session['user_text'] = ""
         session['summary'] = ""
         session['quiz_questions'] = []
         
@@ -165,8 +166,6 @@ def upload_multiple():
         # Check if user is authenticated
         if 'user_id' not in session:
             return jsonify({'error': 'Unauthorized'}), 401
-
-        start_time = time.time()
         
         # Clean up any existing temp directory for this user
         cleanup_temp_dir(session['user_id'])
@@ -178,15 +177,17 @@ def upload_multiple():
 
         set_process_priority()
         
+        # Get additional user text if provided
+        user_text = request.form.get('userText', '').strip()
+        
         # Check if files were uploaded
-        if 'files' not in request.files:
-            raise Exception("No files part in the request")
+        files = request.files.getlist('files') if 'files' in request.files else []
         
-        files = request.files.getlist('files')
-        if len(files) == 0:
-            raise Exception("No files selected")
+        # Must have either files or user text
+        if len(files) == 0 and not user_text:
+            raise Exception("No files or text provided")
         
-        results = session['pdf_results']
+        results = {}
         total_extracted_text = ""
         
         # Process each file
@@ -206,18 +207,29 @@ def upload_multiple():
             print(f"File received: {filename}, {total_bytes / (1024*1024):.1f} MB")
             
             # Extract text from PDF
-            extracted_text = extract_text_from_pdf(input_path)
-            if extracted_text:
-                results[filename] = extracted_text
-                
+            if filename.endswith('.pdf'):
+                extracted_text = extract_text_from_pdf(input_path)
+                if extracted_text:
+                    results[filename] = extracted_text
         
-        if not results:
-            raise Exception("No text could be extracted from any of the PDFs")
-        
+        # Combine PDF text and user text
         filenames = ""
         for key, value in results.items():
             filenames += key + " "
             total_extracted_text += value
+        
+        # Add user text if provided
+        print(f"User text: {user_text}")
+        if user_text:
+            total_extracted_text += f"\n\nAdditional Notes:\n{user_text}"
+            if filenames:
+                filenames += "+ Additional Text"
+            else:
+                filenames = "User Text"
+        
+        if not total_extracted_text:
+            raise Exception("No text could be extracted from PDFs and no additional text provided")
+        
         filenames = filenames.strip()
         summary = gpt_summarize_transcript(total_extracted_text)
         summary = f"Summary of: {filenames}\n\n{summary}"
@@ -225,6 +237,7 @@ def upload_multiple():
         # Store results in session
         session['summary'] = summary
         session['pdf_results'] = results
+        session['user_text'] = user_text  # Store user text separately
         
         return jsonify({
             'success': True,
@@ -266,6 +279,7 @@ def clear_results():
             if 'summary' in session:
                 session['pdf_results'] = {}
                 session['summary'] = ""
+                session['user_text'] = ""  # Clear user text as well
                 session['quiz_questions'] = []
             return jsonify({'success': True})
         return jsonify({'error': 'Unauthorized'}), 401
@@ -444,32 +458,54 @@ def save_quiz_answers():
 
 @app.route('/api/regenerate-summary', methods=['POST'])
 def regenerate_summary():
-    """Endpoint to regenerate the summary from stored PDF text"""
+    """Endpoint to regenerate the summary from stored PDF text and optional new user text"""
     print("regenerate_summary()")
     try:
         # Check if user is authenticated
         if 'user_id' not in session:
             return jsonify({'error': 'Unauthorized'}), 401
-            
-        # Check if there's PDF text to work with
-        pdf_results = session.get('pdf_results', {})
-        if not pdf_results:
-            return jsonify({'error': 'No PDF text available. Please upload PDFs first.'}), 400
         
-        # Combine all PDF text
+        # Get request data
+        data = request.json or {}
+        new_user_text = data.get('userText', '').strip() if data.get('userText') else ''
+        
+        # Get stored data
+        pdf_results = session.get('pdf_results', {})
+        stored_user_text = session.get('user_text', '')
+        
+        # Use new user text if provided, otherwise use stored user text
+        user_text = new_user_text if new_user_text else stored_user_text
+        
+        # Must have either PDF text or user text
+        if not pdf_results and not user_text:
+            return jsonify({'error': 'No PDF text or user text available. Please upload PDFs or enter text.'}), 400
+        
+        # Combine all text sources
         total_extracted_text = ""
         filenames = ""
+        
+        # Add PDF text
         for key, value in pdf_results.items():
             filenames += key + " "
             total_extracted_text += value
+        
+        # Add user text if provided
+        if user_text:
+            total_extracted_text += f"\n\nAdditional Notes:\n{user_text}"
+            if filenames:
+                filenames += "+ Additional Text"
+            else:
+                filenames = "User Text"
+        
         filenames = filenames.strip()
         
         # Generate new summary
         summary = gpt_summarize_transcript(total_extracted_text)
         summary = f"Summary of: {filenames}\n\n{summary}"
         
-        # Update session
+        # Update session with new data
         session['summary'] = summary
+        session['user_text'] = user_text  # Update stored user text
         session['quiz_questions'] = []  # Clear questions since summary changed
         
         return jsonify({

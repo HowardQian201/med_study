@@ -1,6 +1,38 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import {
+  Box,
+  AppBar,
+  Toolbar,
+  Typography,
+  Button,
+  Container,
+  Card,
+  CardContent,
+  LinearProgress,
+  Alert,
+  List,
+  ListItem,
+  ListItemText,
+  IconButton,
+  Stack,
+  Divider,
+  Paper,
+  Chip,
+  Grid,
+  TextField
+} from '@mui/material';
+import {
+  CloudUpload,
+  Quiz,
+  Refresh,
+  Clear,
+  Cancel,
+  Logout,
+  Description
+} from '@mui/icons-material';
+import ThemeToggle from '../components/ThemeToggle';
 
 const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const navigate = useNavigate();
@@ -8,6 +40,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [userText, setUserText] = useState('');
   const abortController = useRef(null);
 
   // Cleanup function to be called in various scenarios
@@ -53,13 +86,14 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   };
 
   const uploadPDFs = async () => {
-    if (files.length === 0) {
-      setError('Please select at least one file first');
+    // Check that we have either files or user text
+    if (files.length === 0 && !userText.trim()) {
+      setError('Please select at least one file or enter some text');
       return;
     }
   
     try {
-      console.log(`Uploading ${files.length} PDFs`);
+      console.log(`Processing ${files.length} PDFs and additional text`);
       setIsUploading(true);
       setProgress(0);
       setError('');
@@ -72,7 +106,12 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
       files.forEach(file => {
         formData.append('files', file);
       });
-  
+      
+      // Add user text if provided
+      if (userText.trim()) {
+        formData.append('userText', userText.trim());
+      }
+
       const response = await axios.post('/api/upload-multiple', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -86,17 +125,17 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
           setProgress(percentCompleted);
         },
       });
-  
+
       if (response.data.success) {
-        console.log("extraction success");
+        console.log("processing success");
         // Update to handle the new response format (text instead of dictionary)
         setSummary(response.data.results);
       } else {
-        setError('Text extraction failed');
+        setError('Processing failed');
       }
     } catch (err) {
       if (err.name === 'AbortError') {
-        setError('Upload cancelled');
+        setError('Processing cancelled');
         await cleanup(); // Cleanup on cancel
       } else if (err.response?.status === 401) {
         setError('Session expired. Please log in again.');
@@ -105,7 +144,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
         navigate('/login');
       } else {
         setError(err.response?.data?.error || err.message);
-        console.error('Upload failed:', err);
+        console.error('Processing failed:', err);
       }
     } finally {
       setIsUploading(false);
@@ -138,7 +177,9 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
       setIsUploading(true); // Reuse the loading state
       setError('');
       
-      const response = await axios.post('/api/regenerate-summary', {}, {
+      const response = await axios.post('/api/regenerate-summary', {
+        userText: userText.trim() || undefined
+      }, {
         withCredentials: true
       });
       
@@ -177,153 +218,261 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-700">Welcome, {user?.name}</span>
-              <button
-                onClick={handleLogout}
-                className="ml-4 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="w-full max-w-3xl mx-auto p-8 bg-white rounded-xl shadow-lg">
-            <h2 className="text-2xl font-bold text-center mb-8 text-gray-800">
-              PDF Text Extraction
-            </h2>
-
-            {/* File Selection Area */}
-            <div className="space-y-6">
-              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-8 bg-gray-50 hover:bg-gray-100 transition-colors">
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={handleFileSelect}
-                  multiple
-                  className="block w-full text-sm text-gray-500
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-full file:border-0
-                    file:text-sm file:font-semibold
-                    file:bg-blue-50 file:text-blue-700
-                    hover:file:bg-blue-100
-                    cursor-pointer"
-                />
-                {files.length > 0 && (
-                  <div className="mt-4 text-sm text-gray-600">
-                    Selected: {files.length} file(s)
-                    <ul className="mt-2 list-disc pl-5">
-                      {files.map((file, index) => (
-                        <li key={index}>{file.name}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {/* Submit Button */}
-              <div className="flex justify-center">
-                <button
-                  onClick={uploadPDFs}
-                  disabled={files.length === 0 || isUploading}
-                  className={`px-6 py-3 rounded-lg font-medium text-white 
-                    ${files.length === 0 || isUploading 
-                      ? 'bg-gray-400 cursor-not-allowed' 
-                      : 'bg-blue-500 hover:bg-blue-600 transition-colors'
-                    }`}
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      {/* App Bar */}
+      <AppBar position="static" color="default" elevation={1}>
+        <Container maxWidth="xl">
+          <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
+            <Toolbar>
+              <Typography variant="h6" component="h1" sx={{ flexGrow: 1, fontWeight: 600 }}>
+                Dashboard
+              </Typography>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Typography variant="body2" color="text.secondary">
+                  Welcome, {user?.name}
+                </Typography>
+                <ThemeToggle size="small" />
+                <Button
+                  onClick={handleLogout}
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<Logout />}
+                  size="small"
                 >
-                  {isUploading ? 'Extracting Text...' : 'Extract Text'}
-                </button>
-              </div>
+                  Logout
+                </Button>
+              </Stack>
+            </Toolbar>
+          </Box>
+        </Container>
+      </AppBar>
+
+      {/* Main Content */}
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Card elevation={3} sx={{ maxWidth: 1000, mx: 'auto' }}>
+          <CardContent sx={{ p: 4 }}>
+            <Typography 
+              variant="h4" 
+              component="h2" 
+              align="center" 
+              gutterBottom
+              fontWeight="bold"
+              color="text.primary"
+            >
+              PDF Text Extraction
+            </Typography>
+
+            <Grid container spacing={4}>
+              {/* PDF Upload Section */}
+              <Grid item xs={12} md={6}>
+                <Stack spacing={3}>
+                  {/* File Upload Area */}
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      border: '2px dashed',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      p: 4,
+                      bgcolor: 'action.hover',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        bgcolor: 'action.selected',
+                        borderColor: 'primary.main'
+                      }
+                    }}
+                  >
+                    <Stack spacing={2} alignItems="center">
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={handleFileSelect}
+                        multiple
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          border: 'none',
+                          borderRadius: '8px',
+                          backgroundColor: 'transparent',
+                          cursor: 'pointer'
+                        }}
+                      />
+                      
+                      {files.length > 0 && (
+                        <Box sx={{ width: '100%', mt: 2 }}>
+                          <Typography variant="body2" color="text.secondary" gutterBottom>
+                            Selected: {files.length} file(s)
+                          </Typography>
+                          <List dense>
+                            {files.map((file, index) => (
+                              <ListItem key={index} sx={{ pl: 0 }}>
+                                <Description sx={{ mr: 1, color: 'primary.main' }} />
+                                <ListItemText 
+                                  primary={file.name}
+                                  primaryTypographyProps={{ variant: 'body2' }}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
+                      )}
+                    </Stack>
+                  </Paper>
+                </Stack>
+              </Grid>
+
+              {/* Text Input Section */}
+              <Grid item xs={12} md={6}>
+                <Stack spacing={3}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      border: '2px solid',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      p: 3,
+                      bgcolor: 'background.paper',
+                      height: '100%',
+                      minHeight: 200
+                    }}
+                  >
+                    <Typography variant="h6" fontWeight="600" gutterBottom>
+                      Additional Text
+                    </Typography>
+                    <TextField
+                      multiline
+                      rows={8}
+                      fullWidth
+                      placeholder="Enter any additional text or notes that you want to include with the PDF content for summary and quiz generation..."
+                      value={userText}
+                      onChange={(e) => setUserText(e.target.value)}
+                      variant="outlined"
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          '& fieldset': {
+                            borderColor: 'divider',
+                          },
+                        },
+                      }}
+                    />
+                  </Paper>
+                </Stack>
+              </Grid>
+            </Grid>
+
+            <Stack spacing={4} mt={4}>
+              {/* Upload Button */}
+              <Box display="flex" justifyContent="center">
+                <Button
+                  onClick={uploadPDFs}
+                  disabled={(files.length === 0 && !userText.trim()) || isUploading}
+                  variant="contained"
+                  size="large"
+                  startIcon={<CloudUpload />}
+                  sx={{ px: 4, py: 1.5 }}
+                >
+                  {isUploading ? 'Processing...' : 'Generate New Summary'}
+                </Button>
+              </Box>
 
               {/* Progress Bar */}
               {isUploading && (
-                <div className="space-y-2">
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-                    <div 
-                      className="bg-blue-600 h-full rounded-full transition-all duration-300"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>Upload {progress}% complete. Summarizing...</span>
-                    <button 
+                <Box>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      Upload {progress}% complete. Summarizing...
+                    </Typography>
+                    <Button
                       onClick={cancelUpload}
-                      className="text-red-500 hover:text-red-700"
+                      color="error"
+                      size="small"
+                      startIcon={<Cancel />}
                     >
                       Cancel
-                    </button>
-                  </div>
-                </div>
+                    </Button>
+                  </Box>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={progress} 
+                    sx={{ borderRadius: 1, height: 8 }}
+                  />
+                </Box>
               )}
 
               {/* Error Message */}
               {error && (
-                <div className="text-red-500 text-center text-sm">
+                <Alert severity="error" sx={{ borderRadius: 2 }}>
                   {error}
-                </div>
+                </Alert>
               )}
 
-              {/* Results - Updated to show summary text */}
+              {/* Results Section */}
               {summary && (
-                <div className="mt-8">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-semibold text-gray-800">
+                <Box>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="h6" fontWeight="600" color="text.primary">
                       Summary:
-                    </h3>
-                    <div className="flex space-x-2">
-                      <button
+                    </Typography>
+                    <Stack direction="row" spacing={1}>
+                      <Button
                         onClick={regenerateSummary}
                         disabled={isUploading}
-                        className={`text-sm px-4 py-2 font-medium text-white bg-blue-600 rounded hover:bg-blue-700 flex items-center ${isUploading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        variant="outlined"
+                        size="small"
+                        startIcon={<Refresh />}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        {isUploading ? 'Regenerating...' : 'Regenerate Summary'}
-                      </button>
-                      <button
+                        {isUploading ? 'Regenerating...' : 'Regenerate'}
+                      </Button>
+                      <Button
                         onClick={goToQuiz}
-                        className="text-sm px-4 py-2 font-medium text-white bg-green-600 rounded hover:bg-green-700 flex items-center"
+                        variant="outlined"
+                        color="secondary"
+                        size="small"
+                        startIcon={<Quiz />}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
                         Quiz Me
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         onClick={clearResults}
-                        className="text-sm text-red-600 hover:text-red-800"
+                        color="error"
+                        size="small"
+                        startIcon={<Clear />}
                       >
-                        Clear Results
-                      </button>
-                    </div>
-                  </div>
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="p-4 bg-white">
-                      <p className="whitespace-pre-wrap text-gray-700 max-h-96 overflow-y-auto">
-                        {summary}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                        Clear
+                      </Button>
+                    </Stack>
+                  </Box>
+                  
+                  <Paper 
+                    elevation={1} 
+                    sx={{ 
+                      p: 3, 
+                      maxHeight: 400, 
+                      overflow: 'auto',
+                      bgcolor: 'background.paper',
+                      border: '1px solid',
+                      borderColor: 'divider'
+                    }}
+                  >
+                    <Typography 
+                      variant="body1" 
+                      color="text.primary"
+                      align="left"
+                      sx={{ 
+                        whiteSpace: 'pre-wrap',
+                        lineHeight: 1.6
+                      }}
+                    >
+                      {summary}
+                    </Typography>
+                  </Paper>
+                </Box>
               )}
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Container>
+    </Box>
   );
 };
 

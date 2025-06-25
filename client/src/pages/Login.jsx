@@ -1,6 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import {
+  Box,
+  Card,
+  CardContent,
+  TextField,
+  Button,
+  Typography,
+  Alert,
+  Container,
+  CircularProgress,
+  Stack
+} from '@mui/material';
+import { Login as LoginIcon } from '@mui/icons-material';
+import ThemeToggle from '../components/ThemeToggle';
 
 const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
   const [email, setEmail] = useState('');
@@ -55,73 +69,140 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-xl shadow-lg">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
-          </h2>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="email-address" className="sr-only">
-                Email address
-              </label>
-              <input
-                id="email-address"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-              />
-            </div>
-          </div>
+    <Container 
+      component="main" 
+      maxWidth="sm"
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'background.default',
+        py: 3,
+        position: 'relative'
+      }}
+    >
+      {/* Theme Toggle Button */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 16,
+          right: 16,
+          zIndex: 1000
+        }}
+      >
+        <ThemeToggle />
+      </Box>
 
-          {error && (
-            <div className="text-red-500 text-sm text-center">
-              {error}
-            </div>
-          )}
-
-          <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white ${
-                isLoading ? 'bg-indigo-400' : 'bg-indigo-600 hover:bg-indigo-700'
-              } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+      <Card 
+        elevation={3}
+        sx={{
+          width: '100%',
+          maxWidth: 400,
+          p: 2
+        }}
+      >
+        <CardContent>
+          <Stack spacing={3} alignItems="center">
+            <LoginIcon 
+              sx={{ 
+                fontSize: 48, 
+                color: 'primary.main' 
+              }} 
+            />
+            
+            <Typography 
+              component="h1" 
+              variant="h4" 
+              align="center"
+              fontWeight="bold"
+              color="text.primary"
             >
-              {isLoading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </div>
-          
-          <div className="text-sm text-center text-gray-600">
-            <p>Demo credentials: test@example.com / password123</p>
-          </div>
-        </form>
-      </div>
-    </div>
+              Sign in to your account
+            </Typography>
+            
+            <Box 
+              component="form" 
+              onSubmit={handleSubmit}
+              sx={{ width: '100%' }}
+            >
+              <Stack spacing={2}>
+                <TextField
+                  id="email"
+                  name="email"
+                  label="Email address"
+                  type="email"
+                  variant="outlined"
+                  fullWidth
+                  required
+                  autoComplete="email"
+                  autoFocus
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
+                />
+                
+                <TextField
+                  id="password"
+                  name="password"
+                  label="Password"
+                  type="password"
+                  variant="outlined"
+                  fullWidth
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                />
+
+                {error && (
+                  <Alert severity="error" sx={{ mt: 2 }}>
+                    {error}
+                  </Alert>
+                )}
+
+                <Button
+                  type="submit"
+                  fullWidth
+                  variant="contained"
+                  size="large"
+                  disabled={isLoading}
+                  startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <LoginIcon />}
+                  sx={{ 
+                    mt: 3, 
+                    py: 1.5,
+                    fontSize: '1rem',
+                    fontWeight: 'medium'
+                  }}
+                >
+                  {isLoading ? 'Signing in...' : 'Sign in'}
+                </Button>
+                
+                <Box 
+                  sx={{ 
+                    mt: 2, 
+                    p: 2, 
+                    backgroundColor: 'action.hover', 
+                    borderRadius: 1,
+                    textAlign: 'center',
+                    border: '1px solid',
+                    borderColor: 'divider'
+                  }}
+                >
+                  <Typography variant="body2" color="text.primary" fontWeight="600">
+                    Demo credentials:
+                  </Typography>
+                  <Typography variant="body2" color="text.primary" sx={{ mt: 0.5 }}>
+                    test@example.com / password123
+                  </Typography>
+                </Box>
+              </Stack>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+    </Container>
   );
 };
 
