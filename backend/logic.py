@@ -160,7 +160,7 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
         print({json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"})
 
         prompt = f"""
-        Based on the following medical text summary and struggled concepts, create 5 clinical vignette style multiple-choice questions.
+        Based on the following medical text summary and struggled concepts, create 5 challenging clinical vignette style multiple-choice questions.
 
         The user previously struggled with these specific concepts:
         {json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"}
