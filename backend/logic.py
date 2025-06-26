@@ -66,30 +66,60 @@ else:
         # Try to get more info about the environment
         try:
             import subprocess
-            # Check if tesseract is installed but not in expected locations
-            result = subprocess.run(['dpkg', '-l', 'tesseract-ocr'], 
-                                  capture_output=True, text=True, timeout=10)
-            if result.returncode == 0:
-                print("tesseract-ocr package is installed:")
-                print(result.stdout)
+            print("Running diagnostic commands...")
             
-            # Try to find tesseract files
-            result = subprocess.run(['find', '/usr', '-name', 'tesseract', '-type', 'f'], 
-                                  capture_output=True, text=True, timeout=10)
-            if result.returncode == 0 and result.stdout.strip():
-                print("Found tesseract files:")
-                print(result.stdout)
-                # Use the first found tesseract executable
-                tesseract_files = result.stdout.strip().split('\n')
-                for file_path in tesseract_files:
-                    if os.access(file_path, os.X_OK):  # Check if executable
-                        print(f"Using found executable: {file_path}")
-                        pytesseract.pytesseract.tesseract_cmd = file_path
-                        tesseract_found = True
-                        break
-                        
+            # Check if tesseract is installed but not in expected locations
+            try:
+                result = subprocess.run(['dpkg', '-l', 'tesseract-ocr'], 
+                                      capture_output=True, text=True, timeout=10)
+                print(f"dpkg check returncode: {result.returncode}")
+                if result.returncode == 0:
+                    print("tesseract-ocr package is installed:")
+                    print(result.stdout)
+                else:
+                    print("tesseract-ocr package not found via dpkg")
+                    print(f"stderr: {result.stderr}")
+            except Exception as dpkg_error:
+                print(f"dpkg command failed: {str(dpkg_error)}")
+            
+            # Try to find tesseract files anywhere
+            try:
+                result = subprocess.run(['find', '/usr', '-name', '*tesseract*', '-type', 'f'], 
+                                      capture_output=True, text=True, timeout=15)
+                print(f"find command returncode: {result.returncode}")
+                if result.returncode == 0 and result.stdout.strip():
+                    print("Found tesseract-related files:")
+                    print(result.stdout)
+                    # Look for executable files
+                    tesseract_files = result.stdout.strip().split('\n')
+                    for file_path in tesseract_files:
+                        if 'tesseract' in file_path and os.access(file_path, os.X_OK):
+                            print(f"Found executable tesseract: {file_path}")
+                            pytesseract.pytesseract.tesseract_cmd = file_path
+                            tesseract_found = True
+                            break
+                else:
+                    print("No tesseract files found via find command")
+                    print(f"stderr: {result.stderr}")
+            except Exception as find_error:
+                print(f"find command failed: {str(find_error)}")
+            
+            # Check PATH environment variable
+            try:
+                path_env = os.environ.get('PATH', '')
+                print(f"PATH environment variable: {path_env}")
+                
+                # Try whereis command
+                result = subprocess.run(['whereis', 'tesseract'], 
+                                      capture_output=True, text=True, timeout=10)
+                print(f"whereis tesseract: {result.stdout}")
+            except Exception as path_error:
+                print(f"PATH check failed: {str(path_error)}")
+                
         except Exception as e:
-            print(f"Error during tesseract search: {str(e)}")
+            print(f"Error during comprehensive tesseract search: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
 # Test if tesseract is working
 try:
@@ -705,8 +735,15 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
         # Log OCR usage statistics
         if ocr_pages_count > 0:
             print(f"OCR was used on {ocr_pages_count}/{num_pages} pages ({ocr_pages_count/num_pages*100:.1f}%)")
-        else:
+        elif TESSERACT_AVAILABLE:
             print(f"All {num_pages} pages had sufficient text, no OCR needed")
+        else:
+            insufficient_pages = sum(1 for page_num in range(num_pages) 
+                                   if len(pdf_reader.pages[page_num].extract_text().strip()) < OCR_TEXT_THRESHOLD)
+            if insufficient_pages > 0:
+                print(f"Note: {insufficient_pages}/{num_pages} pages had insufficient text but OCR was unavailable")
+            else:
+                print(f"All {num_pages} pages had sufficient text (OCR not needed)")
         
         analyze_memory_usage(f"PDF extraction complete - {filename}")
         return final_text.strip()
