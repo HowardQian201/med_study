@@ -54,6 +54,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
   const [showAllPreviousQuestions, setShowAllPreviousQuestions] = useState(false);
   const [allPreviousQuestions, setAllPreviousQuestions] = useState([]);
   const [isLoadingPreviousQuestions, setIsLoadingPreviousQuestions] = useState(false);
+  const [visibleExplanation, setVisibleExplanation] = useState(null);
 
   // Use refs to prevent duplicate calls
   const hasFetchedQuiz = useRef(false);
@@ -167,41 +168,61 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
   };
 
   const handleSubmitAnswer = (questionId) => {
-    // Record that this question has been answered
-    setSubmittedAnswers({
-      ...submittedAnswers,
-      [questionId]: true
+    setSubmittedAnswers({ ...submittedAnswers, [questionId]: true });
+    
+    const question = questions.find(q => q.id === questionId);
+    const wasCorrect = selectedAnswers[questionId] === question.correctAnswer;
+    
+    setVisibleExplanation({
+      isCorrect: wasCorrect,
+      reason: question.reason
     });
     
-    // Save answers to backend immediately (with small delay to ensure state updates)
-    setTimeout(() => {
-      saveUserAnswers();
-    }, 100);
-  };
-
-  const isAnswerCorrect = (questionId) => {
-    const question = questions.find(q => q.id === questionId);
-    return selectedAnswers[questionId] === question.correctAnswer;
+    setTimeout(() => saveUserAnswers(), 100);
   };
 
   const moveToNextQuestion = () => {
     if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
+      const nextQuestionIndex = currentQuestion + 1;
+      const nextQuestion = questions[nextQuestionIndex];
+
+      if (submittedAnswers[nextQuestion.id]) {
+        const wasCorrect = selectedAnswers[nextQuestion.id] === nextQuestion.correctAnswer;
+        setVisibleExplanation({
+          isCorrect: wasCorrect,
+          reason: nextQuestion.reason
+        });
+      } else {
+        setVisibleExplanation(null);
+      }
+      setCurrentQuestion(nextQuestionIndex);
     } else {
-      // If on the last question, show results directly
       setShowResults(true);
     }
   };
 
   const moveToPreviousQuestion = () => {
     if (currentQuestion > 0) {
-      setCurrentQuestion(currentQuestion - 1);
+      const prevQuestionIndex = currentQuestion - 1;
+      const prevQuestion = questions[prevQuestionIndex];
+
+      if (submittedAnswers[prevQuestion.id]) {
+        const wasCorrect = selectedAnswers[prevQuestion.id] === prevQuestion.correctAnswer;
+        setVisibleExplanation({
+          isCorrect: wasCorrect,
+          reason: prevQuestion.reason
+        });
+      } else {
+        setVisibleExplanation(null);
+      }
+      setCurrentQuestion(prevQuestionIndex);
     }
   };
 
   const resetQuiz = () => {
     setSelectedAnswers({});
     setSubmittedAnswers({});
+    setVisibleExplanation(null);
     setCurrentQuestion(0);
     setShowResults(false);
   };
@@ -914,19 +935,21 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                         </Box>
 
                         {/* Explanation after submission */}
-                        <Collapse in={submittedAnswers[questions[currentQuestion].id]}>
-                          <Alert
-                            severity={isAnswerCorrect(questions[currentQuestion].id) ? 'success' : 'error'}
-                            sx={{ mb: 2 }}
-                            icon={isAnswerCorrect(questions[currentQuestion].id) ? <CheckCircle /> : <Cancel />}
-                          >
-                            <Typography variant="h6" gutterBottom>
-                              {isAnswerCorrect(questions[currentQuestion].id) ? 'Correct!' : 'Incorrect!'}
-                            </Typography>
-                            <Typography variant="body2">
-                              {questions[currentQuestion].reason}
-                            </Typography>
-                          </Alert>
+                        <Collapse in={!!visibleExplanation && submittedAnswers[questions[currentQuestion].id]}>
+                          {visibleExplanation && (
+                            <Alert
+                              severity={visibleExplanation.isCorrect ? 'success' : 'error'}
+                              sx={{ mb: 2 }}
+                              icon={visibleExplanation.isCorrect ? <CheckCircle /> : <Cancel />}
+                            >
+                              <Typography variant="h6" gutterBottom>
+                                {visibleExplanation.isCorrect ? 'Correct!' : 'Incorrect!'}
+                              </Typography>
+                              <Typography variant="body2">
+                                {visibleExplanation.reason}
+                              </Typography>
+                            </Alert>
+                          )}
                         </Collapse>
                       </Box>
                     )}
