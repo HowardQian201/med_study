@@ -219,7 +219,7 @@ def upload_multiple():
             total_extracted_text += value
         
         # Add user text if provided
-        print(f"User text: {user_text}")
+        print(f"User text: {user_text[:100]}")
         if user_text:
             total_extracted_text += f"\n\nAdditional Notes:\n{user_text}"
             if filenames:

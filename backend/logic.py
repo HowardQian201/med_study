@@ -12,6 +12,7 @@ import shutil
 import json
 import time
 import uuid
+import random
 
 
 
@@ -20,6 +21,46 @@ openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 tesseract_custom_path = os.getenv("TESSERACT_PATH")
 if tesseract_custom_path:
     pytesseract.pytesseract.tesseract_cmd = tesseract_custom_path
+
+def randomize_answer_choices(question):
+    """
+    Randomize the order of answer choices and update the correctAnswer index accordingly.
+    
+    Args:
+        question (dict): Question object with 'options' and 'correctAnswer' fields
+        
+    Returns:
+        dict: Question object with randomized options and updated correctAnswer index
+    """
+    if not isinstance(question.get('options'), list) or len(question['options']) != 4:
+        return question
+    
+    if not isinstance(question.get('correctAnswer'), int) or question['correctAnswer'] < 0 or question['correctAnswer'] > 3:
+        return question
+    
+    # Store the original correct answer index
+    original_correct_index = question['correctAnswer']
+    
+    # Create a list of (index, option) pairs to track original positions
+    indexed_options = [(i, option) for i, option in enumerate(question['options'])]
+    
+    # Shuffle the options
+    random.shuffle(indexed_options)
+    
+    # Extract the shuffled options and find new position of correct answer
+    shuffled_options = []
+    new_correct_index = 0
+    
+    for new_index, (original_index, option) in enumerate(indexed_options):
+        shuffled_options.append(option)
+        if original_index == original_correct_index:
+            new_correct_index = new_index
+    
+    # Update the question with randomized data
+    question['options'] = shuffled_options
+    question['correctAnswer'] = new_correct_index
+    
+    return question
 
 def gpt_summarize_transcript(text):
     prompt = f"Provide me with detailed, thorough, and comprehensive study guide/summary \
@@ -49,21 +90,22 @@ def generate_quiz_questions(summary_text, request_id=None):
     
     try:
         prompt = f"""
-        Based on the following medical text summary, create 5 challenging clinical vignette style \
+        Based on the following medical text summary, create 5 challenging USMLE clinical vignette style \
             multiple-choice questions to test the student's understanding. 
         
         For each question:
         1. Create a clear, specific question about key concepts in the text
-        2. Provide exactly 4 answer choices (randomize the order)
+        2. Provide exactly 4 answer choices
         3. Indicate which answer is correct (index 0-3)
-        4. Include a thorough explanation for why the correct answer is right and why others are wrong
-        
+        4. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
+        5. Be in the style of a clinical vignette (e.g. "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
+
         Format the response as a JSON array of question objects. Each question object should have these fields:
         - id: a unique number (1-5)
         - text: the question text
-        - options: array of 4 answer choices
+        - options: array of 4 answer choices 
         - correctAnswer: index of correct answer (0-3)
-        - reason: explanation for the correct answer
+        - reason: explanation for the correct answer (Dont include the answer index in the reason)
         
         Summary:
         {summary_text}
@@ -84,7 +126,7 @@ def generate_quiz_questions(summary_text, request_id=None):
         # Get JSON response
         response_text = completion.choices[0].message.content.strip()
         print("response_text")
-        print(response_text)
+        print(response_text[:100])
         
         # Sometimes the API returns markdown json blocks, so let's clean that up
         if response_text.startswith("```json"):
@@ -114,6 +156,9 @@ def generate_quiz_questions(summary_text, request_id=None):
             # Ensure correctAnswer is an integer between 0-3
             if not isinstance(q['correctAnswer'], int) or q['correctAnswer'] < 0 or q['correctAnswer'] > 3:
                 raise Exception(f"Question correctAnswer must be an integer between 0-3")
+        
+            randomize_answer_choices(q)
+
         
         return questions
     except Exception as e:
@@ -160,7 +205,7 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
         print({json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"})
 
         prompt = f"""
-        Based on the following medical text summary and struggled concepts, create 5 challenging clinical vignette style multiple-choice questions.
+        Based on the following medical text summary and struggled concepts, create 5 challenging USMLE clinical vignette style multiple-choice questions.
 
         The user previously struggled with these specific concepts:
         {json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"}
@@ -168,16 +213,18 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
         For each question:
         1. Create challenging but fair questions that test understanding of key concepts
         2. If the user struggled with specific areas above, focus at least 3 questions on similar topics, but make sure they are not too similar/repetitive.
-        3. Provide exactly 4 answer choices (randomize the order)
+        3. Provide exactly 4 answer choices
         4. Indicate which answer is correct (index 0-3)
-        5. Include a thorough explanation for why the correct answer is right and why others are wrong
-        
+        5. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
+        6. Be in the style of a clinical vignette (e.g. "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
+
+
         Format the response as a JSON array of question objects. Each question object should have these fields:
         - id: a unique number (1-5)
         - text: the question text
-        - options: array of 4 answer choices
+        - options: array of 4 answer choices 
         - correctAnswer: index of correct answer (0-3)
-        - reason: explanation for the correct answer
+        - reason: explanation for the correct answer (Dont include the answer index in the reason)
         
         Summary:
         {summary_text}
@@ -198,7 +245,7 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
         # Get JSON response
         response_text = completion.choices[0].message.content.strip()
         print("response_text")
-        print(response_text)
+        print(response_text[:100])
         
         # Clean up markdown formatting if present
         if response_text.startswith("```json"):
@@ -229,6 +276,8 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
             # Ensure correctAnswer is an integer between 0-3
             if not isinstance(q['correctAnswer'], int) or q['correctAnswer'] < 0 or q['correctAnswer'] > 3:
                 raise Exception(f"Question correctAnswer must be an integer between 0-3")
+        
+            randomize_answer_choices(q)
         
         return questions
     except Exception as e:
