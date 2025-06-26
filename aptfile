@@ -1,5 +1,7 @@
 tesseract-ocr
 tesseract-ocr-eng
+tesseract-ocr-osd
 libtesseract-dev
 libleptonica-dev
-poppler-utils 
+poppler-utils
+imagemagick 
