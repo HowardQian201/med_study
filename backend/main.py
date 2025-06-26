@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, session, send_from_directory
 from flask_cors import CORS
 import traceback
-from .logic import extract_text_from_pdf_memory, gpt_summarize_transcript, set_process_priority, generate_quiz_questions, generate_focused_questions, log_memory_usage, check_memory
+from .logic import extract_text_from_pdf_memory, gpt_summarize_transcript, set_process_priority, generate_quiz_questions, generate_focused_questions, log_memory_usage, check_memory, get_container_memory_limit, analyze_memory_usage
 from flask_session import Session
 import os
 import re
@@ -164,7 +164,16 @@ def upload_multiple():
             return jsonify({'error': 'Unauthorized'}), 401
         
         # Initial memory check
-        log_memory_usage("upload start")
+        analyze_memory_usage("upload start")
+        
+        # Get memory limits for file size validation
+        try:
+            memory_limit = get_container_memory_limit()
+            available_memory = memory_limit * 0.7  # Use only 70% of available memory
+            max_file_size = min(available_memory * 0.3, 20 * 1024 * 1024)  # Max 30% of available or 20MB
+            print(f"Memory limit: {memory_limit/(1024*1024):.0f}MB, Max file size: {max_file_size/(1024*1024):.1f}MB")
+        except:
+            max_file_size = 10 * 1024 * 1024  # Default 10MB limit
         
         # Clean up any existing temp directory for this user (for cleanup consistency)
         cleanup_temp_dir(session['user_id'])
@@ -202,12 +211,18 @@ def upload_multiple():
             
             # Extract text from PDF directly from memory without saving to disk
             if filename.endswith('.pdf'):
-                # Get file size for logging
+                # Get file size for validation and logging
                 file.seek(0, 2)  # Seek to end
                 file_size = file.tell()
                 file.seek(0)  # Reset to beginning
                 
                 print(f"File: {filename}, {file_size / (1024*1024):.1f} MB")
+                
+                # Validate file size against memory constraints
+                if file_size > max_file_size:
+                    error_msg = f"File '{filename}' ({file_size/(1024*1024):.1f}MB) exceeds maximum allowed size ({max_file_size/(1024*1024):.1f}MB) for current memory constraints"
+                    print(error_msg)
+                    raise Exception(error_msg)
                 
                 # Process PDF directly from memory
                 extracted_text = extract_text_from_pdf_memory(file, filename)
@@ -240,9 +255,19 @@ def upload_multiple():
         log_memory_usage("before summarization")
         
         filenames = filenames.strip()
+        
+        # Analyze memory before AI call
+        analyze_memory_usage("before AI summarization")
+        print(f"Text length being sent to AI: {len(total_extracted_text)} characters")
+        
         summary = gpt_summarize_transcript(total_extracted_text)
         summary = f"Summary of: {filenames}\n\n{summary}"
         
+        # Clear the large text variable immediately
+        del total_extracted_text
+        gc.collect()
+        
+        analyze_memory_usage("after AI summarization")
         log_memory_usage("after summarization")
         
         # Store results in session

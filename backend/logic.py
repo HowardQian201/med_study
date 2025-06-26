@@ -23,6 +23,9 @@ tesseract_custom_path = os.getenv("TESSERACT_PATH")
 if tesseract_custom_path:
     pytesseract.pytesseract.tesseract_cmd = tesseract_custom_path
 
+# Global variable to track peak memory usage
+_peak_memory_usage = 0
+
 def get_container_memory_limit():
     """Get the actual memory limit for the container"""
     try:
@@ -35,17 +38,19 @@ def get_container_memory_limit():
                     raise Exception("No cgroup limit set")
                 return limit
         except:
+            print("Error reading memory limit from cgroups v1")
             pass
         
-        # Try to read from cgroups v2
-        try:
-            with open('/sys/fs/cgroup/memory.max', 'r') as f:
-                limit_str = f.read().strip()
-                if limit_str == 'max':
-                    raise Exception("No cgroup limit set")
-                return int(limit_str)
-        except:
-            pass
+        # # Try to read from cgroups v2
+        # try:
+        #     with open('/sys/fs/cgroup/memory.max', 'r') as f:
+        #         limit_str = f.read().strip()
+        #         if limit_str == 'max':
+        #             raise Exception("No cgroup limit set")
+        #         return int(limit_str)
+        # except:
+        #     print("Error reading memory limit from cgroups v2")
+        #     pass
             
         # Check environment variables that Render might set
         if 'MEMORY_LIMIT' in os.environ:
@@ -62,39 +67,55 @@ def get_container_memory_limit():
 def get_container_memory_usage():
     """Get current memory usage that respects container limits"""
     try:
+        # First try to read current usage from cgroups v2 (most accurate for containers)
+        try:
+            with open('/sys/fs/cgroup/memory.current', 'r') as f:
+                cgroup_memory = int(f.read().strip())
+                print(f"Container memory from cgroups v2: {cgroup_memory/(1024*1024):.1f}MB")
+                return cgroup_memory
+        except Exception as e:
+            print(f"Error reading memory usage from cgroups v2: {e}")
+        
         # Try to read current usage from cgroups v1
         try:
             with open('/sys/fs/cgroup/memory/memory.usage_in_bytes', 'r') as f:
-                return int(f.read().strip())
-        except:
-            print("Error reading memory usage from cgroups v1")
+                cgroup_memory = int(f.read().strip())
+                print(f"Container memory from cgroups v1: {cgroup_memory/(1024*1024):.1f}MB")
+                return cgroup_memory
+        except Exception as e:
+            print(f"Error reading memory usage from cgroups v1: {e}")
         
-        # Try to read from cgroups v2
-        try:
-            with open('/sys/fs/cgroup/memory.current', 'r') as f:
-                return int(f.read().strip())
-        except:
-            print("Error reading memory usage from cgroups v2")
-            
-        # Fallback to psutil but this might not be accurate in containers
-        memory = psutil.virtual_memory()
-        print("Memory usage from psutil")
-        return memory.used
+        # Fallback to process memory (less accurate but better than system memory)
+        current_process = psutil.Process()
+        process_memory = current_process.memory_info()
+        
+        # RSS (Resident Set Size) is the actual physical memory used by this process
+        actual_memory_used = process_memory.rss
+        
+        print(f"Process memory fallback - RSS: {actual_memory_used/(1024*1024):.1f}MB, VMS: {process_memory.vms/(1024*1024):.1f}MB")
+        return actual_memory_used
         
     except Exception as e:
-        print(f"Error reading memory usage: {e}")
+        print(f"Error reading container memory: {e}")
+        # Final fallback to system memory (least accurate)
         memory = psutil.virtual_memory()
-        print("Memory usage from psutil")
+        print("Using system memory as final fallback")
         return memory.used
 
 def log_memory_usage(stage):
-    """Log current memory usage with container awareness"""
+    """Log current memory usage with container awareness and peak tracking"""
+    global _peak_memory_usage
+    
     try:
         memory_limit = get_container_memory_limit()
         memory_used = get_container_memory_usage()
         memory_percent = (memory_used / memory_limit) * 100
         
-        print(f"Memory at {stage}: {memory_percent:.1f}% used ({memory_used/(1024*1024):.1f}MB/{memory_limit/(1024*1024):.1f}MB)")
+        # Track peak memory usage
+        if memory_used > _peak_memory_usage:
+            _peak_memory_usage = memory_used
+            
+        print(f"Memory at {stage}: {memory_percent:.1f}% used ({memory_used/(1024*1024):.1f}MB/{memory_limit/(1024*1024):.1f}MB) [Peak: {_peak_memory_usage/(1024*1024):.1f}MB]")
         return memory_percent
     except Exception as e:
         print(f"Error in memory logging: {e}")
@@ -454,7 +475,7 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
     final_text = ""
     
     try:
-        log_memory_usage("PDF memory extraction start")
+        analyze_memory_usage(f"PDF extraction start - {filename}")
         
         # Reset file pointer to beginning
         file_obj.seek(0)
@@ -464,6 +485,7 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
         num_pages = len(pdf_reader.pages)
         
         print(f"Processing PDF '{filename}' with {num_pages} pages from memory")
+        analyze_memory_usage(f"After PDF reader creation - {num_pages} pages")
         
         # Process pages in smaller batches to reduce memory usage
         batch_size = 5 if num_pages > 20 else 10  # Smaller batches for large files
@@ -473,16 +495,21 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
             batch_text = ""
             
             print(f"Processing batch: pages {batch_start + 1}-{batch_end}")
-            log_memory_usage(f"batch {batch_start//batch_size + 1}")
+            analyze_memory_usage(f"Batch {batch_start//batch_size + 1} start")
             
             for page_num in range(batch_start, batch_end):
                 print(f"Extracting text from page {page_num + 1}")
                 
                 # Check memory before processing each page
+                memory_before = analyze_memory_usage(f"Before page {page_num + 1}")
                 check_memory()
                 
                 page = pdf_reader.pages[page_num]
                 page_text = page.extract_text()
+                
+                memory_after = analyze_memory_usage(f"After page {page_num + 1} extraction")
+                page_memory_delta = memory_after - memory_before
+                print(f"Page {page_num + 1} memory delta: {page_memory_delta/(1024*1024):.1f}MB")
                 
                 # Add page text directly to batch, don't store separately
                 batch_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
@@ -490,6 +517,12 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
                 # Clear page reference to help garbage collection
                 del page_text
                 del page
+                
+                # Force garbage collection and check effect
+                gc.collect()
+                memory_after_gc = analyze_memory_usage(f"After page {page_num + 1} cleanup")
+                gc_effect = memory_after - memory_after_gc
+                print(f"GC freed: {gc_effect/(1024*1024):.1f}MB")
             
             # Add batch to final text and clear batch
             final_text += batch_text
@@ -498,13 +531,14 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
             # Force garbage collection between batches for large files
             if num_pages > 15:
                 gc.collect()
-                log_memory_usage(f"after batch {batch_start//batch_size + 1} cleanup")
+                analyze_memory_usage(f"After batch {batch_start//batch_size + 1} cleanup")
         
-        log_memory_usage("PDF memory extraction complete")
+        analyze_memory_usage(f"PDF extraction complete - {filename}")
         return final_text.strip()
         
     except Exception as e:
         print(f"Error extracting text from PDF in memory: {str(e)}")
+        analyze_memory_usage(f"PDF extraction error - {filename}")
         # Force cleanup on error
         gc.collect()
         return ""
@@ -617,6 +651,55 @@ def check_memory():
             print(f"Memory usage critical (host): {memory.percent}%")
         
         return memory.percent
+
+def analyze_memory_usage(stage):
+    """Detailed memory analysis to identify memory consumers"""
+    try:
+        current_process = psutil.Process()
+        memory_info = current_process.memory_info()
+        memory_percent = current_process.memory_percent()
+        
+        # Get number of open file descriptors
+        try:
+            num_fds = current_process.num_fds()
+        except:
+            num_fds = "N/A"
+        
+        # Get thread count
+        num_threads = current_process.num_threads()
+        
+        # Try to get container memory for comparison
+        container_memory = None
+        try:
+            with open('/sys/fs/cgroup/memory.current', 'r') as f:
+                container_memory = int(f.read().strip())
+        except:
+            try:
+                with open('/sys/fs/cgroup/memory/memory.usage_in_bytes', 'r') as f:
+                    container_memory = int(f.read().strip())
+            except:
+                pass
+        
+        print(f"=== Memory Analysis at {stage} ===")
+        print(f"Process RSS (Physical): {memory_info.rss/(1024*1024):.1f}MB")
+        print(f"Process VMS (Virtual): {memory_info.vms/(1024*1024):.1f}MB")
+        if container_memory:
+            print(f"Container Memory (cgroups): {container_memory/(1024*1024):.1f}MB")
+            print(f"Difference (Container - Process): {(container_memory - memory_info.rss)/(1024*1024):.1f}MB")
+        print(f"Memory %: {memory_percent:.1f}%")
+        print(f"Threads: {num_threads}")
+        print(f"File descriptors: {num_fds}")
+        
+        # Check for memory leaks by looking at object counts
+        import sys
+        print(f"Python objects: {len(gc.get_objects())}")
+        
+        # Return container memory if available, otherwise process memory
+        return container_memory if container_memory else memory_info.rss
+        
+    except Exception as e:
+        print(f"Error in memory analysis: {e}")
+        return 0
 
 
 
