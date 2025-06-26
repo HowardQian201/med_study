@@ -24,37 +24,72 @@ openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 tesseract_custom_path = os.getenv("TESSERACT_PATH")
 if tesseract_custom_path:
     pytesseract.pytesseract.tesseract_cmd = tesseract_custom_path
+    print(f"Using custom tesseract path: {tesseract_custom_path}")
 else:
     # Try common tesseract paths
     common_paths = [
         '/usr/bin/tesseract',
         '/usr/local/bin/tesseract',
+        '/bin/tesseract',
         '/opt/homebrew/bin/tesseract',  # macOS with Homebrew
         'tesseract'  # System PATH
     ]
     
     tesseract_found = False
+    print("Searching for tesseract executable...")
+    
     for path in common_paths:
+        print(f"Checking path: {path}")
         try:
-            # Test if tesseract is available at this path
             if path == 'tesseract':
-                # Test system PATH
-                import subprocess
-                result = subprocess.run(['which', 'tesseract'], capture_output=True, text=True)
-                if result.returncode == 0:
-                    print(f"Found tesseract in system PATH: {result.stdout.strip()}")
+                # Test system PATH using shutil.which
+                import shutil
+                tesseract_path = shutil.which('tesseract')
+                if tesseract_path:
+                    print(f"Found tesseract in system PATH: {tesseract_path}")
+                    pytesseract.pytesseract.tesseract_cmd = tesseract_path
                     tesseract_found = True
                     break
             elif os.path.exists(path):
-                pytesseract.pytesseract.tesseract_cmd = path
                 print(f"Found tesseract at: {path}")
+                pytesseract.pytesseract.tesseract_cmd = path
                 tesseract_found = True
                 break
+            else:
+                print(f"  Not found at {path}")
         except Exception as e:
+            print(f"  Error checking {path}: {str(e)}")
             continue
     
     if not tesseract_found:
         print("Warning: Tesseract not found. OCR functionality will be disabled.")
+        # Try to get more info about the environment
+        try:
+            import subprocess
+            # Check if tesseract is installed but not in expected locations
+            result = subprocess.run(['dpkg', '-l', 'tesseract-ocr'], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                print("tesseract-ocr package is installed:")
+                print(result.stdout)
+            
+            # Try to find tesseract files
+            result = subprocess.run(['find', '/usr', '-name', 'tesseract', '-type', 'f'], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0 and result.stdout.strip():
+                print("Found tesseract files:")
+                print(result.stdout)
+                # Use the first found tesseract executable
+                tesseract_files = result.stdout.strip().split('\n')
+                for file_path in tesseract_files:
+                    if os.access(file_path, os.X_OK):  # Check if executable
+                        print(f"Using found executable: {file_path}")
+                        pytesseract.pytesseract.tesseract_cmd = file_path
+                        tesseract_found = True
+                        break
+                        
+        except Exception as e:
+            print(f"Error during tesseract search: {str(e)}")
 
 # Test if tesseract is working
 try:
@@ -64,6 +99,20 @@ try:
 except Exception as e:
     print(f"Tesseract OCR not available: {str(e)}")
     TESSERACT_AVAILABLE = False
+    
+    # Additional debugging - show current tesseract command
+    print(f"Current tesseract command: {pytesseract.pytesseract.tesseract_cmd}")
+    
+    # Try to run tesseract directly to see what happens
+    try:
+        import subprocess
+        result = subprocess.run([pytesseract.pytesseract.tesseract_cmd, '--version'], 
+                              capture_output=True, text=True, timeout=10)
+        print(f"Direct tesseract call result (returncode {result.returncode}):")
+        print(f"stdout: {result.stdout}")
+        print(f"stderr: {result.stderr}")
+    except Exception as direct_error:
+        print(f"Direct tesseract call failed: {str(direct_error)}")
 
 # Configuration constants
 OCR_TEXT_THRESHOLD = 50  # Minimum characters to trigger OCR fallback
