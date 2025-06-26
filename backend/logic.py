@@ -23,11 +23,83 @@ tesseract_custom_path = os.getenv("TESSERACT_PATH")
 if tesseract_custom_path:
     pytesseract.pytesseract.tesseract_cmd = tesseract_custom_path
 
+def get_container_memory_limit():
+    """Get the actual memory limit for the container"""
+    try:
+        # Try to read from cgroups v1
+        try:
+            with open('/sys/fs/cgroup/memory/memory.limit_in_bytes', 'r') as f:
+                limit = int(f.read().strip())
+                # If limit is very large, it's probably not set (default is 9223372036854775807)
+                if limit > 1024 * 1024 * 1024 * 1024:  # 1TB
+                    raise Exception("No cgroup limit set")
+                return limit
+        except:
+            pass
+        
+        # Try to read from cgroups v2
+        try:
+            with open('/sys/fs/cgroup/memory.max', 'r') as f:
+                limit_str = f.read().strip()
+                if limit_str == 'max':
+                    raise Exception("No cgroup limit set")
+                return int(limit_str)
+        except:
+            pass
+            
+        # Check environment variables that Render might set
+        if 'MEMORY_LIMIT' in os.environ:
+            return int(os.environ['MEMORY_LIMIT']) * 1024 * 1024  # Assume MB
+        
+        # Default to Render free tier limit
+        print("Warning: Could not detect container memory limit, assuming 512MB")
+        return 512 * 1024 * 1024  # 512MB in bytes
+        
+    except Exception as e:
+        print(f"Error detecting memory limit: {e}")
+        return 512 * 1024 * 1024  # Default to 512MB
+
+def get_container_memory_usage():
+    """Get current memory usage that respects container limits"""
+    try:
+        # Try to read current usage from cgroups v1
+        try:
+            with open('/sys/fs/cgroup/memory/memory.usage_in_bytes', 'r') as f:
+                return int(f.read().strip())
+        except:
+            pass
+        
+        # Try to read from cgroups v2
+        try:
+            with open('/sys/fs/cgroup/memory.current', 'r') as f:
+                return int(f.read().strip())
+        except:
+            pass
+            
+        # Fallback to psutil but this might not be accurate in containers
+        memory = psutil.virtual_memory()
+        return memory.used
+        
+    except Exception as e:
+        print(f"Error reading memory usage: {e}")
+        memory = psutil.virtual_memory()
+        return memory.used
+
 def log_memory_usage(stage):
-    """Log current memory usage"""
-    memory = psutil.virtual_memory()
-    print(f"Memory at {stage}: {memory.percent}% used ({memory.used/(1024*1024):.1f}MB/{memory.total/(1024*1024):.1f}MB)")
-    return memory.percent
+    """Log current memory usage with container awareness"""
+    try:
+        memory_limit = get_container_memory_limit()
+        memory_used = get_container_memory_usage()
+        memory_percent = (memory_used / memory_limit) * 100
+        
+        print(f"Memory at {stage}: {memory_percent:.1f}% used ({memory_used/(1024*1024):.1f}MB/{memory_limit/(1024*1024):.1f}MB)")
+        return memory_percent
+    except Exception as e:
+        print(f"Error in memory logging: {e}")
+        # Fallback to psutil
+        memory = psutil.virtual_memory()
+        print(f"Memory at {stage}: {memory.percent}% used ({memory.used/(1024*1024):.1f}MB/{memory.total/(1024*1024):.1f}MB) [HOST]")
+        return memory.percent
 
 def randomize_answer_choices(question):
     """
@@ -506,20 +578,43 @@ def set_process_priority():
         print("Could not set process priority")
 
 def check_memory():
-    """Check if system has enough memory with proactive garbage collection"""
-    memory = psutil.virtual_memory()
-    
-    if memory.percent > 85:  # Lower threshold for proactive management
-        print(f"High memory usage detected: {memory.percent}% - forcing garbage collection")
-        gc.collect()  # Force garbage collection
+    """Check if system has enough memory with proactive garbage collection and container awareness"""
+    try:
+        memory_limit = get_container_memory_limit()
+        memory_used = get_container_memory_usage()
+        memory_percent = (memory_used / memory_limit) * 100
         
-        # Check again after garbage collection
+        if memory_percent > 75:  # Lower threshold for containers (was 85%)
+            print(f"High memory usage detected: {memory_percent:.1f}% - forcing garbage collection")
+            gc.collect()  # Force garbage collection
+            
+            # Check again after garbage collection
+            memory_used = get_container_memory_usage()
+            memory_percent = (memory_used / memory_limit) * 100
+            print(f"Memory after GC: {memory_percent:.1f}%")
+            
+        if memory_percent > 90:  # Critical threshold for containers (was 95%)
+            raise Exception(f"Memory usage critical: {memory_percent:.1f}% ({memory_used/(1024*1024):.1f}MB/{memory_limit/(1024*1024):.1f}MB)")
+        
+        return memory_percent
+        
+    except Exception as e:
+        if "Memory usage critical" in str(e):
+            raise  # Re-raise critical memory errors
+        
+        print(f"Error in container memory check: {e}")
+        # Fallback to psutil
         memory = psutil.virtual_memory()
         
-    if memory.percent > 95:  # Critical threshold
-        raise Exception(f"Memory usage critical: {memory.percent}%")
-    
-    return memory.percent
+        if memory.percent > 85:
+            print(f"High memory usage detected (host): {memory.percent}% - forcing garbage collection")
+            gc.collect()
+            memory = psutil.virtual_memory()
+            
+        if memory.percent > 95:
+            raise Exception(f"Memory usage critical (host): {memory.percent}%")
+        
+        return memory.percent
 
 
 
