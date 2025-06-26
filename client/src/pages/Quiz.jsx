@@ -431,12 +431,12 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
 
             {/* Loading State */}
             {isLoading ? (
-              <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight={300}>
+              <Paper elevation={2} sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, width: 800 }}>
                 <CircularProgress size={48} sx={{ mb: 2 }} />
                 <Typography variant="h6" color="text.secondary">
                   Generating quiz questions...
                 </Typography>
-              </Box>
+              </Paper>
             ) : error ? (
               <Alert severity="error" sx={{ borderRadius: 2 }}>
                 {error}

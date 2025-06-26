@@ -521,7 +521,7 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
                             # Use OCR text if it's significantly better
                             if len(ocr_text) > len(page_text):
                                 print(f"Page {page_num + 1}: OCR extracted {len(ocr_text)} chars (vs {len(page_text)} from PDF)")
-                                print("OCR text")
+                                print("OCR text ***")
                                 print(ocr_text[:100])
                                 page_text = ocr_text
                                 ocr_pages_count += 1
