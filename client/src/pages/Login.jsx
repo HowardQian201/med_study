@@ -11,10 +11,12 @@ import {
   Alert,
   Container,
   CircularProgress,
-  Stack
+  Stack,
+  Divider
 } from '@mui/material';
 import { Login as LoginIcon } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
+import GoogleLoginButton from '../components/GoogleLoginButton';
 
 const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
   const [email, setEmail] = useState('');
@@ -66,6 +68,46 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleGoogleSuccess = async (googleUser) => {
+    try {
+      setIsLoading(true);
+      setError('');
+      
+      console.log('Google login success:', googleUser);
+      
+      // Send the credential to our backend
+      const response = await axios.post('/api/auth/google', {
+        credential: googleUser.credential
+      }, {
+        withCredentials: true
+      });
+
+      if (response.data.success) {
+        // Get user info after successful login
+        const userResponse = await axios.get('/api/auth/check', {
+          withCredentials: true
+        });
+        
+        if (userResponse.data.authenticated) {
+          setIsAuthenticated(true);
+          setUser(userResponse.data.user);
+          setSummary(userResponse.data.summary || '');
+          navigate('/dashboard');
+        }
+      }
+    } catch (err) {
+      console.error('Google login error:', err);
+      setError(err.response?.data?.message || 'Google login failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleError = (error) => {
+    console.error('Google login error:', error);
+    setError('Google login failed. Please try again.');
   };
 
   return (
@@ -120,6 +162,21 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
             >
               Sign in to your account
             </Typography>
+
+            {/* Google Login Button */}
+            <Box sx={{ width: '100%' }}>
+              <GoogleLoginButton
+                onSuccess={handleGoogleSuccess}
+                onError={handleGoogleError}
+                disabled={isLoading}
+              />
+            </Box>
+
+            <Divider sx={{ width: '100%', my: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                or continue with email
+              </Typography>
+            </Divider>
             
             <Box 
               component="form" 

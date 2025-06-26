@@ -23,6 +23,10 @@ tesseract_custom_path = os.getenv("TESSERACT_PATH")
 if tesseract_custom_path:
     pytesseract.pytesseract.tesseract_cmd = tesseract_custom_path
 
+# Configuration constants
+OCR_TEXT_THRESHOLD = 50  # Minimum characters to trigger OCR fallback
+OCR_DPI = 300  # DPI for OCR image conversion (balance between quality and memory)
+
 # Global variable to track peak memory usage
 _peak_memory_usage = 0
 
@@ -184,6 +188,7 @@ def gpt_summarize_transcript(text):
     )
 
     print("gpt_summarize_transcript completion")
+    analyze_memory_usage("gpt_summarize_transcript completion")
 
     # Parse the response into lines
     text = completion.choices[0].message.content.strip()
@@ -233,7 +238,8 @@ def generate_quiz_questions(summary_text, request_id=None):
             ],
         )
 
-        log_memory_usage("after API call")
+        log_memory_usage("after OpenAI API call")
+        analyze_memory_usage("after OpenAI API call")
 
         # Get JSON response
         response_text = completion.choices[0].message.content.strip()
@@ -356,6 +362,9 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
             ],
         )
 
+        log_memory_usage("after OpenAI 2 API call")
+        analyze_memory_usage("after OpenAI 2 API call")
+
         # Get JSON response
         response_text = completion.choices[0].message.content.strip()
         print("response_text")
@@ -425,58 +434,72 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
         ]
 
 def extract_text_with_pytesseract(image):
-    """Extract text from an image using pytesseract"""
+    """Extract text from an image using pytesseract with optimized settings"""
     try:
-        # Use pytesseract to extract text
-        text = pytesseract.image_to_string(image, lang='eng')
-        return text
+        # Use pytesseract with optimized configuration for medical/academic text
+        # PSM 3 = Fully automatic page segmentation, but no OSD
+        # OEM 3 = Default, based on what is available
+        custom_config = r'--oem 3 --psm 3 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,;:!?()-[]{}"\''
+        
+        # Extract text with custom configuration
+        text = pytesseract.image_to_string(image, lang='eng', config=custom_config)
+        
+        # Clean up the extracted text
+        cleaned_text = text.strip()
+        
+        # Log OCR result quality
+        if len(cleaned_text) > 0:
+            print(f"OCR extracted {len(cleaned_text)} characters")
+        else:
+            print("OCR extracted no text")
+        
+        return cleaned_text
+        
     except Exception as e:
         print(f"Error with pytesseract OCR: {str(e)}")
         return ""
 
-def convert_pdf_page_to_image(pdf_path, page_num):
-    """Convert a specific PDF page to an image"""
+
+def convert_pdf_page_to_image_from_memory(file_obj, page_num):
+    """Convert a specific PDF page to an image from a file object in memory"""
     try:
-        # Instead of using a context manager, create a temp directory that persists
-        temp_dir = tempfile.mkdtemp()
+        # Save file object to a temporary file for pdf2image conversion
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
+            file_obj.seek(0)
+            temp_pdf.write(file_obj.read())
+            temp_pdf_path = temp_pdf.name
         
         try:
-            # Convert PDF page to image with maximum quality settings
+            # Convert PDF page to image with configured quality settings
             images = convert_from_path(
-                pdf_path, 
+                temp_pdf_path, 
                 first_page=page_num + 1,  # PDF pages are 1-indexed
                 last_page=page_num + 1,
-                dpi=600,  # Higher DPI for maximum quality
-                output_folder=temp_dir,
-                fmt='png',  # PNG for lossless quality
+                dpi=OCR_DPI,  # Use configured DPI
+                fmt='png'
             )
             
             if not images:
                 return None
             
-            # Load the image into memory before returning
-            if images:
-                # Open the image with PIL and create an in-memory copy
-                img = images[0]
-                in_memory_img = Image.new(img.mode, img.size)
-                in_memory_img.paste(img)
-                return in_memory_img
-            return None
+            # Return the first (and only) image
+            return images[0]
             
         finally:
-            # Clean up the temp directory
+            # Clean up the temporary PDF file
             try:
-                shutil.rmtree(temp_dir)
+                os.unlink(temp_pdf_path)
             except Exception as e:
-                print(f"Error cleaning up temp directory: {str(e)}")
+                print(f"Error cleaning up temp PDF file: {str(e)}")
                 
     except Exception as e:
-        print(f"Error converting PDF to image: {str(e)}")
+        print(f"Error converting PDF page to image from memory: {str(e)}")
         return None
 
 def extract_text_from_pdf_memory(file_obj, filename=""):
-    """Extract text from a PDF file object directly from memory"""
+    """Extract text from a PDF file object directly from memory with OCR fallback"""
     final_text = ""
+    ocr_pages_count = 0  # Track how many pages needed OCR
     
     try:
         analyze_memory_usage(f"PDF extraction start - {filename}")
@@ -506,9 +529,41 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
                 check_memory()
                 
                 page = pdf_reader.pages[page_num]
-                page_text = page.extract_text()
+                page_text = page.extract_text().strip()
                 
-                # Add page text directly to batch, don't store separately
+                # Check if extracted text is insufficient (less than configured threshold)
+                if len(page_text) < OCR_TEXT_THRESHOLD:
+                    print(f"Page {page_num + 1}: Insufficient text ({len(page_text)} chars), trying OCR...")
+                    
+                    try:
+                        # Convert page to image and use OCR
+                        page_image = convert_pdf_page_to_image_from_memory(file_obj, page_num)
+                        
+                        if page_image:
+                            ocr_text = extract_text_with_pytesseract(page_image).strip()
+                            
+                            # Use OCR text if it's significantly better
+                            if len(ocr_text) > len(page_text):
+                                print(f"Page {page_num + 1}: OCR extracted {len(ocr_text)} chars (vs {len(page_text)} from PDF)")
+                                print("OCR text")
+                                print(ocr_text)
+                                page_text = ocr_text
+                                ocr_pages_count += 1
+                                
+                            else:
+                                print(f"Page {page_num + 1}: OCR didn't improve text extraction ({len(ocr_text)} chars)")
+                            
+                            # Clean up image to save memory
+                            del page_image
+                        else:
+                            print(f"Page {page_num + 1}: Failed to convert to image for OCR")
+                            
+                    except Exception as ocr_error:
+                        print(f"Page {page_num + 1}: OCR failed - {str(ocr_error)}")
+                else:
+                    print(f"Page {page_num + 1}: Good text extraction ({len(page_text)} chars)")
+                
+                # Add page text to batch
                 batch_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
                 
                 # Clear page reference to help garbage collection
@@ -526,6 +581,12 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
             if num_pages > 15:
                 gc.collect()
         
+        # Log OCR usage statistics
+        if ocr_pages_count > 0:
+            print(f"OCR was used on {ocr_pages_count}/{num_pages} pages ({ocr_pages_count/num_pages*100:.1f}%)")
+        else:
+            print(f"All {num_pages} pages had sufficient text, no OCR needed")
+        
         analyze_memory_usage(f"PDF extraction complete - {filename}")
         return final_text.strip()
         
@@ -535,65 +596,6 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
         # Force cleanup on error
         gc.collect()
         return ""
-
-def extract_text_from_pdf(pdf_path):
-    """Extract text from a PDF file using both PyPDF2 and pytesseract OCR"""
-    
-    final_text = ""
-    
-    try:
-        log_memory_usage("PDF extraction start")
-        
-        with open(pdf_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
-            num_pages = len(pdf_reader.pages)
-            
-            print(f"Processing PDF with {num_pages} pages")
-            
-            # Process pages in smaller batches to reduce memory usage
-            batch_size = 5 if num_pages > 20 else 10  # Smaller batches for large files
-            
-            for batch_start in range(0, num_pages, batch_size):
-                batch_end = min(batch_start + batch_size, num_pages)
-                batch_text = ""
-                
-                print(f"Processing batch: pages {batch_start + 1}-{batch_end}")
-                log_memory_usage(f"batch {batch_start//batch_size + 1}")
-                
-                for page_num in range(batch_start, batch_end):
-                    print(f"Extracting text from page {page_num + 1}")
-                    
-                    # Check memory before processing each page
-                    check_memory()
-                    
-                    page = pdf_reader.pages[page_num]
-                    page_text = page.extract_text()
-                    
-                    # Add page text directly to batch, don't store separately
-                    batch_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
-                    
-                    # Clear page reference to help garbage collection
-                    del page_text
-                    del page
-                
-                # Add batch to final text and clear batch
-                final_text += batch_text
-                del batch_text
-                
-                # Force garbage collection between batches for large files
-                if num_pages > 15:
-                    gc.collect()
-                    log_memory_usage(f"after batch {batch_start//batch_size + 1} cleanup")
-        
-        log_memory_usage("PDF extraction complete")
-        return final_text.strip()
-        
-    except Exception as e:
-        print(f"Error extracting text from PDF: {str(e)}")
-        # Force cleanup on error
-        gc.collect()
-        return ""
-    
 
 def set_process_priority():
     """Configure process priority based on OS"""
