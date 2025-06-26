@@ -166,6 +166,7 @@ def randomize_answer_choices(question):
     return question
 
 def gpt_summarize_transcript(text):
+    print("gpt_summarize_transcript")
     prompt = f"Provide me with detailed, thorough, and comprehensive study guide/summary \
         using full sentences based on this transcript. Include relevant headers for each \
             topic and make sure to inlcude all key information. Be sure to include the \
@@ -181,6 +182,8 @@ def gpt_summarize_transcript(text):
             {"role": "user", "content": prompt},
         ],
     )
+
+    print("gpt_summarize_transcript completion")
 
     # Parse the response into lines
     text = completion.choices[0].message.content.strip()
