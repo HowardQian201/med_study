@@ -19,9 +19,51 @@ import gc
 
 load_dotenv()
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Configure tesseract path
 tesseract_custom_path = os.getenv("TESSERACT_PATH")
 if tesseract_custom_path:
     pytesseract.pytesseract.tesseract_cmd = tesseract_custom_path
+else:
+    # Try common tesseract paths
+    common_paths = [
+        '/usr/bin/tesseract',
+        '/usr/local/bin/tesseract',
+        '/opt/homebrew/bin/tesseract',  # macOS with Homebrew
+        'tesseract'  # System PATH
+    ]
+    
+    tesseract_found = False
+    for path in common_paths:
+        try:
+            # Test if tesseract is available at this path
+            if path == 'tesseract':
+                # Test system PATH
+                import subprocess
+                result = subprocess.run(['which', 'tesseract'], capture_output=True, text=True)
+                if result.returncode == 0:
+                    print(f"Found tesseract in system PATH: {result.stdout.strip()}")
+                    tesseract_found = True
+                    break
+            elif os.path.exists(path):
+                pytesseract.pytesseract.tesseract_cmd = path
+                print(f"Found tesseract at: {path}")
+                tesseract_found = True
+                break
+        except Exception as e:
+            continue
+    
+    if not tesseract_found:
+        print("Warning: Tesseract not found. OCR functionality will be disabled.")
+
+# Test if tesseract is working
+try:
+    version = pytesseract.get_tesseract_version()
+    print(f"Tesseract OCR available - version: {version}")
+    TESSERACT_AVAILABLE = True
+except Exception as e:
+    print(f"Tesseract OCR not available: {str(e)}")
+    TESSERACT_AVAILABLE = False
 
 # Configuration constants
 OCR_TEXT_THRESHOLD = 50  # Minimum characters to trigger OCR fallback
@@ -435,6 +477,11 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
 
 def extract_text_with_pytesseract(image):
     """Extract text from an image using pytesseract with optimized settings"""
+    # Check if tesseract is available
+    if not TESSERACT_AVAILABLE:
+        print("Tesseract OCR not available - skipping OCR")
+        return ""
+    
     try:
         # Use pytesseract with optimized configuration for medical/academic text
         # PSM 3 = Fully automatic page segmentation, but no OSD
@@ -556,33 +603,35 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
                 
                 # Check if extracted text is insufficient (less than configured threshold)
                 if len(page_text) < OCR_TEXT_THRESHOLD:
-                    print(f"Page {page_num + 1}: Insufficient text ({len(page_text)} chars), trying OCR...")
-                    
-                    try:
-                        # Convert page to image and use OCR
-                        page_image = convert_pdf_page_to_image_from_memory(file_obj, page_num)
+                    if TESSERACT_AVAILABLE:
+                        print(f"Page {page_num + 1}: Insufficient text ({len(page_text)} chars), trying OCR...")
                         
-                        if page_image:
-                            ocr_text = extract_text_with_pytesseract(page_image).strip()
+                        try:
+                            # Convert page to image and use OCR
+                            page_image = convert_pdf_page_to_image_from_memory(file_obj, page_num)
                             
-                            # Use OCR text if it's significantly better
-                            if len(ocr_text) > len(page_text):
-                                print(f"Page {page_num + 1}: OCR extracted {len(ocr_text)} chars (vs {len(page_text)} from PDF)")
-                                print("OCR text")
-                                print(ocr_text)
-                                page_text = ocr_text
-                                ocr_pages_count += 1
+                            if page_image:
+                                ocr_text = extract_text_with_pytesseract(page_image).strip()
                                 
+                                # Use OCR text if it's significantly better
+                                if len(ocr_text) > len(page_text):
+                                    print(f"Page {page_num + 1}: OCR extracted {len(ocr_text)} chars (vs {len(page_text)} from PDF)")
+                                    print("OCR text")
+                                    print(ocr_text)
+                                    page_text = ocr_text
+                                    ocr_pages_count += 1
+                                else:
+                                    print(f"Page {page_num + 1}: OCR didn't improve text extraction ({len(ocr_text)} chars)")
+                                
+                                # Clean up image to save memory
+                                del page_image
                             else:
-                                print(f"Page {page_num + 1}: OCR didn't improve text extraction ({len(ocr_text)} chars)")
-                            
-                            # Clean up image to save memory
-                            del page_image
-                        else:
-                            print(f"Page {page_num + 1}: Failed to convert to image for OCR")
-                            
-                    except Exception as ocr_error:
-                        print(f"Page {page_num + 1}: OCR failed - {str(ocr_error)}")
+                                print(f"Page {page_num + 1}: Failed to convert to image for OCR")
+                                
+                        except Exception as ocr_error:
+                            print(f"Page {page_num + 1}: OCR failed - {str(ocr_error)}")
+                    else:
+                        print(f"Page {page_num + 1}: Insufficient text ({len(page_text)} chars), but OCR not available")
                 else:
                     print(f"Page {page_num + 1}: Good text extraction ({len(page_text)} chars)")
                 
