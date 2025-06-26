@@ -359,7 +359,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
       {/* App Bar */}
       <AppBar position="static" color="default" elevation={1}>
         <Container maxWidth="xl">
-          <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
+          <Box sx={{ maxWidth: '100%', mx: 'auto', textAlign: 'left' }}>
             <Toolbar>
               <Typography variant="h6" component="h1" sx={{ flexGrow: 1, fontWeight: 600 }}>
                 Quiz
@@ -670,9 +670,27 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                               : 'divider'
                                           }}
                                         >
-                                          <Typography variant="body1" fontWeight="500" gutterBottom>
-                                            Question {qIndex + 1}: {question.text}
-                                          </Typography>
+                                          <Box display="flex" alignItems="flex-start" mb={2}>
+                                            <Chip
+                                              icon={question.isAnswered
+                                                ? (wasAnsweredCorrectly ? <CheckCircle /> : <Cancel />)
+                                                : <HelpOutline />
+                                              }
+                                              label={question.isAnswered
+                                                ? (wasAnsweredCorrectly ? 'Correct' : 'Incorrect')
+                                                : 'Unanswered'
+                                              }
+                                              color={question.isAnswered
+                                                ? (wasAnsweredCorrectly ? 'success' : 'error')
+                                                : 'default'
+                                              }
+                                              size="small"
+                                              sx={{ mr: 2 }}
+                                            />
+                                            <Typography variant="body1" fontWeight="500">
+                                              Question {qIndex + 1}: {question.text}
+                                            </Typography>
+                                          </Box>
                                           <Box ml={2}>
                                             {question.options.map((option, optIndex) => {
                                               const isCorrectAnswer = optIndex === question.correctAnswer;

@@ -186,6 +186,8 @@ def gpt_summarize_transcript(text):
              You also double check all your responses for accuracy."},
             {"role": "user", "content": prompt},
         ],
+        temperature = 1.2,
+        presence_penalty = 0.6,
     )
 
     print("gpt_summarize_transcript completion")
@@ -207,11 +209,11 @@ def generate_quiz_questions(summary_text, request_id=None):
         gpt_time_start = time.time()
 
         prompt = f"""
-        Based on the following medical text summary, create 5 challenging USMLE clinical vignette style \
+        Based on the following medical text summary, create 5 VERY challenging USMLE clinical vignette style \
             multiple-choice questions to test the student's understanding. 
         
         For each question:
-        1. Create a clear, specific question about key concepts in the text
+        1. Create a clear, specific, and very challenging question about key concepts in the text
         2. Provide exactly 4 answer choices
         3. Indicate which answer is correct (index 0-3)
         4. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
@@ -240,6 +242,8 @@ def generate_quiz_questions(summary_text, request_id=None):
                  You respond ONLY with the requested JSON format."},
                 {"role": "user", "content": prompt},
             ],
+            temperature = 1.2,
+            presence_penalty = 0.6,
         )
 
         gpt_time_end = time.time()
@@ -290,34 +294,7 @@ def generate_quiz_questions(summary_text, request_id=None):
         return questions
     except Exception as e:
         print(f"Error generating quiz questions: {str(e)}")
-        # Return some default questions if there's an error
-        fallback_questions = [
-            {
-                "id": 1,
-                "text": "What is the main purpose of this document?",
-                "options": [
-                    "To provide medical information",
-                    "To give financial advice",
-                    "To describe laboratory procedures",
-                    "To explain treatment options"
-                ],
-                "correctAnswer": 0,
-                "reason": "This is a fallback question generated when the API request failed."
-            },
-            {
-                "id": 2,
-                "text": "Which of the following best describes the content?",
-                "options": [
-                    "Research findings",
-                    "Patient cases",
-                    "Medical guidelines",
-                    "Educational material"
-                ],
-                "correctAnswer": 3,
-                "reason": "This is a fallback question generated when the API request failed."
-            }
-        ]
-        return fallback_questions
+        raise e
 
 def generate_focused_questions(summary_text, incorrect_question_ids, previous_questions):
     """Generate more targeted quiz questions focusing on areas where the user had difficulty"""
@@ -333,13 +310,13 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
         print({json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"})
 
         prompt = f"""
-        Based on the following medical text summary and struggled concepts, create 5 challenging USMLE clinical vignette style multiple-choice questions.
+        Based on the following medical text summary and struggled concepts, create 5 VERY challenging USMLE clinical vignette style multiple-choice questions.
 
         The user previously struggled with these specific concepts:
         {json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"}
         
         For each question:
-        1. Create challenging but fair questions that test understanding of key concepts
+        1. Create very challenging questions that test understanding of key concepts
         2. If the user struggled with specific areas above, focus at least 3 questions on similar topics, but make sure they are not too similar/repetitive.
         3. Provide exactly 4 answer choices
         4. Indicate which answer is correct (index 0-3)
@@ -368,6 +345,8 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
                  You respond ONLY with the requested JSON format."},
                 {"role": "user", "content": prompt},
             ],
+            temperature = 1.2,
+            presence_penalty = 0.6,
         )
 
         gpt_time_end = time.time()
@@ -415,33 +394,7 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
         return questions
     except Exception as e:
         print(f"Error generating focused questions: {str(e)}")
-        # Return some default questions if there's an error
-        return [
-            {
-                "id": 1,
-                "text": "What aspect of the content needs further review?",
-                "options": [
-                    "Key terminology",
-                    "Core concepts",
-                    "Practical applications",
-                    "All of the above"
-                ],
-                "correctAnswer": 3,
-                "reason": "This is a fallback question generated when the API request failed."
-            },
-            {
-                "id": 2,
-                "text": "Which learning strategy might help reinforce this material?",
-                "options": [
-                    "Flashcard review",
-                    "Practice problems",
-                    "Discussion with peers",
-                    "Creating concept maps"
-                ],
-                "correctAnswer": 1,
-                "reason": "This is a fallback question generated when the API request failed."
-            }
-        ]
+        raise e
 
 def extract_text_with_ocr_from_pdf(file_obj, page_num):
     """Extract text from a specific PDF page using OCR.space API directly"""
