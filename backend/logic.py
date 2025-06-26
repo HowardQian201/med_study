@@ -439,7 +439,8 @@ def extract_text_with_pytesseract(image):
         # Use pytesseract with optimized configuration for medical/academic text
         # PSM 3 = Fully automatic page segmentation, but no OSD
         # OEM 3 = Default, based on what is available
-        custom_config = r'--oem 3 --psm 3 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,;:!?()-[]{}"\''
+        # Simplified character whitelist without problematic quotes
+        custom_config = r'--oem 3 --psm 3'
         
         # Extract text with custom configuration
         text = pytesseract.image_to_string(image, lang='eng', config=custom_config)
@@ -457,17 +458,31 @@ def extract_text_with_pytesseract(image):
         
     except Exception as e:
         print(f"Error with pytesseract OCR: {str(e)}")
-        return ""
+        
+        # Fallback: try with minimal configuration
+        try:
+            print("Trying OCR with minimal configuration...")
+            text = pytesseract.image_to_string(image, lang='eng')
+            cleaned_text = text.strip()
+            print(f"Fallback OCR extracted {len(cleaned_text)} characters")
+            return cleaned_text
+        except Exception as fallback_error:
+            print(f"Fallback OCR also failed: {str(fallback_error)}")
+            return ""
 
 
 def convert_pdf_page_to_image_from_memory(file_obj, page_num):
     """Convert a specific PDF page to an image from a file object in memory"""
     try:
+        print(f"Converting page {page_num + 1} to image for OCR...")
+        
         # Save file object to a temporary file for pdf2image conversion
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
             file_obj.seek(0)
             temp_pdf.write(file_obj.read())
             temp_pdf_path = temp_pdf.name
+        
+        print(f"Created temporary PDF: {temp_pdf_path}")
         
         try:
             # Convert PDF page to image with configured quality settings
@@ -480,20 +495,28 @@ def convert_pdf_page_to_image_from_memory(file_obj, page_num):
             )
             
             if not images:
+                print(f"No images generated for page {page_num + 1}")
                 return None
             
+            print(f"Successfully converted page {page_num + 1} to image ({len(images)} images)")
+            
             # Return the first (and only) image
-            return images[0]
+            image = images[0]
+            print(f"Image size: {image.size}, mode: {image.mode}")
+            return image
             
         finally:
             # Clean up the temporary PDF file
             try:
                 os.unlink(temp_pdf_path)
+                print(f"Cleaned up temporary PDF: {temp_pdf_path}")
             except Exception as e:
                 print(f"Error cleaning up temp PDF file: {str(e)}")
                 
     except Exception as e:
         print(f"Error converting PDF page to image from memory: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def extract_text_from_pdf_memory(file_obj, filename=""):
