@@ -1,10 +1,7 @@
 from flask import Flask, request, jsonify, session, send_from_directory
 from flask_cors import CORS
-import tempfile
-from pathlib import Path
 import traceback
-from .logic import extract_text_from_pdf, gpt_summarize_transcript, set_process_priority, save_uploaded_file, generate_quiz_questions, generate_focused_questions
-import time
+from .logic import extract_text_from_pdf_memory, gpt_summarize_transcript, set_process_priority, generate_quiz_questions, generate_focused_questions, log_memory_usage, check_memory
 from flask_session import Session
 import os
 import re
@@ -12,7 +9,7 @@ from datetime import timedelta
 import shutil
 import atexit
 import glob
-import uuid
+import gc
 
 
 # Try absolute path resolution
@@ -161,19 +158,16 @@ def check_auth():
 @app.route('/api/upload-multiple', methods=['POST'])
 def upload_multiple():
     print("upload_multiple()")
-    temp_dir = None
     try:
         # Check if user is authenticated
         if 'user_id' not in session:
             return jsonify({'error': 'Unauthorized'}), 401
         
-        # Clean up any existing temp directory for this user
+        # Initial memory check
+        log_memory_usage("upload start")
+        
+        # Clean up any existing temp directory for this user (for cleanup consistency)
         cleanup_temp_dir(session['user_id'])
-
-        # Create new temp directory
-        temp_dir = tempfile.mkdtemp()
-        active_temp_dirs[session['user_id']] = temp_dir
-        temp_dir = Path(temp_dir)
 
         set_process_priority()
         
@@ -187,6 +181,8 @@ def upload_multiple():
         if len(files) == 0 and not user_text:
             raise Exception("No files or text provided")
         
+        log_memory_usage("before file processing")
+        
         results = {}
         total_extracted_text = ""
         
@@ -195,22 +191,33 @@ def upload_multiple():
             if file.filename == '':
                 continue
                 
-            # Create a unique filename for each file
+            log_memory_usage(f"processing {file.filename}")
+            
             filename = file.filename
-            input_path = temp_dir / filename
             
-            # Save the file
-            total_bytes = save_uploaded_file(file, input_path)
-            if total_bytes == 0:
-                continue
+            # Check memory before processing each file
+            check_memory()
             
-            print(f"File received: {filename}, {total_bytes / (1024*1024):.1f} MB")
+            print(f"Processing file: {filename}")
             
-            # Extract text from PDF
+            # Extract text from PDF directly from memory without saving to disk
             if filename.endswith('.pdf'):
-                extracted_text = extract_text_from_pdf(input_path)
+                # Get file size for logging
+                file.seek(0, 2)  # Seek to end
+                file_size = file.tell()
+                file.seek(0)  # Reset to beginning
+                
+                print(f"File: {filename}, {file_size / (1024*1024):.1f} MB")
+                
+                # Process PDF directly from memory
+                extracted_text = extract_text_from_pdf_memory(file, filename)
                 if extracted_text:
                     results[filename] = extracted_text
+                    
+                # Clear file reference to help with memory
+                file.seek(0)  # Reset file pointer for any potential reuse
+        
+        log_memory_usage("after file processing")
         
         # Combine PDF text and user text
         filenames = ""
@@ -230,14 +237,20 @@ def upload_multiple():
         if not total_extracted_text:
             raise Exception("No text could be extracted from PDFs and no additional text provided")
         
+        log_memory_usage("before summarization")
+        
         filenames = filenames.strip()
         summary = gpt_summarize_transcript(total_extracted_text)
         summary = f"Summary of: {filenames}\n\n{summary}"
-                
+        
+        log_memory_usage("after summarization")
+        
         # Store results in session
         session['summary'] = summary
         session['pdf_results'] = results
         session['user_text'] = user_text  # Store user text separately
+        
+        log_memory_usage("upload complete")
         
         return jsonify({
             'success': True,
@@ -247,16 +260,12 @@ def upload_multiple():
     except Exception as e:
         print(f"Error: {str(e)}")
         traceback.print_exc()
+        log_memory_usage("upload error")
         return jsonify({'error': str(e)}), 500
     finally:
-        # Clean up temp directory
-        if temp_dir and os.path.exists(temp_dir):
-            try:
-                shutil.rmtree(temp_dir)
-                if 'user_id' in session:
-                    del active_temp_dirs[session['user_id']]
-            except Exception as e:
-                print(f"Error cleaning up temp directory: {str(e)}")
+        # Force garbage collection to clean up memory
+        log_memory_usage("final cleanup")
+        gc.collect()
 
 @app.route('/api/cleanup', methods=['POST'])
 def cleanup():

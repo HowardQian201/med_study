@@ -13,6 +13,7 @@ import json
 import time
 import uuid
 import random
+import gc
 
 
 
@@ -21,6 +22,12 @@ openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 tesseract_custom_path = os.getenv("TESSERACT_PATH")
 if tesseract_custom_path:
     pytesseract.pytesseract.tesseract_cmd = tesseract_custom_path
+
+def log_memory_usage(stage):
+    """Log current memory usage"""
+    memory = psutil.virtual_memory()
+    print(f"Memory at {stage}: {memory.percent}% used ({memory.used/(1024*1024):.1f}MB/{memory.total/(1024*1024):.1f}MB)")
+    return memory.percent
 
 def randomize_answer_choices(question):
     """
@@ -89,6 +96,8 @@ def generate_quiz_questions(summary_text, request_id=None):
         request_id = str(uuid.uuid4())[:8]
     
     try:
+        log_memory_usage("quiz generation start")
+        
         prompt = f"""
         Based on the following medical text summary, create 5 challenging USMLE clinical vignette style \
             multiple-choice questions to test the student's understanding. 
@@ -113,6 +122,8 @@ def generate_quiz_questions(summary_text, request_id=None):
         Return ONLY the valid JSON array with no other text.
         """
 
+        check_memory()  # Check memory before API call
+        
         completion = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -122,6 +133,8 @@ def generate_quiz_questions(summary_text, request_id=None):
                 {"role": "user", "content": prompt},
             ],
         )
+
+        log_memory_usage("after API call")
 
         # Get JSON response
         response_text = completion.choices[0].message.content.strip()
@@ -137,6 +150,8 @@ def generate_quiz_questions(summary_text, request_id=None):
         response_text = response_text.strip()
         # Parse JSON
         questions = json.loads(response_text)
+        
+        log_memory_usage("after JSON parsing")
         
         # Validate the response has the expected structure
         if not isinstance(questions, list) or len(questions) == 0:
@@ -159,7 +174,7 @@ def generate_quiz_questions(summary_text, request_id=None):
         
             randomize_answer_choices(q)
 
-        
+        log_memory_usage("quiz generation complete")
         return questions
     except Exception as e:
         print(f"Error generating quiz questions: {str(e)}")
@@ -360,44 +375,122 @@ def convert_pdf_page_to_image(pdf_path, page_num):
         print(f"Error converting PDF to image: {str(e)}")
         return None
 
-def extract_text_from_pdf(pdf_path):
-    """Extract text from a PDF file using both PyPDF2 and pytesseract OCR"""
-    PyPDF2_combined_text = ""
-    pytesseract_combined_text = ""
+def extract_text_from_pdf_memory(file_obj, filename=""):
+    """Extract text from a PDF file object directly from memory"""
     final_text = ""
-    min_text_length = 50  # Minimum characters to consider text sufficient
     
     try:
-        # Get direct text extraction first
+        log_memory_usage("PDF memory extraction start")
+        
+        # Reset file pointer to beginning
+        file_obj.seek(0)
+        
+        # Create PDF reader from file object
+        pdf_reader = PyPDF2.PdfReader(file_obj)
+        num_pages = len(pdf_reader.pages)
+        
+        print(f"Processing PDF '{filename}' with {num_pages} pages from memory")
+        
+        # Process pages in smaller batches to reduce memory usage
+        batch_size = 5 if num_pages > 20 else 10  # Smaller batches for large files
+        
+        for batch_start in range(0, num_pages, batch_size):
+            batch_end = min(batch_start + batch_size, num_pages)
+            batch_text = ""
+            
+            print(f"Processing batch: pages {batch_start + 1}-{batch_end}")
+            log_memory_usage(f"batch {batch_start//batch_size + 1}")
+            
+            for page_num in range(batch_start, batch_end):
+                print(f"Extracting text from page {page_num + 1}")
+                
+                # Check memory before processing each page
+                check_memory()
+                
+                page = pdf_reader.pages[page_num]
+                page_text = page.extract_text()
+                
+                # Add page text directly to batch, don't store separately
+                batch_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
+                
+                # Clear page reference to help garbage collection
+                del page_text
+                del page
+            
+            # Add batch to final text and clear batch
+            final_text += batch_text
+            del batch_text
+            
+            # Force garbage collection between batches for large files
+            if num_pages > 15:
+                gc.collect()
+                log_memory_usage(f"after batch {batch_start//batch_size + 1} cleanup")
+        
+        log_memory_usage("PDF memory extraction complete")
+        return final_text.strip()
+        
+    except Exception as e:
+        print(f"Error extracting text from PDF in memory: {str(e)}")
+        # Force cleanup on error
+        gc.collect()
+        return ""
+
+def extract_text_from_pdf(pdf_path):
+    """Extract text from a PDF file using both PyPDF2 and pytesseract OCR"""
+    
+    final_text = ""
+    
+    try:
+        log_memory_usage("PDF extraction start")
+        
         with open(pdf_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
             num_pages = len(pdf_reader.pages)
             
-            for page_num in range(num_pages):
-                print(f"Extracting text from page {page_num + 1}")
-                page = pdf_reader.pages[page_num]
-                page_text = page.extract_text()
-                PyPDF2_combined_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
+            print(f"Processing PDF with {num_pages} pages")
+            
+            # Process pages in smaller batches to reduce memory usage
+            batch_size = 5 if num_pages > 20 else 10  # Smaller batches for large files
+            
+            for batch_start in range(0, num_pages, batch_size):
+                batch_end = min(batch_start + batch_size, num_pages)
+                batch_text = ""
                 
-                # # OCR causes OOM error
-                # # Check if the extracted text is too short
-                # if len(page_text.strip()) < min_text_length:
-                #     # Text is too short, use OCR instead
-                #     print(f"Text is too short, using OCR for page {page_num + 1}")
-                #     image = convert_pdf_page_to_image(pdf_path, page_num)
-                #     if image:
-                #         ocr_text = extract_text_with_pytesseract(image)
-                #         if ocr_text:
-                #             # Use OCR text for this page
-                #             final_text += f"[Page {page_num + 1}]:\n{ocr_text}\n\n"
-                #             pytesseract_combined_text += f"[OCR Page {page_num + 1}]:\n{ocr_text}\n\n"
-                #             continue
-                # If we didn't use OCR or OCR failed, use the PyPDF2 text
-                final_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
-                                
+                print(f"Processing batch: pages {batch_start + 1}-{batch_end}")
+                log_memory_usage(f"batch {batch_start//batch_size + 1}")
+                
+                for page_num in range(batch_start, batch_end):
+                    print(f"Extracting text from page {page_num + 1}")
+                    
+                    # Check memory before processing each page
+                    check_memory()
+                    
+                    page = pdf_reader.pages[page_num]
+                    page_text = page.extract_text()
+                    
+                    # Add page text directly to batch, don't store separately
+                    batch_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
+                    
+                    # Clear page reference to help garbage collection
+                    del page_text
+                    del page
+                
+                # Add batch to final text and clear batch
+                final_text += batch_text
+                del batch_text
+                
+                # Force garbage collection between batches for large files
+                if num_pages > 15:
+                    gc.collect()
+                    log_memory_usage(f"after batch {batch_start//batch_size + 1} cleanup")
+        
+        log_memory_usage("PDF extraction complete")
         return final_text.strip()
+        
     except Exception as e:
         print(f"Error extracting text from PDF: {str(e)}")
+        # Force cleanup on error
+        gc.collect()
         return ""
     
 
@@ -413,26 +506,20 @@ def set_process_priority():
         print("Could not set process priority")
 
 def check_memory():
-    """Check if system has enough memory"""
-    if psutil.virtual_memory().percent > 90:
-        raise Exception("Memory usage too high")
+    """Check if system has enough memory with proactive garbage collection"""
+    memory = psutil.virtual_memory()
+    
+    if memory.percent > 85:  # Lower threshold for proactive management
+        print(f"High memory usage detected: {memory.percent}% - forcing garbage collection")
+        gc.collect()  # Force garbage collection
+        
+        # Check again after garbage collection
+        memory = psutil.virtual_memory()
+        
+    if memory.percent > 95:  # Critical threshold
+        raise Exception(f"Memory usage critical: {memory.percent}%")
+    
+    return memory.percent
 
-def save_uploaded_file(file, input_path):
-    """Save uploaded file and return total bytes"""
-    total_bytes = 0
-    chunk_size = 1024 * 1024  # 1MB chunks
-    
-    with open(input_path, 'wb') as f:
-        while True:
-            chunk = file.read(chunk_size)
-            if not chunk:
-                break
-            check_memory()
-            f.write(chunk)
-            total_bytes += len(chunk)
-            if total_bytes % (100 * 1024 * 1024) == 0:
-                print(f"Received {total_bytes / (1024*1024):.1f} MB")
-    
-    return total_bytes
 
 
