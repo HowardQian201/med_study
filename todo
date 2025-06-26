@@ -2,11 +2,12 @@
 URGENT:
 
 optimize gpt prompts - 
-Add running total of questions answered
-page refresh brings back to login
+Login page use google
+reimplement OCR text extract
 
 
 FUTURE:
 
 use database to store user uploaded documents
 Favicon not showing on deployed version
+Add running total of questions answered

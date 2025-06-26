@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, session, send_from_directory
 from flask_cors import CORS
 import traceback
-from .logic import extract_text_from_pdf_memory, gpt_summarize_transcript, set_process_priority, generate_quiz_questions, generate_focused_questions, log_memory_usage, check_memory, get_container_memory_limit, analyze_memory_usage
+from .logic import extract_text_from_pdf_memory, gpt_summarize_transcript, set_process_priority, generate_quiz_questions, generate_focused_questions, log_memory_usage, check_memory, get_container_memory_limit
 from flask_session import Session
 import os
 import re
@@ -10,6 +10,8 @@ import shutil
 import atexit
 import glob
 import gc
+from google.auth.transport import requests
+from google.oauth2 import id_token
 
 
 # Try absolute path resolution
@@ -118,6 +120,93 @@ def login():
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
+@app.route('/api/auth/google', methods=['POST'])
+def google_login():
+    print("google_login()")
+    try:
+        data = request.get_json()
+        credential = data.get('credential')
+        
+        if not credential:
+            return jsonify({'message': 'Google credential is required'}), 400
+
+        # Verify the Google JWT token
+        try:
+            # Get Google Client ID from environment
+            google_client_id = os.getenv('GOOGLE_CLIENT_ID')
+            if not google_client_id:
+                return jsonify({'message': 'Google authentication not configured'}), 500
+            
+            # Verify the token
+            idinfo = id_token.verify_oauth2_token(
+                credential, 
+                requests.Request(), 
+                google_client_id
+            )
+            
+            # Get user info from the verified token
+            google_user_id = idinfo['sub']
+            email = idinfo['email']
+            name = idinfo['name']
+            picture = idinfo.get('picture', '')
+            
+            # Check if user exists in our system
+            user = USERS.get(email)
+            if not user:
+                # Create new user for Google login
+                user_id = len(USERS) + 1000  # Use high ID for Google users
+                USERS[email] = {
+                    'name': name,
+                    'id': user_id,
+                    'google_id': google_user_id,
+                    'picture': picture,
+                    'auth_provider': 'google'
+                }
+                user = USERS[email]
+                print(f"Created new Google user: {email}")
+            else:
+                # Update existing user with Google info if needed
+                user.update({
+                    'google_id': google_user_id,
+                    'picture': picture,
+                    'auth_provider': 'google'
+                })
+                print(f"Updated existing user for Google login: {email}")
+
+            # Clear any existing session data
+            session.clear()
+            
+            # Set new session data
+            session['user_id'] = user['id']
+            session['name'] = user['name']
+            session['email'] = email
+            session['picture'] = picture
+            session['auth_provider'] = 'google'
+            
+            # Ensure PDF results are empty on fresh login
+            session['pdf_results'] = {}
+            session['user_text'] = ""
+            session['summary'] = ""
+            session['quiz_questions'] = []
+            
+            return jsonify({
+                'success': True,
+                'user': {
+                    'name': name,
+                    'email': email,
+                    'picture': picture
+                }
+            })
+            
+        except ValueError as e:
+            # Invalid token
+            print(f"Invalid Google token: {str(e)}")
+            return jsonify({'message': 'Invalid Google token'}), 401
+            
+    except Exception as e:
+        print(f"Google login error: {str(e)}")
+        return jsonify({'message': 'Google authentication failed'}), 500
+
 @app.route('/api/auth/logout', methods=['POST'])
 def logout():
     print("logout()")
@@ -146,7 +235,9 @@ def check_auth():
                 'user': {
                     'name': session.get('name'),
                     'email': email,
-                    'id': session.get('user_id')
+                    'id': session.get('user_id'),
+                    'picture': session.get('picture', ''),
+                    'auth_provider': session.get('auth_provider', 'email')
                 },
                 'summary': session.get('summary', '')
             })
