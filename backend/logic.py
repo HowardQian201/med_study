@@ -67,22 +67,24 @@ def get_container_memory_usage():
             with open('/sys/fs/cgroup/memory/memory.usage_in_bytes', 'r') as f:
                 return int(f.read().strip())
         except:
-            pass
+            print("Error reading memory usage from cgroups v1")
         
         # Try to read from cgroups v2
         try:
             with open('/sys/fs/cgroup/memory.current', 'r') as f:
                 return int(f.read().strip())
         except:
-            pass
+            print("Error reading memory usage from cgroups v2")
             
         # Fallback to psutil but this might not be accurate in containers
         memory = psutil.virtual_memory()
+        print("Memory usage from psutil")
         return memory.used
         
     except Exception as e:
         print(f"Error reading memory usage: {e}")
         memory = psutil.virtual_memory()
+        print("Memory usage from psutil")
         return memory.used
 
 def log_memory_usage(stage):
@@ -594,7 +596,7 @@ def check_memory():
             print(f"Memory after GC: {memory_percent:.1f}%")
             
         if memory_percent > 90:  # Critical threshold for containers (was 95%)
-            raise Exception(f"Memory usage critical: {memory_percent:.1f}% ({memory_used/(1024*1024):.1f}MB/{memory_limit/(1024*1024):.1f}MB)")
+            print(f"Memory usage critical: {memory_percent:.1f}% ({memory_used/(1024*1024):.1f}MB/{memory_limit/(1024*1024):.1f}MB)")
         
         return memory_percent
         
@@ -612,7 +614,7 @@ def check_memory():
             memory = psutil.virtual_memory()
             
         if memory.percent > 95:
-            raise Exception(f"Memory usage critical (host): {memory.percent}%")
+            print(f"Memory usage critical (host): {memory.percent}%")
         
         return memory.percent
 
