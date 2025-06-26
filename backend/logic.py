@@ -458,8 +458,20 @@ def extract_text_with_ocr_from_pdf(file_obj, page_num):
 
         files = {'file': (f'page_{page_num + 1}.pdf', page_buffer, 'application/pdf')}
 
-        response = requests.post('https://api.ocr.space/parse/image',
-                                 data=payload, files=files)
+        print("before OCR API call")
+        ocr_time_start = time.time()
+        try:
+            response = requests.post('https://api.ocr.space/parse/image',
+                                     data=payload, files=files, timeout=10)
+            ocr_time_end = time.time()
+            print("after OCR API call")
+            print(f"OCR time: {ocr_time_end - ocr_time_start} seconds")
+        except requests.exceptions.Timeout:
+            print(f"OCR API call timed out after 10 seconds for page {page_num + 1}")
+            return ""
+        except requests.exceptions.RequestException as req_error:
+            print(f"OCR API request failed for page {page_num + 1}: {str(req_error)}")
+            return ""
 
         # Check if the response status is OK
         if response.status_code != 200:
@@ -498,54 +510,6 @@ def extract_text_with_ocr_from_pdf(file_obj, page_num):
         traceback.print_exc()
         return ""
 
-
-def convert_pdf_page_to_image_from_memory(file_obj, page_num):
-    """Convert a specific PDF page to an image from a file object in memory"""
-    try:
-        print(f"Converting page {page_num + 1} to image for OCR...")
-        
-        # Save file object to a temporary file for pdf2image conversion
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
-            file_obj.seek(0)
-            temp_pdf.write(file_obj.read())
-            temp_pdf_path = temp_pdf.name
-        
-        print(f"Created temporary PDF: {temp_pdf_path}")
-        
-        try:
-            # Convert PDF page to image with configured quality settings
-            images = convert_from_path(
-                temp_pdf_path, 
-                first_page=page_num + 1,  # PDF pages are 1-indexed
-                last_page=page_num + 1,
-                dpi=OCR_DPI,  # Use configured DPI
-                fmt='png'
-            )
-            
-            if not images:
-                print(f"No images generated for page {page_num + 1}")
-                return None
-            
-            print(f"Successfully converted page {page_num + 1} to image ({len(images)} images)")
-            
-            # Return the first (and only) image
-            image = images[0]
-            print(f"Image size: {image.size}, mode: {image.mode}")
-            return image
-            
-        finally:
-            # Clean up the temporary PDF file
-            try:
-                os.unlink(temp_pdf_path)
-                print(f"Cleaned up temporary PDF: {temp_pdf_path}")
-            except Exception as e:
-                print(f"Error cleaning up temp PDF file: {str(e)}")
-                
-    except Exception as e:
-        print(f"Error converting PDF page to image from memory: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return None
 
 def extract_text_from_pdf_memory(file_obj, filename=""):
     """Extract text from a PDF file object directly from memory with OCR fallback"""
@@ -595,7 +559,7 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
                             if len(ocr_text) > len(page_text):
                                 print(f"Page {page_num + 1}: OCR extracted {len(ocr_text)} chars (vs {len(page_text)} from PDF)")
                                 print("OCR text")
-                                print(ocr_text)
+                                print(ocr_text[:100])
                                 page_text = ocr_text
                                 ocr_pages_count += 1
                             else:
