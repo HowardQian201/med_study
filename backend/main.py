@@ -10,8 +10,6 @@ import shutil
 import atexit
 import glob
 import gc
-from google.auth.transport import requests
-from google.oauth2 import id_token
 
 
 # Try absolute path resolution
@@ -120,93 +118,6 @@ def login():
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/auth/google', methods=['POST'])
-def google_login():
-    print("google_login()")
-    try:
-        data = request.get_json()
-        credential = data.get('credential')
-        
-        if not credential:
-            return jsonify({'message': 'Google credential is required'}), 400
-
-        # Verify the Google JWT token
-        try:
-            # Get Google Client ID from environment
-            google_client_id = os.getenv('GOOGLE_CLIENT_ID')
-            if not google_client_id:
-                return jsonify({'message': 'Google authentication not configured'}), 500
-            
-            # Verify the token
-            idinfo = id_token.verify_oauth2_token(
-                credential, 
-                requests.Request(), 
-                google_client_id
-            )
-            
-            # Get user info from the verified token
-            google_user_id = idinfo['sub']
-            email = idinfo['email']
-            name = idinfo['name']
-            picture = idinfo.get('picture', '')
-            
-            # Check if user exists in our system
-            user = USERS.get(email)
-            if not user:
-                # Create new user for Google login
-                user_id = len(USERS) + 1000  # Use high ID for Google users
-                USERS[email] = {
-                    'name': name,
-                    'id': user_id,
-                    'google_id': google_user_id,
-                    'picture': picture,
-                    'auth_provider': 'google'
-                }
-                user = USERS[email]
-                print(f"Created new Google user: {email}")
-            else:
-                # Update existing user with Google info if needed
-                user.update({
-                    'google_id': google_user_id,
-                    'picture': picture,
-                    'auth_provider': 'google'
-                })
-                print(f"Updated existing user for Google login: {email}")
-
-            # Clear any existing session data
-            session.clear()
-            
-            # Set new session data
-            session['user_id'] = user['id']
-            session['name'] = user['name']
-            session['email'] = email
-            session['picture'] = picture
-            session['auth_provider'] = 'google'
-            
-            # Ensure PDF results are empty on fresh login
-            session['pdf_results'] = {}
-            session['user_text'] = ""
-            session['summary'] = ""
-            session['quiz_questions'] = []
-            
-            return jsonify({
-                'success': True,
-                'user': {
-                    'name': name,
-                    'email': email,
-                    'picture': picture
-                }
-            })
-            
-        except ValueError as e:
-            # Invalid token
-            print(f"Invalid Google token: {str(e)}")
-            return jsonify({'message': 'Invalid Google token'}), 401
-            
-    except Exception as e:
-        print(f"Google login error: {str(e)}")
-        return jsonify({'message': 'Google authentication failed'}), 500
-
 @app.route('/api/auth/logout', methods=['POST'])
 def logout():
     print("logout()")
@@ -235,9 +146,7 @@ def check_auth():
                 'user': {
                     'name': session.get('name'),
                     'email': email,
-                    'id': session.get('user_id'),
-                    'picture': session.get('picture', ''),
-                    'auth_provider': session.get('auth_provider', 'email')
+                    'id': session.get('user_id')
                 },
                 'summary': session.get('summary', '')
             })
@@ -327,7 +236,7 @@ def upload_multiple():
         for key, value in results.items():
             filenames += key + " "
             total_extracted_text += value
-        
+                
         # Add user text if provided
         print(f"User text: {user_text[:100]}")
         if user_text:
@@ -347,7 +256,6 @@ def upload_multiple():
         print(f"Text length being sent to AI: {len(total_extracted_text)} characters")
         
         summary = gpt_summarize_transcript(total_extracted_text)
-        summary = f"Summary of: {filenames}\n\n{summary}"
         
         # Clear the large text variable immediately
         del total_extracted_text
@@ -382,10 +290,15 @@ def cleanup():
     """Endpoint to manually trigger cleanup"""
     print("cleanup()")
     try:
-        if 'user_id' in session:
-            cleanup_temp_dir(session['user_id'])
-            return jsonify({'success': True})
-        return jsonify({'error': 'Unauthorized'}), 401
+        # Allow cleanup even if no user session exists
+        user_id = session.get('user_id')
+        if user_id:
+            cleanup_temp_dir(user_id)
+            return jsonify({'success': True, 'message': 'Cleanup completed for authenticated user'})
+        else:
+            # Still return success for unauthenticated requests
+            # This allows frontend cleanup calls to succeed even after logout/session expiry
+            return jsonify({'success': True, 'message': 'No cleanup needed - no active session'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

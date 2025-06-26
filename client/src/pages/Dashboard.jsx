@@ -10,7 +10,6 @@ import {
   Container,
   Card,
   CardContent,
-  LinearProgress,
   Alert,
   List,
   ListItem,
@@ -37,7 +36,6 @@ import ThemeToggle from '../components/ThemeToggle';
 const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const navigate = useNavigate();
   const [files, setFiles] = useState([]);
-  const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [userText, setUserText] = useState('');
@@ -95,7 +93,6 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
     try {
       console.log(`Processing ${files.length} PDFs and additional text`);
       setIsUploading(true);
-      setProgress(0);
       setError('');
       setSummary('');
       
@@ -118,12 +115,6 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
         },
         withCredentials: true,
         signal: abortController.current.signal,
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
-          setProgress(percentCompleted);
-        },
       });
 
       if (response.data.success) {
@@ -148,16 +139,6 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
       }
     } finally {
       setIsUploading(false);
-    }
-  };
-
-  const cancelUpload = async () => {
-    if (abortController.current) {
-      console.log("aborting")
-      abortController.current.abort();
-      setError('Upload cancelled');
-      setIsUploading(false);
-      await cleanup(); // Cleanup on manual cancel
     }
   };
 
@@ -221,10 +202,10 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* App Bar */}
       <AppBar position="static" color="default" elevation={1}>
-        <Container maxWidth="xl">
-          <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
+        <Container maxWidth="false">
+          <Box sx={{ maxWidth: '100%', mx: 'auto' }}>
             <Toolbar>
-              <Typography variant="h6" component="h1" sx={{ flexGrow: 1, fontWeight: 600 }}>
+              <Typography variant="h6" component="h1" sx={{ flexGrow: 1, fontWeight: 600, textAlign: 'left' }}>
                 Dashboard
               </Typography>
               <Stack direction="row" spacing={2} alignItems="center">
@@ -248,8 +229,8 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
       </AppBar>
 
       {/* Main Content */}
-      <Container maxWidth="xl" sx={{ py: 4 }}>
-        <Card elevation={3} sx={{ maxWidth: 1400, mx: 'auto' }}>
+      <Container maxWidth="xl" sx={{ py: 3 }}>
+        <Card elevation={3} sx={{ maxWidth: '100%', mx: 'auto' }}>
           <CardContent sx={{ p: 4 }}>
             <Typography 
               variant="h4" 
@@ -259,7 +240,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
               fontWeight="bold"
               color="text.primary"
             >
-              PDF Text Extraction
+              PDF/Text Summarizer
             </Typography>
 
             <Box sx={{ display: 'flex', gap: 4, flexDirection: { xs: 'column', md: 'row' } }}>
@@ -275,6 +256,8 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       borderRadius: 2,
                       p: 4,
                       bgcolor: 'action.hover',
+                      width: 400,
+                      height: 200,
                       transition: 'all 0.2s ease',
                       '&:hover': {
                         bgcolor: 'action.selected',
@@ -282,7 +265,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       }
                     }}
                   >
-                    <Stack spacing={2} alignItems="center">
+                    <Stack spacing={2} alignItems="center" sx={{ height: '100%' }}>
                       <input
                         type="file"
                         accept="application/pdf"
@@ -294,12 +277,12 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                           border: 'none',
                           borderRadius: '8px',
                           backgroundColor: 'transparent',
-                          cursor: 'pointer'
+                          cursor: 'pointer',
                         }}
                       />
                       
                       {files.length > 0 && (
-                        <Box sx={{ width: '100%', mt: 2 }}>
+                        <Box sx={{ width: '100%', mt: 2, overflow: 'auto', maxHeight: 120 }}>
                           <Typography variant="body2" color="text.secondary" gutterBottom>
                             Selected: {files.length} file(s)
                           </Typography>
@@ -347,6 +330,8 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                             borderColor: 'divider',
                           },
                         },
+                        width: '100%',
+                        height: 160,
                       }}
                     />
                   </Paper>
@@ -359,35 +344,11 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       variant="contained"
                       size="large"
                       startIcon={<CloudUpload />}
-                      sx={{ px: 4, py: 1.5 }}
+                      sx={{ px: 4, py: 1.5, width: 300, }}
                     >
                       {isUploading ? 'Processing...' : 'Generate Summary'}
                     </Button>
                   </Box>
-
-                  {/* Progress Bar */}
-                  {isUploading && (
-                    <Box>
-                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                        <Typography variant="body2" color="text.secondary">
-                          Upload {progress}% complete. Summarizing...
-                        </Typography>
-                        <Button
-                          onClick={cancelUpload}
-                          color="error"
-                          size="small"
-                          startIcon={<Cancel />}
-                        >
-                          Cancel
-                        </Button>
-                      </Box>
-                      <LinearProgress 
-                        variant="determinate" 
-                        value={progress} 
-                        sx={{ borderRadius: 1, height: 8 }}
-                      />
-                    </Box>
-                  )}
 
                   {/* Error Message */}
                   {error && (
@@ -401,53 +362,15 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
               {/* Right Column - Summary Results */}
               <Box sx={{ flex: 1 }}>
                 <Stack spacing={3}>
-                  {/* Summary Action Buttons - Always Visible */}
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="h6" fontWeight="600" color="text.primary">
-                      Summary:
-                    </Typography>
-                    <Stack direction="row" spacing={1}>
-                      <Button
-                        onClick={regenerateSummary}
-                        disabled={!summary || isUploading}
-                        variant="outlined"
-                        size="small"
-                        startIcon={<Refresh />}
-                        sx={{ minWidth: 'fit-content' }}
-                      >
-                        {isUploading ? 'Regenerating...' : 'Regenerate'}
-                      </Button>
-                      <Button
-                        onClick={goToQuiz}
-                        disabled={!summary}
-                        variant="contained"
-                        color="primary"
-                        size="small"
-                        startIcon={<Quiz />}
-                        sx={{ minWidth: 'fit-content' }}
-                      >
-                        Quiz Me
-                      </Button>
-                      <Button
-                        onClick={clearResults}
-                        disabled={!summary}
-                        variant="outlined"
-                        color="error"
-                        size="small"
-                        startIcon={<Clear />}
-                        sx={{ minWidth: 'fit-content' }}
-                      >
-                        Clear
-                      </Button>
-                    </Stack>
-                  </Box>
+                  
                   
                   {summary ? (
                     <Paper 
                       elevation={1} 
                       sx={{ 
                         p: 3, 
-                        height: 500, 
+                        height: 500,
+                        width: 600,
                         overflow: 'auto',
                         bgcolor: 'background.paper',
                         border: '1px solid',
@@ -471,6 +394,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       elevation={1} 
                       sx={{ 
                         height: 500,
+                        width: 600,
                         display: 'flex', 
                         alignItems: 'center', 
                         justifyContent: 'center',
@@ -484,6 +408,42 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       </Typography>
                     </Paper>
                   )}
+
+                  {/* Summary Action Buttons - Below Summary */}
+                  <Box display="flex" justifyContent="center" gap={1}>
+                    <Button
+                      onClick={regenerateSummary}
+                      disabled={!summary || isUploading}
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Refresh />}
+                      sx={{ minWidth: 'fit-content' }}
+                    >
+                      {isUploading ? 'Regenerating...' : 'Regenerate'}
+                    </Button>
+                    <Button
+                      onClick={goToQuiz}
+                      disabled={!summary}
+                      variant="contained"
+                      color="primary"
+                      size="small"
+                      startIcon={<Quiz />}
+                      sx={{ minWidth: 'fit-content' }}
+                    >
+                      Quiz Me
+                    </Button>
+                    <Button
+                      onClick={clearResults}
+                      disabled={!summary}
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      startIcon={<Clear />}
+                      sx={{ minWidth: 'fit-content' }}
+                    >
+                      Clear
+                    </Button>
+                  </Box>
                 </Stack>
               </Box>
             </Box>
