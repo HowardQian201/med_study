@@ -255,7 +255,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       borderColor: 'divider',
                       borderRadius: 2,
                       p: 4,
-                      bgcolor: 'action.hover',
+                      bgcolor: 'background.paper',
                       width: 400,
                       height: 200,
                       transition: 'all 0.2s ease',
@@ -398,7 +398,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         display: 'flex', 
                         alignItems: 'center', 
                         justifyContent: 'center',
-                        bgcolor: 'action.hover',
+                        bgcolor: 'background.paper',
                         border: '2px dashed',
                         borderColor: 'divider'
                       }}
