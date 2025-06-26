@@ -20,7 +20,8 @@ import {
   Paper,
   Chip,
   Grid,
-  TextField
+  TextField,
+  CircularProgress
 } from '@mui/material';
 import {
   CloudUpload,
@@ -255,7 +256,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       borderColor: 'divider',
                       borderRadius: 2,
                       p: 4,
-                      bgcolor: 'background.paper',
+                      bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
                       width: 400,
                       height: 200,
                       transition: 'all 0.2s ease',
@@ -310,7 +311,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       borderColor: 'divider',
                       borderRadius: 2,
                       p: 3,
-                      bgcolor: 'background.paper'
+                      bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper')
                     }}
                   >
                     <Typography variant="h6" fontWeight="600" gutterBottom>
@@ -343,7 +344,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       disabled={(files.length === 0 && !userText.trim()) || isUploading}
                       variant="contained"
                       size="large"
-                      startIcon={<CloudUpload />}
+                      startIcon={isUploading ? <CircularProgress size={24} color="inherit" /> : <CloudUpload />}
                       sx={{ px: 4, py: 1.5, width: 300, }}
                     >
                       {isUploading ? 'Processing...' : 'Generate Summary'}
@@ -398,7 +399,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         display: 'flex', 
                         alignItems: 'center', 
                         justifyContent: 'center',
-                        bgcolor: 'background.paper',
+                        bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
                         border: '2px dashed',
                         borderColor: 'divider'
                       }}
@@ -416,7 +417,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       disabled={!summary || isUploading}
                       variant="outlined"
                       size="small"
-                      startIcon={<Refresh />}
+                      startIcon={isUploading ? <CircularProgress size={16} color="inherit" /> : <Refresh />}
                       sx={{ minWidth: 'fit-content' }}
                     >
                       {isUploading ? 'Regenerating...' : 'Regenerate'}

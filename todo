@@ -7,6 +7,8 @@ Login page use google
 
 FUTURE:
 
+
+Allow users to select number of questions to generate
 use database to store user uploaded documents
 Favicon not showing on deployed version
 Add running total of questions answered
