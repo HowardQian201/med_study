@@ -7,144 +7,23 @@ import PyPDF2
 import tempfile
 from pdf2image import convert_from_path
 from PIL import Image
-import pytesseract
-import shutil
+import requests
 import json
 import time
 import uuid
 import random
 import gc
-
+from io import BytesIO
+import traceback
 
 
 load_dotenv()
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+OCR_API_KEY = os.getenv("OCR_API_KEY", "helloworld")
 
-# Configure tesseract path
-tesseract_custom_path = os.getenv("TESSERACT_PATH")
-if tesseract_custom_path:
-    pytesseract.pytesseract.tesseract_cmd = tesseract_custom_path
-    print(f"Using custom tesseract path: {tesseract_custom_path}")
-else:
-    # Try common tesseract paths
-    common_paths = [
-        '/usr/bin/tesseract',
-        '/usr/local/bin/tesseract',
-        '/bin/tesseract',
-        '/opt/homebrew/bin/tesseract',  # macOS with Homebrew
-        'tesseract'  # System PATH
-    ]
-    
-    tesseract_found = False
-    print("Searching for tesseract executable...")
-    
-    for path in common_paths:
-        print(f"Checking path: {path}")
-        try:
-            if path == 'tesseract':
-                # Test system PATH using shutil.which
-                import shutil
-                tesseract_path = shutil.which('tesseract')
-                if tesseract_path:
-                    print(f"Found tesseract in system PATH: {tesseract_path}")
-                    pytesseract.pytesseract.tesseract_cmd = tesseract_path
-                    tesseract_found = True
-                    break
-            elif os.path.exists(path):
-                print(f"Found tesseract at: {path}")
-                pytesseract.pytesseract.tesseract_cmd = path
-                tesseract_found = True
-                break
-            else:
-                print(f"  Not found at {path}")
-        except Exception as e:
-            print(f"  Error checking {path}: {str(e)}")
-            continue
-    
-    if not tesseract_found:
-        print("Warning: Tesseract not found. OCR functionality will be disabled.")
-        # Try to get more info about the environment
-        try:
-            import subprocess
-            print("Running diagnostic commands...")
-            
-            # Check if tesseract is installed but not in expected locations
-            try:
-                result = subprocess.run(['dpkg', '-l', 'tesseract-ocr'], 
-                                      capture_output=True, text=True, timeout=10)
-                print(f"dpkg check returncode: {result.returncode}")
-                if result.returncode == 0:
-                    print("tesseract-ocr package is installed:")
-                    print(result.stdout)
-                else:
-                    print("tesseract-ocr package not found via dpkg")
-                    print(f"stderr: {result.stderr}")
-            except Exception as dpkg_error:
-                print(f"dpkg command failed: {str(dpkg_error)}")
-            
-            # Try to find tesseract files anywhere
-            try:
-                result = subprocess.run(['find', '/usr', '-name', '*tesseract*', '-type', 'f'], 
-                                      capture_output=True, text=True, timeout=15)
-                print(f"find command returncode: {result.returncode}")
-                if result.returncode == 0 and result.stdout.strip():
-                    print("Found tesseract-related files:")
-                    print(result.stdout)
-                    # Look for executable files
-                    tesseract_files = result.stdout.strip().split('\n')
-                    for file_path in tesseract_files:
-                        if 'tesseract' in file_path and os.access(file_path, os.X_OK):
-                            print(f"Found executable tesseract: {file_path}")
-                            pytesseract.pytesseract.tesseract_cmd = file_path
-                            tesseract_found = True
-                            break
-                else:
-                    print("No tesseract files found via find command")
-                    print(f"stderr: {result.stderr}")
-            except Exception as find_error:
-                print(f"find command failed: {str(find_error)}")
-            
-            # Check PATH environment variable
-            try:
-                path_env = os.environ.get('PATH', '')
-                print(f"PATH environment variable: {path_env}")
-                
-                # Try whereis command
-                result = subprocess.run(['whereis', 'tesseract'], 
-                                      capture_output=True, text=True, timeout=10)
-                print(f"whereis tesseract: {result.stdout}")
-            except Exception as path_error:
-                print(f"PATH check failed: {str(path_error)}")
-                
-        except Exception as e:
-            print(f"Error during comprehensive tesseract search: {str(e)}")
-            import traceback
-            traceback.print_exc()
-
-# Test if tesseract is working
-try:
-    version = pytesseract.get_tesseract_version()
-    print(f"Tesseract OCR available - version: {version}")
-    TESSERACT_AVAILABLE = True
-except Exception as e:
-    print(f"Tesseract OCR not available: {str(e)}")
-    TESSERACT_AVAILABLE = False
-    
-    # Additional debugging - show current tesseract command
-    print(f"Current tesseract command: {pytesseract.pytesseract.tesseract_cmd}")
-    
-    # Try to run tesseract directly to see what happens
-    try:
-        import subprocess
-        result = subprocess.run([pytesseract.pytesseract.tesseract_cmd, '--version'], 
-                              capture_output=True, text=True, timeout=10)
-        print(f"Direct tesseract call result (returncode {result.returncode}):")
-        print(f"stdout: {result.stdout}")
-        print(f"stderr: {result.stderr}")
-    except Exception as direct_error:
-        print(f"Direct tesseract call failed: {str(direct_error)}")
 
 # Configuration constants
+OCR_AVAILABLE = True
 OCR_TEXT_THRESHOLD = 50  # Minimum characters to trigger OCR fallback
 OCR_DPI = 300  # DPI for OCR image conversion (balance between quality and memory)
 
@@ -554,47 +433,70 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
             }
         ]
 
-def extract_text_with_pytesseract(image):
-    """Extract text from an image using pytesseract with optimized settings"""
-    # Check if tesseract is available
-    if not TESSERACT_AVAILABLE:
-        print("Tesseract OCR not available - skipping OCR")
-        return ""
-    
+def extract_text_with_ocr_from_pdf(file_obj, page_num):
+    """Extract text from a specific PDF page using OCR.space API directly"""
     try:
-        # Use pytesseract with optimized configuration for medical/academic text
-        # PSM 3 = Fully automatic page segmentation, but no OSD
-        # OEM 3 = Default, based on what is available
-        # Simplified character whitelist without problematic quotes
-        custom_config = r'--oem 3 --psm 3'
+        # Create a new PDF with just the target page
+        file_obj.seek(0)
+        pdf_reader = PyPDF2.PdfReader(file_obj)
         
-        # Extract text with custom configuration
-        text = pytesseract.image_to_string(image, lang='eng', config=custom_config)
+        # Create a new PDF writer with just the target page
+        pdf_writer = PyPDF2.PdfWriter()
+        pdf_writer.add_page(pdf_reader.pages[page_num])
         
-        # Clean up the extracted text
-        cleaned_text = text.strip()
+        # Write the single page to a BytesIO buffer
+        page_buffer = BytesIO()
+        pdf_writer.write(page_buffer)
+        page_buffer.seek(0)
         
-        # Log OCR result quality
-        if len(cleaned_text) > 0:
-            print(f"OCR extracted {len(cleaned_text)} characters")
-        else:
-            print("OCR extracted no text")
-        
-        return cleaned_text
+        payload = {
+            'apikey': OCR_API_KEY,
+            'language': 'eng',
+            'isOverlayRequired': False,
+            'filetype': 'PDF'
+        }
+
+        files = {'file': (f'page_{page_num + 1}.pdf', page_buffer, 'application/pdf')}
+
+        response = requests.post('https://api.ocr.space/parse/image',
+                                 data=payload, files=files)
+
+        # Check if the response status is OK
+        if response.status_code != 200:
+            print(f"OCR API returned status code {response.status_code} for page {page_num + 1}")
+            print(f"Response text: {response.text[:200]}")
+            return ""
+
+        # Try to parse JSON response
+        try:
+            result = response.json()
+        except Exception as json_error:
+            print(f"Failed to parse JSON response for page {page_num + 1}: {str(json_error)}")
+            print(f"Response text: {response.text[:200]}")
+            return ""
+
+        # Check if result is a string (error case)
+        if isinstance(result, str):
+            print(f"OCR API returned error string for page {page_num + 1}: {result}")
+            return ""
+
+        if result.get('IsErroredOnProcessing'):
+            print(f"OCR failed for page {page_num + 1}: {result.get('ErrorMessage', 'Unknown error')}")
+            return ""
+
+        # Check if ParsedResults exists and has content
+        if not result.get('ParsedResults') or len(result['ParsedResults']) == 0:
+            print(f"OCR failed for page {page_num + 1}: No parsed results returned")
+            return ""
+            
+        text = result['ParsedResults'][0]['ParsedText']
+        print(f"OCR extracted {len(text)} characters from page {page_num + 1}")
+        return text
         
     except Exception as e:
-        print(f"Error with pytesseract OCR: {str(e)}")
-        
-        # Fallback: try with minimal configuration
-        try:
-            print("Trying OCR with minimal configuration...")
-            text = pytesseract.image_to_string(image, lang='eng')
-            cleaned_text = text.strip()
-            print(f"Fallback OCR extracted {len(cleaned_text)} characters")
-            return cleaned_text
-        except Exception as fallback_error:
-            print(f"Fallback OCR also failed: {str(fallback_error)}")
-            return ""
+        print(f"Error in OCR processing for page {page_num + 1}: {str(e)}")
+        traceback.print_exc()
+        return ""
 
 
 def convert_pdf_page_to_image_from_memory(file_obj, page_num):
@@ -682,30 +584,22 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
                 
                 # Check if extracted text is insufficient (less than configured threshold)
                 if len(page_text) < OCR_TEXT_THRESHOLD:
-                    if TESSERACT_AVAILABLE:
+                    if OCR_AVAILABLE:
                         print(f"Page {page_num + 1}: Insufficient text ({len(page_text)} chars), trying OCR...")
                         
                         try:
-                            # Convert page to image and use OCR
-                            page_image = convert_pdf_page_to_image_from_memory(file_obj, page_num)
+                            # Use OCR directly on PDF page
+                            ocr_text = extract_text_with_ocr_from_pdf(file_obj, page_num).strip()
                             
-                            if page_image:
-                                ocr_text = extract_text_with_pytesseract(page_image).strip()
-                                
-                                # Use OCR text if it's significantly better
-                                if len(ocr_text) > len(page_text):
-                                    print(f"Page {page_num + 1}: OCR extracted {len(ocr_text)} chars (vs {len(page_text)} from PDF)")
-                                    print("OCR text")
-                                    print(ocr_text)
-                                    page_text = ocr_text
-                                    ocr_pages_count += 1
-                                else:
-                                    print(f"Page {page_num + 1}: OCR didn't improve text extraction ({len(ocr_text)} chars)")
-                                
-                                # Clean up image to save memory
-                                del page_image
+                            # Use OCR text if it's significantly better
+                            if len(ocr_text) > len(page_text):
+                                print(f"Page {page_num + 1}: OCR extracted {len(ocr_text)} chars (vs {len(page_text)} from PDF)")
+                                print("OCR text")
+                                print(ocr_text)
+                                page_text = ocr_text
+                                ocr_pages_count += 1
                             else:
-                                print(f"Page {page_num + 1}: Failed to convert to image for OCR")
+                                print(f"Page {page_num + 1}: OCR didn't improve text extraction ({len(ocr_text)} chars)")
                                 
                         except Exception as ocr_error:
                             print(f"Page {page_num + 1}: OCR failed - {str(ocr_error)}")
@@ -735,7 +629,7 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
         # Log OCR usage statistics
         if ocr_pages_count > 0:
             print(f"OCR was used on {ocr_pages_count}/{num_pages} pages ({ocr_pages_count/num_pages*100:.1f}%)")
-        elif TESSERACT_AVAILABLE:
+        elif OCR_AVAILABLE:
             print(f"All {num_pages} pages had sufficient text, no OCR needed")
         else:
             insufficient_pages = sum(1 for page_num in range(num_pages) 
