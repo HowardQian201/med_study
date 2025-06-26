@@ -1,7 +1,6 @@
 
 URGENT:
 
-Fix memory issue
 optimize gpt prompts - 
 Add running total of questions answered
 page refresh brings back to login

@@ -489,7 +489,6 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
         num_pages = len(pdf_reader.pages)
         
         print(f"Processing PDF '{filename}' with {num_pages} pages from memory")
-        analyze_memory_usage(f"After PDF reader creation - {num_pages} pages")
         
         # Process pages in smaller batches to reduce memory usage
         batch_size = 5 if num_pages > 20 else 10  # Smaller batches for large files
@@ -499,21 +498,15 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
             batch_text = ""
             
             print(f"Processing batch: pages {batch_start + 1}-{batch_end}")
-            analyze_memory_usage(f"Batch {batch_start//batch_size + 1} start")
             
             for page_num in range(batch_start, batch_end):
                 print(f"Extracting text from page {page_num + 1}")
                 
                 # Check memory before processing each page
-                memory_before = analyze_memory_usage(f"Before page {page_num + 1}")
                 check_memory()
                 
                 page = pdf_reader.pages[page_num]
                 page_text = page.extract_text()
-                
-                memory_after = analyze_memory_usage(f"After page {page_num + 1} extraction")
-                page_memory_delta = memory_after - memory_before
-                print(f"Page {page_num + 1} memory delta: {page_memory_delta/(1024*1024):.1f}MB")
                 
                 # Add page text directly to batch, don't store separately
                 batch_text += f"[Page {page_num + 1}]:\n{page_text}\n\n"
@@ -524,9 +517,6 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
                 
                 # Force garbage collection and check effect
                 gc.collect()
-                memory_after_gc = analyze_memory_usage(f"After page {page_num + 1} cleanup")
-                gc_effect = memory_after - memory_after_gc
-                print(f"GC freed: {gc_effect/(1024*1024):.1f}MB")
             
             # Add batch to final text and clear batch
             final_text += batch_text
@@ -535,7 +525,6 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
             # Force garbage collection between batches for large files
             if num_pages > 15:
                 gc.collect()
-                analyze_memory_usage(f"After batch {batch_start//batch_size + 1} cleanup")
         
         analyze_memory_usage(f"PDF extraction complete - {filename}")
         return final_text.strip()

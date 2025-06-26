@@ -163,9 +163,6 @@ def upload_multiple():
         if 'user_id' not in session:
             return jsonify({'error': 'Unauthorized'}), 401
         
-        # Initial memory check
-        analyze_memory_usage("upload start")
-        
         # Get memory limits for file size validation
         try:
             memory_limit = get_container_memory_limit()
@@ -256,8 +253,6 @@ def upload_multiple():
         
         filenames = filenames.strip()
         
-        # Analyze memory before AI call
-        analyze_memory_usage("before AI summarization")
         print(f"Text length being sent to AI: {len(total_extracted_text)} characters")
         
         summary = gpt_summarize_transcript(total_extracted_text)
@@ -267,7 +262,6 @@ def upload_multiple():
         del total_extracted_text
         gc.collect()
         
-        analyze_memory_usage("after AI summarization")
         log_memory_usage("after summarization")
         
         # Store results in session
