@@ -29,6 +29,18 @@ _peak_memory_usage = 0
 def get_container_memory_limit():
     """Get the actual memory limit for the container"""
     try:
+        
+        # Try to read from cgroups v2
+        try:
+            with open('/sys/fs/cgroup/memory.max', 'r') as f:
+                limit_str = f.read().strip()
+                if limit_str == 'max':
+                    raise Exception("No cgroup limit set")
+                return int(limit_str)
+        except:
+            print("Error reading memory limit from cgroups v2")
+            pass
+
         # Try to read from cgroups v1
         try:
             with open('/sys/fs/cgroup/memory/memory.limit_in_bytes', 'r') as f:
@@ -40,17 +52,6 @@ def get_container_memory_limit():
         except:
             print("Error reading memory limit from cgroups v1")
             pass
-        
-        # # Try to read from cgroups v2
-        # try:
-        #     with open('/sys/fs/cgroup/memory.max', 'r') as f:
-        #         limit_str = f.read().strip()
-        #         if limit_str == 'max':
-        #             raise Exception("No cgroup limit set")
-        #         return int(limit_str)
-        # except:
-        #     print("Error reading memory limit from cgroups v2")
-        #     pass
             
         # Check environment variables that Render might set
         if 'MEMORY_LIMIT' in os.environ:
