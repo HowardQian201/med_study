@@ -171,6 +171,7 @@ def randomize_answer_choices(question):
 
 def gpt_summarize_transcript(text):
     print("gpt_summarize_transcript")
+    gpt_time_start = time.time()
     prompt = f"Provide me with detailed, thorough, and comprehensive study guide/summary \
         using full sentences based on this transcript. Include relevant headers for each \
             topic and make sure to inlcude all key information. Be sure to include the \
@@ -188,6 +189,8 @@ def gpt_summarize_transcript(text):
     )
 
     print("gpt_summarize_transcript completion")
+    gpt_time_end = time.time()
+    print(f"GPT time: {gpt_time_end - gpt_time_start} seconds")
     analyze_memory_usage("gpt_summarize_transcript completion")
 
     # Parse the response into lines
@@ -201,7 +204,8 @@ def generate_quiz_questions(summary_text, request_id=None):
     
     try:
         log_memory_usage("quiz generation start")
-        
+        gpt_time_start = time.time()
+
         prompt = f"""
         Based on the following medical text summary, create 5 challenging USMLE clinical vignette style \
             multiple-choice questions to test the student's understanding. 
@@ -237,6 +241,9 @@ def generate_quiz_questions(summary_text, request_id=None):
                 {"role": "user", "content": prompt},
             ],
         )
+
+        gpt_time_end = time.time()
+        print(f"GPT time: {gpt_time_end - gpt_time_start} seconds")
 
         log_memory_usage("after OpenAI API call")
         analyze_memory_usage("after OpenAI API call")
@@ -320,6 +327,7 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
         if previous_questions and incorrect_question_ids:
             incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
         
+        gpt_time_start = time.time()
         # Create a prompt with more focus on areas the user missed
         print("incorrect_questions")
         print({json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"})
@@ -362,6 +370,8 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
             ],
         )
 
+        gpt_time_end = time.time()
+        print(f"GPT time: {gpt_time_end - gpt_time_start} seconds")
         log_memory_usage("after OpenAI 2 API call")
         analyze_memory_usage("after OpenAI 2 API call")
 
