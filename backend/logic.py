@@ -216,7 +216,7 @@ def generate_quiz_questions(summary_text, request_id=None):
         request_id = str(uuid.uuid4())[:8]
 
     log_memory_usage("quiz generation start")
-
+    
     prompt = f"""
     Based on the following medical text summary, create 5 VERY challenging USMLE clinical vignette style \
         multiple-choice questions to test the student's understanding. 
@@ -251,8 +251,8 @@ def generate_quiz_questions(summary_text, request_id=None):
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are an expert medical professor that creates \
-                     accurate, challenging multiple choice questions in the style of clinical vignettes. \
-                     You respond ONLY with the requested JSON format."},
+                    accurate, challenging multiple choice questions in the style of clinical vignettes. \
+                    You respond ONLY with the requested JSON format."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=1.2,
@@ -261,7 +261,7 @@ def generate_quiz_questions(summary_text, request_id=None):
             gpt_time_end = time.time()
             print(f"GPT time (attempt {attempt + 1}): {gpt_time_end - gpt_time_start} seconds")
             log_memory_usage(f"after OpenAI API call (attempt {attempt + 1})")
-            
+
             response_text = completion.choices[0].message.content.strip()
             
             if response_text.startswith("```json"):
@@ -283,7 +283,7 @@ def generate_quiz_questions(summary_text, request_id=None):
                     raise ValueError(f"Question options is not a list of 4: {q}")
                 if not isinstance(q.get('correctAnswer'), int) or not (0 <= q['correctAnswer'] <= 3):
                     raise ValueError(f"Invalid correctAnswer: {q}")
-            
+
             # If validation is successful, randomize and return
             for q in questions:
                 randomize_answer_choices(q)
@@ -345,7 +345,7 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
     
     Return ONLY the valid JSON array with no other text.
     """
-    
+
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -355,8 +355,8 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are an expert medical professor that creates \
-                     accurate, challenging multiple choice questions in the style of clinical vignettes. \
-                     You respond ONLY with the requested JSON format."},
+                    accurate, challenging multiple choice questions in the style of clinical vignettes. \
+                    You respond ONLY with the requested JSON format."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=1.2,

@@ -1,8 +1,7 @@
 
 URGENT:
-Quiz generation json format error callback
 use database to store user uploaded documents and previous questions - ssl handshake error on prod also
-
+Stream summary generation to frontend
 
 FUTURE:
 

@@ -30,9 +30,6 @@ app.config['SESSION_FILE_THRESHOLD'] = 100  # Maximum number of sessions to stor
 app.config['SESSION_FILE_DIR'] = 'flask_session'
 app.config['CLEANUP_INTERVAL'] = 300  # Cleanup every 5 minutes
 
-# Store active temp directories
-active_temp_dirs = {}
-
 # Mock user database (replace with actual database in production)
 USERS = {
     'test@example.com': {
@@ -51,15 +48,11 @@ EMAIL_REGEX = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
 Session(app)
 
-
 # Cleanup on application exit
 @atexit.register
 def cleanup_on_exit():
     print("cleanup_on_exit()")
     try:
-        # Clean up any remaining temp directories
-        for user_id, temp_dir in list(active_temp_dirs.items()):
-            cleanup_temp_dir(user_id)
             
         # Clean up all session files
         session_dir = app.config['SESSION_FILE_DIR']
@@ -74,17 +67,6 @@ def cleanup_on_exit():
     except Exception as e:
         print(f"Error during cleanup: {str(e)}")
 
-
-def cleanup_temp_dir(user_id):
-    """Clean up temporary directory for a user"""
-    if user_id in active_temp_dirs:
-        try:
-            temp_dir = active_temp_dirs[user_id]
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
-            del active_temp_dirs[user_id]
-        except Exception as e:
-            print(f"Error cleaning up temp directory for user {user_id}: {str(e)}")
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
@@ -128,9 +110,6 @@ def login():
 def logout():
     print("logout()")
     try:
-        # Clean up temp directory before clearing session
-        if 'user_id' in session:
-            cleanup_temp_dir(session['user_id'])
         
         # Explicitly clear PDF results and all session data
         session.clear()
@@ -180,8 +159,6 @@ def upload_multiple():
         except:
             max_file_size = 10 * 1024 * 1024  # Default 10MB limit
         
-        # Clean up any existing temp directory for this user (for cleanup consistency)
-        cleanup_temp_dir(user_id)
 
         set_process_priority()
         
@@ -303,22 +280,6 @@ def upload_multiple():
         log_memory_usage("final cleanup")
         gc.collect()
 
-@app.route('/api/cleanup', methods=['POST'])
-def cleanup():
-    """Endpoint to manually trigger cleanup"""
-    print("cleanup()")
-    try:
-        # Allow cleanup even if no user session exists
-        user_id = session.get('user_id')
-        if user_id:
-            cleanup_temp_dir(user_id)
-            return jsonify({'success': True, 'message': 'Cleanup completed for authenticated user'})
-        else:
-            # Still return success for unauthenticated requests
-            # This allows frontend cleanup calls to succeed even after logout/session expiry
-            return jsonify({'success': True, 'message': 'No cleanup needed - no active session'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/clear-results', methods=['POST'])
 def clear_results():
