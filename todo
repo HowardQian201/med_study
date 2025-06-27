@@ -1,8 +1,7 @@
 
 URGENT:
 use database to store user uploaded documents and previous questions - ssl handshake error on prod also
-Stream summary generation to frontend
-
+    - switch to supabase
 FUTURE:
 
 

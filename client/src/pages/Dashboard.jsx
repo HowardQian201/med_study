@@ -466,7 +466,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                     </Button>
                     <Button
                       onClick={goToQuiz}
-                      disabled={!summary}
+                      disabled={!summary || isUploading}
                       variant="contained"
                       color="primary"
                       size="small"
@@ -477,7 +477,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                     </Button>
                     <Button
                       onClick={clearResults}
-                      disabled={!summary}
+                      disabled={!summary || isUploading}
                       variant="outlined"
                       color="error"
                       size="small"
