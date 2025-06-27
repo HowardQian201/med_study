@@ -36,9 +36,14 @@ active_temp_dirs = {}
 # Mock user database (replace with actual database in production)
 USERS = {
     'test@example.com': {
-        'name': 'Test User',
+        'name': 'Test User 1',
         'password': 'password123',  # In production, store hashed passwords
         'id': 1
+    },
+    'test2@example.com': {
+        'name': 'Test User 2',
+        'password': 'password123',  # In production, store hashed passwords
+        'id': 2
     }
 }
 # Email validation regex
