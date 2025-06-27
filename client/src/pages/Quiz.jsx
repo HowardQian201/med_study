@@ -351,7 +351,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
       await saveUserAnswers();
       
       if (allPreviousQuestions.length === 0) {
-        await fetchAllPreviousQuestions();
+      await fetchAllPreviousQuestions();
       } else {
         setShowAllPreviousQuestions(true);
       }
@@ -382,16 +382,19 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
         <Container maxWidth="xl">
           <Box sx={{ maxWidth: '100%', mx: 'auto', textAlign: 'left' }}>
             <Toolbar>
-              <Typography variant="h6" component="h1" sx={{ flexGrow: 1, fontWeight: 600 }}>
-                Quiz
-              </Typography>
+              <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <img src="/favicon.png" alt="MedStudy.AI Logo" style={{ width: 28, height: 28 }} />
+                <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
+                  MedStudy.AI
+                </Typography>
+              </Box>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Typography variant="body2" color="text.secondary">
                   Welcome, {user?.name}
                 </Typography>
                 <ThemeToggle size="small" />
                 <Button
-                  onClick={handleLogout}
+                onClick={handleLogout}
                   variant="outlined"
                   color="primary"
                   startIcon={<Logout />}
@@ -546,7 +549,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                         <Stack spacing={3}>
                           {stats.questionsWithStatus.map((question) => (
                             <Card 
-                              key={question.id}
+                              key={question.id} 
                               elevation={1}
                               sx={{
                                 border: '1px solid',
@@ -579,9 +582,9 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                 </Box>
                                 
                                 <Box ml={2}>
-                                  {question.options.map((option, index) => (
+                                {question.options.map((option, index) => (
                                     <Paper
-                                      key={index}
+                                    key={index}
                                       elevation={0}
                                       onClick={() => handleAnswerSelect(question.id, index)}
                                       sx={{
@@ -589,7 +592,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                         mb: 1,
                                         border: '2px solid',
                                         borderColor: submittedAnswers[question.id] 
-                                          ? (index === question.correctAnswer 
+                                        ? (index === question.correctAnswer
                                               ? 'success.main' 
                                               : (selectedAnswers[question.id] === index && selectedAnswers[question.id] !== question.correctAnswer)
                                                 ? 'error.main'
@@ -794,38 +797,38 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                         <Card elevation={2} sx={{ mb: 4 }}>
                           <CardContent sx={{ p: 4 }}>
                             <Typography variant="h5" fontWeight="500" gutterBottom>
-                              {questions[currentQuestion].text}
+                            {questions[currentQuestion].text}
                             </Typography>
                             
                             <FormControl component="fieldset" sx={{ width: '100%', mt: 3 }}>
                               <Stack spacing={2}>
-                                {questions[currentQuestion].options.map((option, index) => {
-                                  const questionId = questions[currentQuestion].id;
-                                  const isSelected = selectedAnswers[questionId] === index;
-                                  const isSubmitted = submittedAnswers[questionId];
-                                  const correctAnswer = questions[currentQuestion].correctAnswer;
-                                  const isCorrect = isSelected && index === correctAnswer;
-                                  const isIncorrect = isSelected && index !== correctAnswer;
-                                  const isCorrectAnswer = index === correctAnswer;
+                            {questions[currentQuestion].options.map((option, index) => {
+                              const questionId = questions[currentQuestion].id;
+                              const isSelected = selectedAnswers[questionId] === index;
+                              const isSubmitted = submittedAnswers[questionId];
+                              const correctAnswer = questions[currentQuestion].correctAnswer;
+                              const isCorrect = isSelected && index === correctAnswer;
+                              const isIncorrect = isSelected && index !== correctAnswer;
+                              const isCorrectAnswer = index === correctAnswer;
 
-                                  return (
+                              return (
                                     <Paper
-                                      key={index}
+                                  key={index}
                                       elevation={0}
-                                      onClick={() => handleAnswerSelect(questionId, index)}
+                                  onClick={() => handleAnswerSelect(questionId, index)}
                                       sx={{
                                         p: 2,
                                         mb: 1,
                                         border: '2px solid',
                                         borderColor: isSubmitted 
-                                          ? (isCorrect
+                                      ? (isCorrect
                                               ? 'success.main'
-                                              : isIncorrect
+                                          : isIncorrect
                                                 ? 'error.main'
-                                                : isCorrectAnswer
+                                            : isCorrectAnswer
                                                   ? 'success.main'
                                                   : 'divider')
-                                          : (isSelected
+                                      : (isSelected
                                               ? 'primary.main'
                                               : 'divider'),
                                         bgcolor: 'transparent',
@@ -845,14 +848,14 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                             borderRadius: '50%',
                                             border: '2px solid',
                                             borderColor: isSubmitted 
-                                              ? (isCorrect
+                                        ? (isCorrect
                                                   ? 'success.main'
-                                                  : isIncorrect
+                                            : isIncorrect
                                                     ? 'error.main'
-                                                    : isCorrectAnswer
+                                              : isCorrectAnswer
                                                       ? 'success.main'
                                                       : 'divider')
-                                              : (isSelected
+                                        : (isSelected
                                                   ? 'primary.main'
                                                   : 'divider'),
                                             bgcolor: isSubmitted
@@ -884,8 +887,8 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                         </Typography>
                                       </Box>
                                     </Paper>
-                                  );
-                                })}
+                              );
+                            })}
                               </Stack>
                             </FormControl>
                           </CardContent>

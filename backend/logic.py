@@ -15,11 +15,29 @@ import random
 import gc
 from io import BytesIO
 import traceback
+import boto3
+from botocore.client import Config
+from botocore.exceptions import NoCredentialsError, PartialCredentialsError
+import urllib3
+import ssl, socket
 
+hostname = 'ded5994f541134e9d32a9ebb95ac85a5.r2.cloudflarestorage.com'
+context = ssl.create_default_context()
+
+with socket.create_connection((hostname, 443)) as sock:
+    with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+        print(ssock.version())
 
 load_dotenv()
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 OCR_API_KEY = os.getenv("OCR_API_KEY", "helloworld")
+
+# R2 Configuration - Placeholder values
+R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID", "YOUR_R2_ACCOUNT_ID")
+R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "YOUR_R2_ACCESS_KEY_ID")
+R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "YOUR_R2_SECRET_ACCESS_KEY")
+R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME", "YOUR_R2_BUCKET_NAME")
+R2_ENDPOINT_URL = f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
 
 # Configuration constants
@@ -207,7 +225,7 @@ def generate_quiz_questions(summary_text, request_id=None):
     try:
         log_memory_usage("quiz generation start")
         gpt_time_start = time.time()
-
+        
         prompt = f"""
         Based on the following medical text summary, create 5 VERY challenging USMLE clinical vignette style \
             multiple-choice questions to test the student's understanding. 
@@ -218,11 +236,11 @@ def generate_quiz_questions(summary_text, request_id=None):
         3. Indicate which answer is correct (index 0-3)
         4. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
         5. Be in the style of a clinical vignette (e.g. "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
-
+        
         Format the response as a JSON array of question objects. Each question object should have these fields:
         - id: a unique number (1-5)
         - text: the question text
-        - options: array of 4 answer choices 
+        - options: array of 4 answer choices
         - correctAnswer: index of correct answer (0-3)
         - reason: explanation for the correct answer (Dont include the answer index in the reason)
         
@@ -233,7 +251,7 @@ def generate_quiz_questions(summary_text, request_id=None):
         """
 
         check_memory()  # Check memory before API call
-        
+
         completion = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -311,7 +329,7 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
 
         prompt = f"""
         Based on the following medical text summary and struggled concepts, create 5 VERY challenging USMLE clinical vignette style multiple-choice questions.
-
+        
         The user previously struggled with these specific concepts:
         {json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"}
         
@@ -323,11 +341,11 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
         5. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
         6. Be in the style of a clinical vignette (e.g. "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
 
-
+        
         Format the response as a JSON array of question objects. Each question object should have these fields:
         - id: a unique number (1-5)
         - text: the question text
-        - options: array of 4 answer choices 
+        - options: array of 4 answer choices
         - correctAnswer: index of correct answer (0-3)
         - reason: explanation for the correct answer (Dont include the answer index in the reason)
         
@@ -467,7 +485,7 @@ def extract_text_with_ocr_from_pdf(file_obj, page_num):
         text = result['ParsedResults'][0]['ParsedText']
         print(f"OCR extracted {len(text)} characters from page {page_num + 1}")
         return text
-        
+                
     except Exception as e:
         print(f"Error in OCR processing for page {page_num + 1}: {str(e)}")
         traceback.print_exc()
@@ -674,6 +692,67 @@ def analyze_memory_usage(stage):
     except Exception as e:
         print(f"Error in memory analysis: {e}")
         return 0
+
+def upload_to_r2(file_obj, filename, user_id):
+    """
+    Uploads a file object to a Cloudflare R2 bucket.
+
+    Args:
+        file_obj: The file-like object to upload.
+        filename (str): The name of the file in the bucket.
+        user_id (str): The ID of the user uploading the file, for organizing in the bucket.
+
+    Returns:
+        str: The public URL of the uploaded file, or None on failure.
+    """
+    if not all([R2_ACCOUNT_ID != "YOUR_R2_ACCOUNT_ID", R2_ACCESS_KEY_ID != "YOUR_R2_ACCESS_KEY_ID", R2_SECRET_ACCESS_KEY != "YOUR_R2_SECRET_ACCESS_KEY", R2_BUCKET_NAME != "YOUR_R2_BUCKET_NAME"]):
+        print("R2 credentials are not fully configured with actual values. Skipping upload.")
+        return None
+    
+
+    try:
+        s3_client = boto3.client(
+            's3',
+            endpoint_url=R2_ENDPOINT_URL,
+            aws_access_key_id=R2_ACCESS_KEY_ID,
+            aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+            config=Config(
+                signature_version='s3v4',
+                s3={'addressing_style': 'virtual'},
+                connect_timeout=30,
+                retries={'max_attempts': 3}
+            ),
+            verify=True  # Disable SSL verification (temporary)
+        )
+
+        # Reset file pointer before reading
+        file_obj.seek(0)
+        
+        # Create a unique object name inside a user-specific folder
+        object_name = f"user_{user_id}/{uuid.uuid4()}_{filename.replace(' ', '_')}"
+
+        print(f"Uploading {filename} to R2 bucket '{R2_BUCKET_NAME}' as '{object_name}'")
+        
+        s3_client.upload_fileobj(
+            file_obj,
+            R2_BUCKET_NAME,
+            object_name,
+            ExtraArgs={'ContentType': 'application/pdf'}
+        )
+
+        # Construct the public URL (assuming bucket is public or has a custom public domain)
+        public_url = f"https://{R2_BUCKET_NAME}.pub.r2.dev/{object_name}"
+        
+        print(f"Successfully uploaded to R2. URL: {public_url}")
+        return public_url
+
+    except (NoCredentialsError, PartialCredentialsError):
+        print("Error: AWS/R2 credentials not found or incomplete in your environment.")
+        return None
+    except Exception as e:
+        print(f"Error uploading file to R2: {str(e)}")
+        traceback.print_exc()
+        return None
 
 
 
