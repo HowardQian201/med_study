@@ -206,9 +206,12 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
         <Container maxWidth="false">
           <Box sx={{ maxWidth: '100%', mx: 'auto' }}>
             <Toolbar>
-              <Typography variant="h6" component="h1" sx={{ flexGrow: 1, fontWeight: 600, textAlign: 'left' }}>
-                Dashboard
-              </Typography>
+              <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <img src="/favicon.png" alt="MedStudy.AI Logo" style={{ width: 28, height: 28 }} />
+                <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
+                  MedStudy.AI
+                </Typography>
+              </Box>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Typography variant="body2" color="text.secondary">
                   Welcome, {user?.name}

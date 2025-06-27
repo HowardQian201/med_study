@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, session, send_from_directory
 from flask_cors import CORS
 import traceback
-from .logic import extract_text_from_pdf_memory, gpt_summarize_transcript, set_process_priority, generate_quiz_questions, generate_focused_questions, log_memory_usage, check_memory, get_container_memory_limit
+from .logic import extract_text_from_pdf_memory, gpt_summarize_transcript, set_process_priority, generate_quiz_questions, generate_focused_questions, log_memory_usage, check_memory, get_container_memory_limit, upload_to_r2
 from flask_session import Session
 import os
 import re
@@ -10,6 +10,7 @@ import shutil
 import atexit
 import glob
 import gc
+from io import BytesIO
 
 
 # Try absolute path resolution
@@ -163,6 +164,8 @@ def upload_multiple():
         if 'user_id' not in session:
             return jsonify({'error': 'Unauthorized'}), 401
         
+        user_id = session['user_id']
+        
         # Get memory limits for file size validation
         try:
             memory_limit = get_container_memory_limit()
@@ -173,7 +176,7 @@ def upload_multiple():
             max_file_size = 10 * 1024 * 1024  # Default 10MB limit
         
         # Clean up any existing temp directory for this user (for cleanup consistency)
-        cleanup_temp_dir(session['user_id'])
+        cleanup_temp_dir(user_id)
 
         set_process_priority()
         
@@ -201,6 +204,13 @@ def upload_multiple():
             
             filename = file.filename
             
+            # Read the file into an in-memory buffer to prevent "closed file" errors.
+            file_content = file.read()
+
+            # Create separate, isolated buffers for each operation
+            r2_buffer = BytesIO(file_content)
+            pdf_buffer = BytesIO(file_content)
+            
             # Check memory before processing each file
             check_memory()
             
@@ -208,10 +218,16 @@ def upload_multiple():
             
             # Extract text from PDF directly from memory without saving to disk
             if filename.endswith('.pdf'):
+
+                # Upload the file to R2 before any other processing
+                r2_url = upload_to_r2(r2_buffer, filename, user_id)
+                if r2_url:
+                    print(f"File '{filename}' stored in R2 at: {r2_url}")
+                else:
+                    print(f"Skipped or failed to upload '{filename}' to R2. Continuing with local processing.")
+
                 # Get file size for validation and logging
-                file.seek(0, 2)  # Seek to end
-                file_size = file.tell()
-                file.seek(0)  # Reset to beginning
+                file_size = len(file_content)
                 
                 print(f"File: {filename}, {file_size / (1024*1024):.1f} MB")
                 
@@ -222,13 +238,10 @@ def upload_multiple():
                     raise Exception(error_msg)
                 
                 # Process PDF directly from memory
-                extracted_text = extract_text_from_pdf_memory(file, filename)
+                extracted_text = extract_text_from_pdf_memory(pdf_buffer, filename)
                 if extracted_text:
                     results[filename] = extracted_text
                     
-                # Clear file reference to help with memory
-                file.seek(0)  # Reset file pointer for any potential reuse
-        
         log_memory_usage("after file processing")
         
         # Combine PDF text and user text

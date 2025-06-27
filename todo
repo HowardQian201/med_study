@@ -1,14 +1,15 @@
 
 URGENT:
-
-optimize gpt prompts - 
-Login page use google
+use database to store user uploaded documents
 
 
 FUTURE:
 
 
+switch to replit for deployment
+optimize gpt prompts - 
+Login page use google
+Allow users to download summary/quiz questions?
 Allow users to select number of questions to generate
-use database to store user uploaded documents
 Favicon not showing on deployed version
 Add running total of questions answered

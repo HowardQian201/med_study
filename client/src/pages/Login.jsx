@@ -13,7 +13,6 @@ import {
   CircularProgress,
   Stack
 } from '@mui/material';
-import { Login as LoginIcon } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 
 const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
@@ -92,19 +91,23 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
       >
         <CardContent>
           <Stack spacing={3} alignItems="center">
-            <LoginIcon 
-              sx={{ 
-                fontSize: 48, 
-                color: 'primary.main' 
-              }} 
-            />
+            <Box display="flex" alignItems="center" gap={1.5}>
+              <img src="/favicon.png" alt="MedStudy.AI Logo" style={{ width: 40, height: 40 }} />
+              <Typography 
+                component="h1" 
+                variant="h4" 
+                fontWeight="bold"
+                color="text.primary"
+              >
+                MedStudy.AI
+              </Typography>
+            </Box>
             
             <Typography 
-              component="h1" 
-              variant="h4" 
+              component="h2" 
+              variant="h5" 
               align="center"
-              fontWeight="bold"
-              color="text.primary"
+              color="text.secondary"
             >
               Sign in to your account
             </Typography>
@@ -156,7 +159,7 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
                   variant="contained"
                   size="large"
                   disabled={isLoading}
-                  startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <LoginIcon />}
+                  startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : undefined}
                   sx={{ 
                     mt: 3, 
                     py: 1.5,

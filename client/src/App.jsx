@@ -66,61 +66,61 @@ function App() {
 
   return (
     <CustomThemeProvider>
-      <Router>
-        <Routes>
-          <Route 
-            path="/login" 
-            element={
-              isAuthenticated ? (
-                <Navigate to="/dashboard" replace />
-              ) : (
-                <Login 
-                  setIsAuthenticated={setIsAuthenticated} 
-                  setUser={setUser} 
-                  setSummary={setSummary}
-                />
-              )
-            } 
-          />
-          <Route 
-            path="/dashboard" 
-            element={
-              isAuthenticated ? (
-                <Dashboard 
-                  setIsAuthenticated={setIsAuthenticated} 
-                  user={user}
-                  summary={summary}
-                  setSummary={setSummary}
-                />
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            } 
-          />
-          <Route 
-            path="/quiz" 
-            element={
-              isAuthenticated ? (
-                <Quiz 
-                  setIsAuthenticated={setIsAuthenticated} 
-                  user={user}
-                  summary={summary}
-                />
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            } 
-          />
-          <Route 
-            path="/" 
-            element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} 
-          />
-          <Route 
-            path="*" 
-            element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} 
-          />
-        </Routes>
-      </Router>
+    <Router>
+      <Routes>
+        <Route 
+          path="/login" 
+          element={
+            isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Login 
+                setIsAuthenticated={setIsAuthenticated} 
+                setUser={setUser} 
+                setSummary={setSummary}
+              />
+            )
+          } 
+        />
+        <Route 
+          path="/dashboard" 
+          element={
+            isAuthenticated ? (
+              <Dashboard 
+                setIsAuthenticated={setIsAuthenticated} 
+                user={user}
+                summary={summary}
+                setSummary={setSummary}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        <Route 
+          path="/quiz" 
+          element={
+            isAuthenticated ? (
+              <Quiz 
+                setIsAuthenticated={setIsAuthenticated} 
+                user={user}
+                summary={summary}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        <Route 
+          path="/" 
+          element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} 
+        />
+        <Route 
+          path="*" 
+          element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} 
+        />
+      </Routes>
+    </Router>
     </CustomThemeProvider>
   )
 }
