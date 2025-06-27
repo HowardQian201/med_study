@@ -14,12 +14,8 @@ import {
   List,
   ListItem,
   ListItemText,
-  IconButton,
   Stack,
-  Divider,
   Paper,
-  Chip,
-  Grid,
   TextField,
   CircularProgress
 } from '@mui/material';
@@ -44,23 +40,6 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const [userText, setUserText] = useState('');
   const abortController = useRef(null);
 
-  // Cleanup function to be called in various scenarios
-  const cleanup = async () => {
-    try {
-      await axios.post('/api/cleanup', {}, {
-        withCredentials: true
-      });
-    } catch (err) {
-      console.error('Cleanup failed:', err);
-    }
-  };
-
-  // Cleanup on component unmount
-  useEffect(() => {
-    return () => {
-      cleanup();
-    };
-  }, []);
 
   // Display existing results if available
   useEffect(() => {
@@ -87,58 +66,77 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   };
 
   const uploadPDFs = async () => {
-    // Check that we have either files or user text
     if (files.length === 0 && !userText.trim()) {
       setError('Please select at least one file or enter some text');
       return;
     }
-  
-    try {
-      console.log(`Processing ${files.length} PDFs and additional text`);
-      setIsUploading(true);
-      setError('');
-      setSummary('');
-      
-      abortController.current = new AbortController();
-  
-      // Create FormData and append all files
-      const formData = new FormData();
-      files.forEach(file => {
-        formData.append('files', file);
-      });
-      
-      // Add user text if provided
-      if (userText.trim()) {
-        formData.append('userText', userText.trim());
-      }
 
-      const response = await axios.post('/api/upload-multiple', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        withCredentials: true,
+    setIsUploading(true);
+    setError('');
+    setSummary('');
+    abortController.current = new AbortController();
+
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('files', file);
+    });
+    if (userText.trim()) {
+      formData.append('userText', userText.trim());
+    }
+
+    try {
+      const response = await fetch('/api/upload-multiple', {
+        method: 'POST',
+        body: formData,
         signal: abortController.current.signal,
       });
 
-      if (response.data.success) {
-        console.log("processing success");
-        // Update to handle the new response format (text instead of dictionary)
-        setSummary(response.data.results);
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText || 'Processing failed');
+      }
+
+      const contentType = response.headers.get('content-type');
+
+      if (contentType && contentType.includes('application/json')) {
+        // Non-streaming response
+        const data = await response.json();
+        if (data.success) {
+          setSummary(data.results);
+        } else {
+          throw new Error(data.error || 'Processing failed');
+        }
+      } else if (contentType && contentType.includes('text/plain')) {
+        // Streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let finalSummary = '';
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          finalSummary += chunk;
+          setSummary(finalSummary);
+        }
+
+        // After stream is complete, save the final summary to the session
+        await axios.post('/api/save-summary', { summary: finalSummary }, {
+          withCredentials: true
+        });
+
       } else {
-        setError('Processing failed');
+        throw new Error(`Unexpected content type: ${contentType}`);
       }
     } catch (err) {
       if (err.name === 'AbortError') {
         setError('Processing cancelled');
-        await cleanup(); // Cleanup on cancel
       } else if (err.response?.status === 401) {
         setError('Session expired. Please log in again.');
-        await cleanup(); // Cleanup on session expiry
         setIsAuthenticated(false);
         navigate('/login');
       } else {
-        setError(err.response?.data?.error || err.message);
-        console.error('Processing failed:', err);
+        setError(err.message || 'An unknown error occurred');
       }
     } finally {
       setIsUploading(false);
@@ -157,25 +155,62 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   };
   
   const regenerateSummary = async () => {
+    setIsUploading(true);
+    setError('');
+    setSummary(''); // Clear previous summary before regenerating
+
+    const payload = {
+      userText: userText.trim() || undefined,
+    };
+
     try {
-      setIsUploading(true); // Reuse the loading state
-      setError('');
-      
-      const response = await axios.post('/api/regenerate-summary', {
-        userText: userText.trim() || undefined
-      }, {
-        withCredentials: true
+      const response = await fetch('/api/regenerate-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        // Samesite cookie isn't sent with fetch by default
+        credentials: 'omit', // Change to 'include' if you face auth issues
       });
-      
-      if (response.data.success) {
-        console.log("Summary regenerated successfully");
-        setSummary(response.data.summary);
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText || 'Failed to regenerate summary');
+      }
+
+      const contentType = response.headers.get('content-type');
+
+      if (contentType && contentType.includes('application/json')) {
+        // Non-streaming
+        const data = await response.json();
+        if (data.success) {
+          setSummary(data.summary);
+        } else {
+          throw new Error(data.error || 'Failed to regenerate summary');
+        }
+      } else if (contentType && contentType.includes('text/plain')) {
+        // Streaming
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let finalSummary = '';
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          finalSummary += chunk;
+          setSummary(finalSummary);
+        }
+
+        // After stream is complete, save the final summary to the session
+        await axios.post('/api/save-summary', { summary: finalSummary }, {
+          withCredentials: true
+        });
+
       } else {
-        setError('Failed to regenerate summary');
+        throw new Error(`Unexpected content type: ${contentType}`);
       }
     } catch (err) {
-      console.error('Failed to regenerate summary:', err);
-      setError(err.response?.data?.error || 'Failed to regenerate summary');
+      setError(err.message || 'An unknown error occurred during regeneration');
     } finally {
       setIsUploading(false);
     }
@@ -187,7 +222,6 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
 
   const handleLogout = async () => {
     try {
-      await cleanup(); // Cleanup before logout
       await axios.post('/api/auth/logout', {}, {
         withCredentials: true
       });

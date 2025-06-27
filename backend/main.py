@@ -1,17 +1,19 @@
-from flask import Flask, request, jsonify, session, send_from_directory
+from flask import Flask, request, jsonify, session, send_from_directory, Response
 from flask_cors import CORS
 import traceback
-from .logic import extract_text_from_pdf_memory, gpt_summarize_transcript, set_process_priority, generate_quiz_questions, generate_focused_questions, log_memory_usage, check_memory, get_container_memory_limit, upload_to_r2
+from .logic import extract_text_from_pdf_memory, gpt_summarize_transcript, set_process_priority, generate_quiz_questions, generate_focused_questions, log_memory_usage, check_memory, get_container_memory_limit
 from flask_session import Session
 import os
 import re
 from datetime import timedelta
-import shutil
 import atexit
 import glob
 import gc
 from io import BytesIO
 
+
+# Streaming flag
+STREAMING_ENABLED = True
 
 # Try absolute path resolution
 static_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'client', 'dist')
@@ -250,25 +252,35 @@ def upload_multiple():
         
         print(f"Text length being sent to AI: {len(total_extracted_text)} characters")
         
-        summary = gpt_summarize_transcript(total_extracted_text)
-        
-        # Clear the large text variable immediately
-        del total_extracted_text
-        gc.collect()
-        
-        log_memory_usage("after summarization")
-        
-        # Store results in session
-        session['summary'] = summary
+        if not STREAMING_ENABLED:
+            summary = gpt_summarize_transcript(total_extracted_text, stream=STREAMING_ENABLED)
+            session['summary'] = summary
+            session['pdf_results'] = results
+            session['user_text'] = user_text
+            session.modified = True
+            log_memory_usage("upload complete")
+            return jsonify({'success': True, 'results': summary})
+            
+        # --- Streaming Response ---
+        def stream_generator(text_to_summarize):
+            stream_gen = gpt_summarize_transcript(text_to_summarize, stream=STREAMING_ENABLED)
+            for chunk in stream_gen:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
+            
+            # The session cannot be modified here. The client will send the final summary
+            # to a different endpoint to be saved.
+            gc.collect()
+            log_memory_usage("streaming complete")
+
+        # Before streaming, save file-related info to the session. This is okay
+        # because it happens within the initial request context.
         session['pdf_results'] = results
-        session['user_text'] = user_text  # Store user text separately
-        
-        log_memory_usage("upload complete")
-        
-        return jsonify({
-            'success': True,
-            'results': summary
-        })
+        session['user_text'] = user_text
+        session.modified = True
+
+        return Response(stream_generator(total_extracted_text), mimetype='text/plain')
 
     except Exception as e:
         print(f"Error: {str(e)}")
@@ -511,23 +523,65 @@ def regenerate_summary():
         filenames = filenames.strip()
         
         # Generate new summary
-        summary = gpt_summarize_transcript(total_extracted_text)
-        summary = f"Summary of: {filenames}\n\n{summary}"
-        
-        # Update session with new data
-        session['summary'] = summary
-        session['user_text'] = user_text  # Update stored user text
-        session['quiz_questions'] = []  # Clear questions since summary changed
-        
-        return jsonify({
-            'success': True,
-            'summary': summary
-        })
+        if not STREAMING_ENABLED:
+            summary = gpt_summarize_transcript(total_extracted_text, stream=STREAMING_ENABLED)
+            summary = f"Summary of: {filenames}\n\n{summary}"
+            session['summary'] = summary
+            session['user_text'] = user_text
+            session['quiz_questions'] = []
+            session.modified = True
+            return jsonify({'success': True, 'summary': summary})
+
+        # --- Streaming Response ---
+        def stream_generator(text_to_summarize):
+            stream_gen = gpt_summarize_transcript(text_to_summarize, stream=STREAMING_ENABLED)
+            for chunk in stream_gen:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
+            
+            # Session cannot be modified here.
+            print("Session not modified, streaming complete (regenerate).")
+
+        # Update user_text in session before streaming
+        session['user_text'] = user_text
+        session['quiz_questions'] = []  # Clear old questions
+        session.modified = True
+
+        return Response(stream_generator(total_extracted_text), mimetype='text/plain')
+
     except Exception as e:
         print(f"Error regenerating summary: {str(e)}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-    
+
+@app.route('/api/save-summary', methods=['POST'])
+def save_summary():
+    """Endpoint to save the completed summary to the session."""
+    print("save_summary()")
+    try:
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        data = request.json
+        summary = data.get('summary')
+
+        if summary is None:
+            return jsonify({'error': 'No summary provided'}), 400
+
+        session['summary'] = summary
+        # Clear any old quiz questions, as they are now outdated
+        session['quiz_questions'] = []
+        session.modified = True
+        
+        print("Summary successfully saved to session.")
+        return jsonify({'success': True})
+
+    except Exception as e:
+        print(f"Error saving summary: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 # Serve the React frontend
 @app.route("/")
 def serve():
