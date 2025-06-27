@@ -543,7 +543,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                     {/* Current Quiz Results */}
                     {!showAllPreviousQuestions && (
                       <Box>
-                        <Typography variant="h6" fontWeight="600" gutterBottom>
+                        <Typography variant="h2" fontWeight="600" gutterBottom>
                           Question Review
                         </Typography>
                         <Stack spacing={3}>
