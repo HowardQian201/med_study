@@ -652,7 +652,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                           <Typography variant="h6" fontWeight="600">
                             All Previous Questions
                           </Typography>
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant="h6" color="text.secondary">
                             Showing {allPreviousQuestions.length} quiz set{allPreviousQuestions.length !== 1 ? 's' : ''} from previous sessions
                           </Typography>
                         </Box>
@@ -673,7 +673,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                             {allPreviousQuestions.map((questionSet, setIndex) => (
                               <Card key={setIndex} elevation={2}>
                                 <CardContent>
-                                  <Typography variant="h6" fontWeight="600" gutterBottom>
+                                  <Typography variant="h2" fontWeight="600" gutterBottom>
                                     Quiz Set #{setIndex + 1}
                                   </Typography>
                                   <Stack spacing={3}>
