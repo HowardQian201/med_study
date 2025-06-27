@@ -219,12 +219,12 @@ def upload_multiple():
             # Extract text from PDF directly from memory without saving to disk
             if filename.endswith('.pdf'):
 
-                # Upload the file to R2 before any other processing
-                r2_url = upload_to_r2(r2_buffer, filename, user_id)
-                if r2_url:
-                    print(f"File '{filename}' stored in R2 at: {r2_url}")
-                else:
-                    print(f"Skipped or failed to upload '{filename}' to R2. Continuing with local processing.")
+                # # Upload the file to R2 before any other processing
+                # r2_url = upload_to_r2(r2_buffer, filename, user_id)
+                # if r2_url:
+                #     print(f"File '{filename}' stored in R2 at: {r2_url}")
+                # else:
+                #     print(f"Skipped or failed to upload '{filename}' to R2. Continuing with local processing.")
 
                 # Get file size for validation and logging
                 file_size = len(file_content)
@@ -568,6 +568,11 @@ def serve():
     """Serve the main React app"""
     print(f"Serving main React app from: {app.static_folder}")
     return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/favicon.png')
+def favicon():
+    # Serve the favicon from the React build output
+    return send_from_directory(app.static_folder, 'favicon.png', mimetype='image/png')
 
 # Catch-all route for client-side routing (React Router)
 @app.route("/<path:path>")
