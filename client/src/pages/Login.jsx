@@ -181,11 +181,12 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
                     borderColor: 'divider'
                   }}
                 >
-                  <Typography variant="body2" color="text.primary" fontWeight="600">
+                  <Typography variant="h5" color="text.primary" fontWeight="600">
                     Demo credentials:
                   </Typography>
-                  <Typography variant="body2" color="text.primary" sx={{ mt: 0.5 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     test@example.com / password123
+                    test2@example.com / password123
                   </Typography>
                 </Box>
               </Stack>
