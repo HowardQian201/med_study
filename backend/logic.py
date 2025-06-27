@@ -175,8 +175,8 @@ def randomize_answer_choices(question):
     
     return question
 
-def gpt_summarize_transcript(text):
-    print("gpt_summarize_transcript")
+def gpt_summarize_transcript(text, stream=False):
+    print(f"gpt_summarize_transcript called with stream={stream}")
     gpt_time_start = time.time()
     prompt = f"""Provide me with a detailed, thorough, and comprehensive study guide/summary based on this transcript. 
         The output should be in Markdown format. 
@@ -199,7 +199,11 @@ def gpt_summarize_transcript(text):
         ],
         temperature = 1.2,
         presence_penalty = 0.6,
+        stream=stream,
     )
+
+    if stream:
+        return completion
 
     print("gpt_summarize_transcript completion")
     gpt_time_end = time.time()
