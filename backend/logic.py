@@ -4,9 +4,6 @@ import psutil
 import platform
 import os
 import PyPDF2
-import tempfile
-from pdf2image import convert_from_path
-from PIL import Image
 import requests
 import json
 import time
@@ -181,10 +178,15 @@ def randomize_answer_choices(question):
 def gpt_summarize_transcript(text):
     print("gpt_summarize_transcript")
     gpt_time_start = time.time()
-    prompt = f"Provide me with detailed, thorough, and comprehensive study guide/summary \
-        using full sentences based on this transcript. Include relevant headers for each \
-            topic and make sure to inlcude all key information. Be sure to include the \
-                mentioned clinical correlates. Transcript:{text}"
+    prompt = f"""Provide me with a detailed, thorough, and comprehensive study guide/summary based on this transcript. 
+        The output should be in Markdown format. 
+        Use Markdown for structure, including headers (#, ##), bold text (**bold**), italics (*italics*), and bulleted lists (-) to organize the information clearly. 
+        Ensure all key information and mentioned clinical correlates are included.
+        Give explanations with real world examples. 
+        
+        Transcript:
+        {text}
+        """
 
     completion = openai_client.chat.completions.create(
         model="gpt-4o-mini",

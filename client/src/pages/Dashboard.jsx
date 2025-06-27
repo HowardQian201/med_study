@@ -33,6 +33,8 @@ import {
   Description
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const navigate = useNavigate();
@@ -378,20 +380,23 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         overflow: 'auto',
                         bgcolor: 'background.paper',
                         border: '1px solid',
-                        borderColor: 'divider'
+                        borderColor: 'divider',
+                        textAlign: 'left',
                       }}
                     >
-                      <Typography 
-                        variant="body1" 
-                        color="text.primary"
-                        align="left"
-                        sx={{ 
-                          whiteSpace: 'pre-wrap',
-                          lineHeight: 1.6
+                      <ReactMarkdown 
+                        children={summary} 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          h1: (props) => <Typography variant="h4" gutterBottom {...props} />,
+                          h2: (props) => <Typography variant="h5" gutterBottom {...props} />,
+                          h3: (props) => <Typography variant="h6" gutterBottom {...props} />,
+                          p: (props) => <Typography variant="body1" paragraph {...props} />,
+                          ul: (props) => <ul style={{ paddingLeft: 20, marginBottom: '1em' }} {...props} />,
+                          ol: (props) => <ol style={{ paddingLeft: 20, marginBottom: '1em' }} {...props} />,
+                          li: (props) => <li style={{ marginBottom: '0.5em' }}><Typography variant="body1" component="span" {...props} /></li>,
                         }}
-                      >
-                        {summary}
-                      </Typography>
+                      />
                     </Paper>
                   ) : (
                     <Paper 
