@@ -214,198 +214,202 @@ def generate_quiz_questions(summary_text, request_id=None):
     """Generate quiz questions from a summary text using OpenAI's API"""
     if request_id is None:
         request_id = str(uuid.uuid4())[:8]
+
+    log_memory_usage("quiz generation start")
+
+    prompt = f"""
+    Based on the following medical text summary, create 5 VERY challenging USMLE clinical vignette style \
+        multiple-choice questions to test the student's understanding. 
     
-    try:
-        log_memory_usage("quiz generation start")
-        gpt_time_start = time.time()
-        
-        prompt = f"""
-        Based on the following medical text summary, create 5 VERY challenging USMLE clinical vignette style \
-            multiple-choice questions to test the student's understanding. 
-        
-        For each question:
-        1. Create a clear, specific, and very challenging question about key concepts in the text
-        2. Provide exactly 4 answer choices
-        3. Indicate which answer is correct (index 0-3)
-        4. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
-        5. Be in the style of a clinical vignette (e.g. "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
-        
-        Format the response as a JSON array of question objects. Each question object should have these fields:
-        - id: a unique number (1-5)
-        - text: the question text
-        - options: array of 4 answer choices
-        - correctAnswer: index of correct answer (0-3)
-        - reason: explanation for the correct answer (Dont include the answer index in the reason)
-        
-        Summary:
-        {summary_text}
-        
-        Return ONLY the valid JSON array with no other text.
-        """
+    For each question:
+    1. Create a clear, specific, and very challenging question about key concepts in the text
+    2. Provide exactly 4 answer choices
+    3. Indicate which answer is correct (index 0-3)
+    4. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
+    5. Be in the style of a clinical vignette (e.g. "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
+    
+    Format the response as a JSON array of question objects. Each question object should have these fields:
+    - id: a unique number (1-5)
+    - text: the question text
+    - options: array of 4 answer choices
+    - correctAnswer: index of correct answer (0-3)
+    - reason: explanation for the correct answer (Dont include the answer index in the reason)
+    
+    Summary:
+    {summary_text}
+    
+    Return ONLY the valid JSON array with no other text.
+    """
 
-        check_memory()  # Check memory before API call
-
-        completion = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an expert medical professor that creates \
-                 accurate, challenging multiple choice questions in the style of clinical vignettes. \
-                 You respond ONLY with the requested JSON format."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature = 1.2,
-            presence_penalty = 0.6,
-        )
-
-        gpt_time_end = time.time()
-        print(f"GPT time: {gpt_time_end - gpt_time_start} seconds")
-
-        log_memory_usage("after OpenAI API call")
-        analyze_memory_usage("after OpenAI API call")
-
-        # Get JSON response
-        response_text = completion.choices[0].message.content.strip()
-        print("response_text")
-        print(response_text[:100])
-        
-        # Sometimes the API returns markdown json blocks, so let's clean that up
-        if response_text.startswith("```json"):
-            response_text = response_text.replace("```json", "", 1)
-        if response_text.endswith("```"):
-            response_text = response_text.rsplit("```", 1)[0]
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            check_memory()  # Check memory before API call
             
-        response_text = response_text.strip()
-        # Parse JSON
-        questions = json.loads(response_text)
-        
-        log_memory_usage("after JSON parsing")
-        
-        # Validate the response has the expected structure
-        if not isinstance(questions, list) or len(questions) == 0:
-            raise Exception("Invalid response format: not a list or empty list")
+            gpt_time_start = time.time()
+            completion = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert medical professor that creates \
+                     accurate, challenging multiple choice questions in the style of clinical vignettes. \
+                     You respond ONLY with the requested JSON format."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=1.2,
+                presence_penalty=0.6,
+            )
+            gpt_time_end = time.time()
+            print(f"GPT time (attempt {attempt + 1}): {gpt_time_end - gpt_time_start} seconds")
+            log_memory_usage(f"after OpenAI API call (attempt {attempt + 1})")
             
-        # Ensure each question has the required fields
-        for q in questions:
-            required_fields = ['id', 'text', 'options', 'correctAnswer', 'reason']
-            for field in required_fields:
-                if field not in q:
-                    raise Exception(f"Question missing required field: {field}")
+            response_text = completion.choices[0].message.content.strip()
             
-            # Ensure options is a list with exactly 4 items
-            if not isinstance(q['options'], list) or len(q['options']) != 4:
-                raise Exception(f"Question options must be a list with exactly 4 items")
-                
-            # Ensure correctAnswer is an integer between 0-3
-            if not isinstance(q['correctAnswer'], int) or q['correctAnswer'] < 0 or q['correctAnswer'] > 3:
-                raise Exception(f"Question correctAnswer must be an integer between 0-3")
-        
-            randomize_answer_choices(q)
+            if response_text.startswith("```json"):
+                response_text = response_text.replace("```json", "", 1).strip()
+            if response_text.endswith("```"):
+                response_text = response_text.rsplit("```", 1)[0].strip()
+            
+            questions = json.loads(response_text)
+            
+            # Validate structure
+            if not isinstance(questions, list) or not questions:
+                raise ValueError("Response is not a list or is empty.")
+            
+            for q in questions:
+                required_fields = ['id', 'text', 'options', 'correctAnswer', 'reason']
+                if not all(field in q for field in required_fields):
+                    raise ValueError(f"Question missing required fields: {q}")
+                if not isinstance(q.get('options'), list) or len(q['options']) != 4:
+                    raise ValueError(f"Question options is not a list of 4: {q}")
+                if not isinstance(q.get('correctAnswer'), int) or not (0 <= q['correctAnswer'] <= 3):
+                    raise ValueError(f"Invalid correctAnswer: {q}")
+            
+            # If validation is successful, randomize and return
+            for q in questions:
+                randomize_answer_choices(q)
+            
+            log_memory_usage("quiz generation complete")
+            return questions
 
-        log_memory_usage("quiz generation complete")
-        return questions
-    except Exception as e:
-        print(f"Error generating quiz questions: {str(e)}")
-        raise e
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"Attempt {attempt + 1} failed to get valid JSON. Error: {e}")
+            if attempt < max_retries - 1:
+                print("Retrying...")
+                time.sleep(1)  # Wait for a second before retrying
+            else:
+                print("Max retries reached. Failing.")
+                raise Exception("Failed to get valid JSON response from AI after multiple attempts.")
+        
+        except Exception as e:
+            print(f"An unexpected error occurred in generate_quiz_questions: {e}")
+            traceback.print_exc()
+            raise e
+
+    raise Exception("Failed to generate quiz questions after all retries.")
 
 def generate_focused_questions(summary_text, incorrect_question_ids, previous_questions):
     """Generate more targeted quiz questions focusing on areas where the user had difficulty"""
-    try:
-        # Extract incorrect questions
-        incorrect_questions = []
-        if previous_questions and incorrect_question_ids:
-            incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
-        
-        gpt_time_start = time.time()
-        # Create a prompt with more focus on areas the user missed
-        print("incorrect_questions")
-        print({json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"})
+    # Extract incorrect questions
+    incorrect_questions = []
+    if previous_questions and incorrect_question_ids:
+        incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
+    
+    # Create a prompt with more focus on areas the user missed
+    print("incorrect_questions")
+    print({json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"})
 
-        prompt = f"""
-        Based on the following medical text summary and struggled concepts, create 5 VERY challenging USMLE clinical vignette style multiple-choice questions.
-        
-        The user previously struggled with these specific concepts:
-        {json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"}
-        
-        For each question:
-        1. Create very challenging questions that test understanding of key concepts
-        2. If the user struggled with specific areas above, focus at least 3 questions on similar topics, but make sure they are not too similar/repetitive.
-        3. Provide exactly 4 answer choices
-        4. Indicate which answer is correct (index 0-3)
-        5. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
-        6. Be in the style of a clinical vignette (e.g. "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
+    prompt = f"""
+    Based on the following medical text summary and struggled concepts, create 5 VERY challenging USMLE clinical vignette style multiple-choice questions.
+    
+    The user previously struggled with these specific concepts:
+    {json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"}
+    
+    For each question:
+    1. Create very challenging questions that test understanding of key concepts
+    2. If the user struggled with specific areas above, focus at least 3 questions on similar topics, but make sure they are not too similar/repetitive.
+    3. Provide exactly 4 answer choices
+    4. Indicate which answer is correct (index 0-3)
+    5. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
+    6. Be in the style of a clinical vignette (e.g. "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
 
-        
-        Format the response as a JSON array of question objects. Each question object should have these fields:
-        - id: a unique number (1-5)
-        - text: the question text
-        - options: array of 4 answer choices
-        - correctAnswer: index of correct answer (0-3)
-        - reason: explanation for the correct answer (Dont include the answer index in the reason)
-        
-        Summary:
-        {summary_text}
-        
-        Return ONLY the valid JSON array with no other text.
-        """
+    
+    Format the response as a JSON array of question objects. Each question object should have these fields:
+    - id: a unique number (1-5)
+    - text: the question text
+    - options: array of 4 answer choices
+    - correctAnswer: index of correct answer (0-3)
+    - reason: explanation for the correct answer (Dont include the answer index in the reason)
+    
+    Summary:
+    {summary_text}
+    
+    Return ONLY the valid JSON array with no other text.
+    """
+    
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            check_memory()
+            gpt_time_start = time.time()
+            completion = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert medical professor that creates \
+                     accurate, challenging multiple choice questions in the style of clinical vignettes. \
+                     You respond ONLY with the requested JSON format."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=1.2,
+                presence_penalty=0.6,
+            )
 
-        completion = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an expert medical professor that creates \
-                 accurate, challenging multiple choice questions in the style of clinical vignettes. \
-                 You respond ONLY with the requested JSON format."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature = 1.2,
-            presence_penalty = 0.6,
-        )
-
-        gpt_time_end = time.time()
-        print(f"GPT time: {gpt_time_end - gpt_time_start} seconds")
-        log_memory_usage("after OpenAI 2 API call")
-        analyze_memory_usage("after OpenAI 2 API call")
-
-        # Get JSON response
-        response_text = completion.choices[0].message.content.strip()
-        print("response_text")
-        print(response_text[:100])
-        
-        # Clean up markdown formatting if present
-        if response_text.startswith("```json"):
-            response_text = response_text.replace("```json", "", 1)
-        if response_text.endswith("```"):
-            response_text = response_text.rsplit("```", 1)[0]
+            gpt_time_end = time.time()
+            print(f"GPT time (attempt {attempt + 1}): {gpt_time_end - gpt_time_start} seconds")
+            log_memory_usage(f"after OpenAI 2 API call (attempt {attempt + 1})")
             
-        response_text = response_text.strip()
+            response_text = completion.choices[0].message.content.strip()
             
-        # Parse JSON
-        questions = json.loads(response_text)
-        
-        # Validate the response has the expected structure
-        if not isinstance(questions, list) or len(questions) == 0:
-            raise Exception("Invalid response format: not a list or empty list")
+            if response_text.startswith("```json"):
+                response_text = response_text.replace("```json", "", 1).strip()
+            if response_text.endswith("```"):
+                response_text = response_text.rsplit("```", 1)[0].strip()
             
-        # Ensure each question has the required fields
-        for q in questions:
-            required_fields = ['id', 'text', 'options', 'correctAnswer', 'reason']
-            for field in required_fields:
-                if field not in q:
-                    raise Exception(f"Question missing required field: {field}")
+            questions = json.loads(response_text)
             
-            # Ensure options is a list with exactly 4 items
-            if not isinstance(q['options'], list) or len(q['options']) != 4:
-                raise Exception(f"Question options must be a list with exactly 4 items")
+            # Validate structure
+            if not isinstance(questions, list) or not questions:
+                raise ValueError("Response is not a list or is empty.")
                 
-            # Ensure correctAnswer is an integer between 0-3
-            if not isinstance(q['correctAnswer'], int) or q['correctAnswer'] < 0 or q['correctAnswer'] > 3:
-                raise Exception(f"Question correctAnswer must be an integer between 0-3")
-        
-            randomize_answer_choices(q)
-        
-        return questions
-    except Exception as e:
-        print(f"Error generating focused questions: {str(e)}")
-        raise e
+            for q in questions:
+                required_fields = ['id', 'text', 'options', 'correctAnswer', 'reason']
+                if not all(field in q for field in required_fields):
+                    raise ValueError(f"Question missing required fields: {q}")
+                if not isinstance(q.get('options'), list) or len(q['options']) != 4:
+                    raise ValueError(f"Question options is not a list of 4: {q}")
+                if not isinstance(q.get('correctAnswer'), int) or not (0 <= q['correctAnswer'] <= 3):
+                    raise ValueError(f"Invalid correctAnswer: {q}")
+            
+            # If validation is successful, randomize and return
+            for q in questions:
+                randomize_answer_choices(q)
+            
+            return questions
+
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"Attempt {attempt + 1} failed to get valid JSON for focused questions. Error: {e}")
+            if attempt < max_retries - 1:
+                print("Retrying...")
+                time.sleep(1) # Wait for a second before retrying
+            else:
+                print("Max retries reached. Failing.")
+                raise Exception("Failed to get valid JSON for focused questions after multiple attempts.")
+
+        except Exception as e:
+            print(f"An unexpected error occurred in generate_focused_questions: {e}")
+            traceback.print_exc()
+            raise e
+
+    raise Exception("Failed to generate focused questions after all retries.")
 
 def extract_text_with_ocr_from_pdf(file_obj, page_num):
     """Extract text from a specific PDF page using OCR.space API directly"""
