@@ -18,15 +18,6 @@ import traceback
 import boto3
 from botocore.client import Config
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
-import urllib3
-import ssl, socket
-
-hostname = 'ded5994f541134e9d32a9ebb95ac85a5.r2.cloudflarestorage.com'
-context = ssl.create_default_context()
-
-with socket.create_connection((hostname, 443)) as sock:
-    with context.wrap_socket(sock, server_hostname=hostname) as ssock:
-        print(ssock.version())
 
 load_dotenv()
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
