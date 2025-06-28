@@ -2,15 +2,16 @@ from flask import Flask, request, jsonify, session, send_from_directory, Respons
 from flask_cors import CORS
 import traceback
 from .logic import extract_text_from_pdf_memory, gpt_summarize_transcript, set_process_priority, generate_quiz_questions, generate_focused_questions, log_memory_usage, check_memory, get_container_memory_limit
+from .database import upsert_pdf_results, generate_file_hash, check_file_exists
 from flask_session import Session
 import os
 import re
-from datetime import timedelta
+from datetime import timedelta, datetime
 import atexit
 import glob
 import gc
 from io import BytesIO
-
+import uuid
 
 # Streaming flag
 STREAMING_ENABLED = True
@@ -87,6 +88,7 @@ def login():
 
         user = USERS.get(email)
         if not user or user['password'] != password:
+            print(f"Invalid credentials for email: {email} and password: {password}")
             return jsonify({'message': 'Invalid credentials'}), 401
 
         # Clear any existing session data
@@ -191,40 +193,63 @@ def upload_multiple():
             # Read the file into an in-memory buffer to prevent "closed file" errors.
             file_content = file.read()
 
-            # Create separate, isolated buffers for each operation
-            r2_buffer = BytesIO(file_content)
-            pdf_buffer = BytesIO(file_content)
+            # Generate hash for the file content
+            file_hash = generate_file_hash(file_content)
             
-            # Check memory before processing each file
-            check_memory()
+            # Check if this file already exists in the database
+            existing_file = check_file_exists(file_hash)
             
-            print(f"Processing file: {filename}")
-            
-            # Extract text from PDF directly from memory without saving to disk
-            if filename.endswith('.pdf'):
+            if existing_file["exists"]:
+                print(f"File '{filename}' already processed (hash: {file_hash[:8]}...)")
+                # Use existing extracted text instead of reprocessing
+                extracted_text = existing_file["data"]["text"]
+                results[filename] = extracted_text
+                print(f"Reusing {len(extracted_text)} characters of previously extracted text")
+            else:
+                print(f"New file '{filename}' (hash: {file_hash[:8]}...)")
+                
+                # Create separate, isolated buffers for each operation
+                pdf_buffer = BytesIO(file_content)
+                
+                # Check memory before processing each file
+                check_memory()
+                
+                print(f"Processing file: {filename}")
+                
+                # Extract text from PDF directly from memory without saving to disk
+                if filename.endswith('.pdf'):
 
-                # # Upload the file to R2 before any other processing
-                # r2_url = upload_to_r2(r2_buffer, filename, user_id)
-                # if r2_url:
-                #     print(f"File '{filename}' stored in R2 at: {r2_url}")
-                # else:
-                #     print(f"Skipped or failed to upload '{filename}' to R2. Continuing with local processing.")
-
-                # Get file size for validation and logging
-                file_size = len(file_content)
-                
-                print(f"File: {filename}, {file_size / (1024*1024):.1f} MB")
-                
-                # Validate file size against memory constraints
-                if file_size > max_file_size:
-                    error_msg = f"File '{filename}' ({file_size/(1024*1024):.1f}MB) exceeds maximum allowed size ({max_file_size/(1024*1024):.1f}MB) for current memory constraints"
-                    print(error_msg)
-                    raise Exception(error_msg)
-                
-                # Process PDF directly from memory
-                extracted_text = extract_text_from_pdf_memory(pdf_buffer, filename)
-                if extracted_text:
-                    results[filename] = extracted_text
+                    # Get file size for validation and logging
+                    file_size = len(file_content)
+                    
+                    print(f"File: {filename}, {file_size / (1024*1024):.1f} MB")
+                    
+                    # Validate file size against memory constraints
+                    if file_size > max_file_size:
+                        error_msg = f"File '{filename}' ({file_size/(1024*1024):.1f}MB) exceeds maximum allowed size ({max_file_size/(1024*1024):.1f}MB) for current memory constraints"
+                        print(error_msg)
+                        raise Exception(error_msg)
+                    
+                    # Process PDF directly from memory
+                    extracted_text = extract_text_from_pdf_memory(pdf_buffer, filename)
+                    if extracted_text:
+                        results[filename] = extracted_text
+                        
+                        # Store with content hash as ID for future duplicate detection
+                        upsert_result = upsert_pdf_results({
+                            "id": str(uuid.uuid4()),  # Generate proper UUID for id field
+                            "file_hash": file_hash,  # Store hash for duplicate detection
+                            "filename": filename,
+                            "text": extracted_text
+                        })
+                        
+                        if upsert_result["success"]:
+                            print(f"Successfully stored file data in database (hash: {file_hash[:8]}...)")
+                        else:
+                            print(f"Failed to store file data: {upsert_result.get('error', 'Unknown error')}")
+                    
+                else:
+                    print(f"Skipping non-PDF file: {filename}")
                     
         log_memory_usage("after file processing")
         
