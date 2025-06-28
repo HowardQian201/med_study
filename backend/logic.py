@@ -20,13 +20,6 @@ load_dotenv()
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 OCR_API_KEY = os.getenv("OCR_API_KEY", "helloworld")
 
-# R2 Configuration - Placeholder values
-R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID", "YOUR_R2_ACCOUNT_ID")
-R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "YOUR_R2_ACCESS_KEY_ID")
-R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "YOUR_R2_SECRET_ACCESS_KEY")
-R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME", "YOUR_R2_BUCKET_NAME")
-R2_ENDPOINT_URL = f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-
 
 # Configuration constants
 OCR_AVAILABLE = True
@@ -693,67 +686,3 @@ def analyze_memory_usage(stage):
     except Exception as e:
         print(f"Error in memory analysis: {e}")
         return 0
-
-def upload_to_r2(file_obj, filename, user_id):
-    """
-    Uploads a file object to a Cloudflare R2 bucket.
-
-    Args:
-        file_obj: The file-like object to upload.
-        filename (str): The name of the file in the bucket.
-        user_id (str): The ID of the user uploading the file, for organizing in the bucket.
-
-    Returns:
-        str: The public URL of the uploaded file, or None on failure.
-    """
-    if not all([R2_ACCOUNT_ID != "YOUR_R2_ACCOUNT_ID", R2_ACCESS_KEY_ID != "YOUR_R2_ACCESS_KEY_ID", R2_SECRET_ACCESS_KEY != "YOUR_R2_SECRET_ACCESS_KEY", R2_BUCKET_NAME != "YOUR_R2_BUCKET_NAME"]):
-        print("R2 credentials are not fully configured with actual values. Skipping upload.")
-        return None
-    
-
-    try:
-        s3_client = boto3.client(
-            's3',
-            endpoint_url=R2_ENDPOINT_URL,
-            aws_access_key_id=R2_ACCESS_KEY_ID,
-            aws_secret_access_key=R2_SECRET_ACCESS_KEY,
-            config=Config(
-                signature_version='s3v4',
-                s3={'addressing_style': 'virtual'},
-                connect_timeout=30,
-                retries={'max_attempts': 3}
-            ),
-            verify=True  # Disable SSL verification (temporary)
-        )
-
-        # Reset file pointer before reading
-        file_obj.seek(0)
-        
-        # Create a unique object name inside a user-specific folder
-        object_name = f"user_{user_id}/{uuid.uuid4()}_{filename.replace(' ', '_')}"
-
-        print(f"Uploading {filename} to R2 bucket '{R2_BUCKET_NAME}' as '{object_name}'")
-        
-        s3_client.upload_fileobj(
-            file_obj,
-            R2_BUCKET_NAME,
-            object_name,
-            ExtraArgs={'ContentType': 'application/pdf'}
-        )
-
-        # Construct the public URL (assuming bucket is public or has a custom public domain)
-        public_url = f"https://{R2_BUCKET_NAME}.pub.r2.dev/{object_name}"
-        
-        print(f"Successfully uploaded to R2. URL: {public_url}")
-        return public_url
-
-    except (NoCredentialsError, PartialCredentialsError):
-        print("Error: AWS/R2 credentials not found or incomplete in your environment.")
-        return None
-    except Exception as e:
-        print(f"Error uploading file to R2: {str(e)}")
-        traceback.print_exc()
-        return None
-
-
-
