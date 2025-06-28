@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify, session, send_from_directory, Response
 from flask_cors import CORS
 import traceback
-from .logic import extract_text_from_pdf_memory, gpt_summarize_transcript, set_process_priority, generate_quiz_questions, generate_focused_questions, log_memory_usage, check_memory, get_container_memory_limit
+from .logic import extract_text_from_pdf_memory, set_process_priority, log_memory_usage, check_memory, get_container_memory_limit
+from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_focused_questions
 from .database import upsert_pdf_results, generate_file_hash, check_file_exists
 from flask_session import Session
 import os
