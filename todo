@@ -1,5 +1,7 @@
 
 URGENT:
+reorganize logic api calls to their own files
+Switch OCR to Amazon
 use database to store user uploaded documents and previous questions - ssl handshake error on prod also
     - switch to supabase
 
