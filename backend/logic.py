@@ -14,12 +14,15 @@ from io import BytesIO
 import traceback
 import boto3
 from botocore.client import Config
-from botocore.exceptions import NoCredentialsError, PartialCredentialsError
+from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
 
 load_dotenv()
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-OCR_API_KEY = os.getenv("OCR_API_KEY", "helloworld")
 
+# AWS Textract Configuration
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 
 # Configuration constants
 OCR_AVAILABLE = True
@@ -409,7 +412,7 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
     raise Exception("Failed to generate focused questions after all retries.")
 
 def extract_text_with_ocr_from_pdf(file_obj, page_num):
-    """Extract text from a specific PDF page using OCR.space API directly"""
+    """Extract text from a specific PDF page using Amazon Textract"""
     try:
         # Create a new PDF with just the target page
         file_obj.seek(0)
@@ -424,64 +427,87 @@ def extract_text_with_ocr_from_pdf(file_obj, page_num):
         pdf_writer.write(page_buffer)
         page_buffer.seek(0)
         
-        payload = {
-            'apikey': OCR_API_KEY,
-            'language': 'eng',
-            'isOverlayRequired': False,
-            'filetype': 'PDF'
-        }
-
-        files = {'file': (f'page_{page_num + 1}.pdf', page_buffer, 'application/pdf')}
-
-        print("before OCR API call")
+        # Get the PDF bytes for Textract
+        pdf_bytes = page_buffer.getvalue()
+        
+        print(f"Sending page {page_num + 1} to Amazon Textract...")
         ocr_time_start = time.time()
+        
         try:
-            response = requests.post('https://api.ocr.space/parse/image',
-                                     data=payload, files=files, timeout=10)
+            # Create Textract client
+            textract_client = boto3.client(
+                'textract',
+                aws_access_key_id=AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                region_name=AWS_REGION,
+                config=Config(
+                    connect_timeout=30,
+                    read_timeout=30,
+                    retries={'max_attempts': 3}
+                )
+            )
+            
+            # Call Textract detect_document_text
+            response = textract_client.detect_document_text(
+                Document={
+                    'Bytes': pdf_bytes
+                }
+            )
+            
             ocr_time_end = time.time()
-            print("after OCR API call")
-            print(f"OCR time: {ocr_time_end - ocr_time_start} seconds")
-        except requests.exceptions.Timeout:
-            print(f"OCR API call timed out after 10 seconds for page {page_num + 1}")
-            return ""
-        except requests.exceptions.RequestException as req_error:
-            print(f"OCR API request failed for page {page_num + 1}: {str(req_error)}")
-            return ""
-
-        # Check if the response status is OK
-        if response.status_code != 200:
-            print(f"OCR API returned status code {response.status_code} for page {page_num + 1}")
-            print(f"Response text: {response.text[:200]}")
-            return ""
-
-        # Try to parse JSON response
-        try:
-            result = response.json()
-        except Exception as json_error:
-            print(f"Failed to parse JSON response for page {page_num + 1}: {str(json_error)}")
-            print(f"Response text: {response.text[:200]}")
-            return ""
-
-        # Check if result is a string (error case)
-        if isinstance(result, str):
-            print(f"OCR API returned error string for page {page_num + 1}: {result}")
-            return ""
-
-        if result.get('IsErroredOnProcessing'):
-            print(f"OCR failed for page {page_num + 1}: {result.get('ErrorMessage', 'Unknown error')}")
-            return ""
-
-        # Check if ParsedResults exists and has content
-        if not result.get('ParsedResults') or len(result['ParsedResults']) == 0:
-            print(f"OCR failed for page {page_num + 1}: No parsed results returned")
+            print(f"Amazon Textract completed in {ocr_time_end - ocr_time_start:.2f} seconds")
+            
+            # Extract text from Textract response
+            extracted_text = ""
+            line_text = ""
+            
+            # Process blocks to extract text
+            for block in response['Blocks']:
+                if block['BlockType'] == 'LINE':
+                    line_text += block['Text'] + '\n'
+                elif block['BlockType'] == 'WORD':
+                    pass  # Individual words, we'll use LINE level for cleaner output
+            
+            # Calculate confidence statistics
+            confidences = []
+            for block in response['Blocks']:
+                if 'Confidence' in block:
+                    confidences.append(block['Confidence'])
+            
+            if confidences:
+                avg_confidence = sum(confidences) / len(confidences)
+                print(f"Page {page_num + 1}: Textract extracted {len(line_text)} characters with {avg_confidence:.1f}% avg confidence")
+            else:
+                print(f"Page {page_num + 1}: Textract extracted {len(line_text)} characters")
+            
+            return line_text.strip()
+            
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            error_message = e.response['Error']['Message']
+            print(f"Textract API error for page {page_num + 1}: {error_code} - {error_message}")
+            
+            if error_code == 'InvalidParameterException':
+                print("   Hint: Check PDF format and size")
+            elif error_code == 'AccessDeniedException':
+                print("   Hint: Check AWS permissions for Textract")
+            elif error_code == 'ThrottlingException':
+                print("   Hint: API rate limit exceeded, try again later")
+            elif error_code == 'ProvisionedThroughputExceededException':
+                print("   Hint: Textract capacity exceeded, try again later")
+            
             return ""
             
-        text = result['ParsedResults'][0]['ParsedText']
-        print(f"OCR extracted {len(text)} characters from page {page_num + 1}")
-        return text
+        except (NoCredentialsError, PartialCredentialsError) as e:
+            print(f"AWS credentials error for page {page_num + 1}: {e}")
+            return ""
+            
+        except Exception as e:
+            print(f"Unexpected Textract error for page {page_num + 1}: {str(e)}")
+            return ""
                 
     except Exception as e:
-        print(f"Error in OCR processing for page {page_num + 1}: {str(e)}")
+        print(f"Error in Textract processing for page {page_num + 1}: {str(e)}")
         traceback.print_exc()
         return ""
 
