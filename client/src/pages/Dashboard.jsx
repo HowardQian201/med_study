@@ -26,7 +26,8 @@ import {
   Clear,
   Cancel,
   Logout,
-  Description
+  Description,
+  ContentCopy
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import ReactMarkdown from 'react-markdown';
@@ -39,7 +40,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [userText, setUserText] = useState('');
   const abortController = useRef(null);
-
+  const [copySuccess, setCopySuccess] = useState(false);
 
   // Display existing results if available
   useEffect(() => {
@@ -235,6 +236,18 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
     }
   };
 
+  const handleCopySummary = async () => {
+    if (!summary) return;
+    
+    try {
+      await navigator.clipboard.writeText(summary);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000); // Reset after 2 seconds
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* App Bar */}
@@ -403,7 +416,6 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
               <Box sx={{ flex: 1 }}>
                 <Stack spacing={3}>
                   
-                  
                   {summary ? (
                     <Paper 
                       elevation={1} 
@@ -416,8 +428,33 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         border: '1px solid',
                         borderColor: 'divider',
                         textAlign: 'left',
+                        position: 'relative'
                       }}
                     >
+                      <Button
+                        onClick={handleCopySummary}
+                        disabled={!summary || isUploading}
+                        size="small"
+                        sx={{
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          minWidth: 'auto',
+                          p: 0.5,
+                          color: (!summary || isUploading) ? 'action.disabled' : (copySuccess ? 'success.main' : 'text.secondary'),
+                          '&:hover': {
+                            bgcolor: (summary && !isUploading) ? 'action.hover' : 'transparent',
+                            color: (summary && !isUploading) ? 'primary.main' : 'action.disabled'
+                          },
+                          '&:disabled': {
+                            color: 'action.disabled'
+                          },
+                          zIndex: 1
+                        }}
+                        title={!summary ? 'No summary to copy' : isUploading ? 'Wait for summary to finish loading' : (copySuccess ? 'Copied!' : 'Copy to clipboard')}
+                      >
+                        <ContentCopy fontSize="small" />
+                      </Button>
                       <ReactMarkdown 
                         children={summary} 
                         remarkPlugins={[remarkGfm]}
@@ -443,9 +480,34 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         justifyContent: 'center',
                         bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
                         border: '2px dashed',
-                        borderColor: 'divider'
+                        borderColor: 'divider',
+                        position: 'relative'
                       }}
                     >
+                      <Button
+                        onClick={handleCopySummary}
+                        disabled={!summary || isUploading}
+                        size="small"
+                        sx={{
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          minWidth: 'auto',
+                          p: 0.5,
+                          color: (!summary || isUploading) ? 'action.disabled' : (copySuccess ? 'success.main' : 'text.secondary'),
+                          '&:hover': {
+                            bgcolor: (summary && !isUploading) ? 'action.hover' : 'transparent',
+                            color: (summary && !isUploading) ? 'primary.main' : 'action.disabled'
+                          },
+                          '&:disabled': {
+                            color: 'action.disabled'
+                          },
+                          zIndex: 1
+                        }}
+                        title={!summary ? 'No summary to copy' : isUploading ? 'Wait for summary to finish loading' : (copySuccess ? 'Copied!' : 'Copy to clipboard')}
+                      >
+                        <ContentCopy fontSize="small" />
+                      </Button>
                       <Typography variant="h6" color="text.secondary">
                         Generate a summary to see results here
                       </Typography>

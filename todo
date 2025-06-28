@@ -2,13 +2,16 @@
 URGENT:
 use database to store user uploaded documents and previous questions - ssl handshake error on prod also
     - switch to supabase
-FUTURE:
 
 
-switch to replit for deployment
+IDEAS:
+
+Stream quiz questions
+switch to replit or vercel for deployment
 optimize gpt prompts - 
 Login page use google
-Allow users to copy/download summary/quiz questions?
+Allow users to download quiz questions?
 Allow users to select number of questions to generate
 Favicon not showing on deployed version
 Add running total of questions answered
+Create visual diagrams from summary

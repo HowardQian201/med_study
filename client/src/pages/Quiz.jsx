@@ -513,8 +513,8 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                         <Button
                           onClick={generateMoreQuestions}
                           disabled={isGeneratingMoreQuestions}
-                          variant="outlined"
-                          color="secondary"
+                          variant="contained"
+                          color="primary"
                           startIcon={isGeneratingMoreQuestions ? <CircularProgress size={16} color="inherit" /> : <Add />}
                         >
                           {isGeneratingMoreQuestions ? 'Generating...' : 'Generate New Questions'}
@@ -923,7 +923,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                               <Button
                                 onClick={moveToNextQuestion}
                                 variant="contained"
-                                color="secondary"
+                                color="primary"
                                 endIcon={<ArrowForward />}
                               >
                                 Next Question
