@@ -104,6 +104,15 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
             </Box>
             
             <Typography 
+              variant="body1" 
+              align="center"
+              color="text.secondary"
+              sx={{ maxWidth: 320, lineHeight: 1.2 }}
+            >
+              Transform your medical PDFs and notes into interactive study materials with AI-generated summaries and USMLE clinical vignette style questions.
+            </Typography>
+            
+            <Typography 
               component="h2" 
               variant="h5" 
               align="center"
