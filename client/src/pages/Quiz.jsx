@@ -260,7 +260,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
   };
 
   const handleBack = () => {
-    navigate('/dashboard');
+    navigate('/pdf_summary');
   };
 
   const handleLogout = async () => {
@@ -423,7 +423,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                 startIcon={<DashboardIcon />}
                 size="small"
               >
-                Back to Dashboard
+                Back to PDF Summary Page
               </Button>
             </Box>
 

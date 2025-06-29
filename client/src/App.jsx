@@ -4,7 +4,7 @@ import { Box, CircularProgress, Typography } from '@mui/material'
 import { CustomThemeProvider } from './theme/ThemeContext'
 import './App.css'
 import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
+import PDF_summary from './pages/PDF_summary'
 import Quiz from './pages/Quiz'
 import axios from 'axios'
 
@@ -72,7 +72,7 @@ function App() {
           path="/login" 
           element={
             isAuthenticated ? (
-              <Navigate to="/dashboard" replace />
+              <Navigate to="/pdf_summary" replace />
             ) : (
               <Login 
                 setIsAuthenticated={setIsAuthenticated} 
@@ -83,10 +83,10 @@ function App() {
           } 
         />
         <Route 
-          path="/dashboard" 
+          path="/pdf_summary" 
           element={
             isAuthenticated ? (
-              <Dashboard 
+              <PDF_summary 
                 setIsAuthenticated={setIsAuthenticated} 
                 user={user}
                 summary={summary}
@@ -113,11 +113,11 @@ function App() {
         />
         <Route 
           path="/" 
-          element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} 
+          element={<Navigate to={isAuthenticated ? "/pdf_summary" : "/login"} replace />} 
         />
         <Route 
           path="*" 
-          element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} 
+          element={<Navigate to={isAuthenticated ? "/pdf_summary" : "/login"} replace />} 
         />
       </Routes>
     </Router>

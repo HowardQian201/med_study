@@ -33,7 +33,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
+const PDF_summary = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const navigate = useNavigate();
   const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
@@ -569,4 +569,4 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   );
 };
 
-export default Dashboard; 
+export default PDF_summary; 
