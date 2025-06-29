@@ -27,6 +27,7 @@ import {
   Edit as EditIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
+  HelpOutline,
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { format } from 'date-fns';
@@ -312,8 +313,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                                             handleEditStart(set);
                                                         }}
                                                         sx={{ 
-                                                            display: 'block', 
-                                                            textAlign: 'left', 
+                                                            display: 'block',
                                                             width: '100%',
                                                             borderRadius: 1,
                                                             '&:hover': {
@@ -322,29 +322,48 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                                         }}
                                                     >
                                                         <Typography variant="h6" fontWeight="bold" sx={{ 
-                                                            height: '3.9em', 
-                                                            lineHeight: 1.3,
-                                                            overflow: 'hidden',
-                                                            textOverflow: 'ellipsis',
-                                                            display: '-webkit-box',
-                                                            WebkitLineClamp: 3,
-                                                            WebkitBoxOrient: 'vertical',
+                                                            height: '3.9em',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            '& > span': {
+                                                                width: '100%',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                display: '-webkit-box',
+                                                                WebkitLineClamp: 3,
+                                                                WebkitBoxOrient: 'vertical',
+                                                                textAlign: 'center'
+                                                            },
                                                             p: '4px',
-                                                            textAlign: 'center',
                                                             mb: 1.5
                                                         }}>
-                                                            {set.short_summary || 'Untitled Set'}
+                                                            <span>
+                                                                {set.short_summary || 'Untitled Set'}
+                                                            </span>
                                                         </Typography>
                                                     </ButtonBase>
                                                 )}
+                                                <Typography variant="body2" color="text.secondary" sx={{ 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'center', 
+                                                    mb: -0.5 
+                                                }}>
+                                                    {`${set.metadata?.question_hashes?.length || 0} questions`}
+                                                </Typography>
                                                 <Typography variant="body2" color="text.secondary" sx={{
                                                     overflow: 'hidden',
                                                     textOverflow: 'ellipsis',
-                                                    whiteSpace: 'nowrap'
+                                                    whiteSpace: 'nowrap',
+                                                    textAlign: 'center',
+                                                    mb: -0.5
                                                 }}>
                                                     Sources: {set.metadata?.content_names?.join(', ') || 'N/A'}
                                                 </Typography>
-                                                <Typography variant="caption" color="text.secondary" display="block">
+                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ 
+                                                    textAlign: 'center',
+                                                    mb: -0.5
+                                                }}>
                                                     Created: {format(new Date(set.created_at), "PPP p")}
                                                 </Typography>
                                             </Box>

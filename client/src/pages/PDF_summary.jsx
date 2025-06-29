@@ -33,6 +33,7 @@ import {
 import ThemeToggle from '../components/ThemeToggle';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Link } from '@mui/material';
 
 const PDF_summary = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const navigate = useNavigate();
@@ -460,7 +461,60 @@ const PDF_summary = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         border: '1px solid',
                         borderColor: 'divider',
                         textAlign: 'left',
-                        position: 'relative'
+                        position: 'relative',
+                        '& h1': { fontSize: '1.7rem', fontWeight: 600, mb: 2, mt: 3, textAlign: 'left' },
+                        '& h2': { fontSize: '1.4rem', fontWeight: 600, mb: 1.5, mt: 2.5, textAlign: 'left' },
+                        '& h3': { fontSize: '1.2rem', fontWeight: 600, mb: 1, mt: 2, textAlign: 'left' },
+                        '& p': { mb: 1.5, fontSize: '1rem', lineHeight: 1.6, textAlign: 'left' },
+                        '& ul, & ol': { mb: 1.5, pl: 3, textAlign: 'left' },
+                        '& li': { mb: 0.5, textAlign: 'left' },
+                        '& code': {
+                          backgroundColor: 'action.hover',
+                          px: 0.8,
+                          py: 0.3,
+                          borderRadius: 1,
+                          fontSize: '0.9em'
+                        },
+                        '& pre': {
+                          backgroundColor: 'action.hover',
+                          p: 2,
+                          borderRadius: 1,
+                          overflow: 'auto',
+                          mb: 2,
+                          textAlign: 'left'
+                        },
+                        '& blockquote': {
+                          borderLeft: 4,
+                          borderColor: 'divider',
+                          pl: 2,
+                          ml: 0,
+                          my: 2,
+                          fontStyle: 'italic',
+                          textAlign: 'left'
+                        },
+                        '& a': {
+                          color: 'primary.main',
+                          textDecoration: 'none',
+                          '&:hover': {
+                            textDecoration: 'underline'
+                          }
+                        },
+                        '& table': {
+                          borderCollapse: 'collapse',
+                          width: '100%',
+                          mb: 2,
+                          textAlign: 'left'
+                        },
+                        '& th, & td': {
+                          border: 1,
+                          borderColor: 'divider',
+                          p: 1,
+                          textAlign: 'left'
+                        },
+                        '& th': {
+                          backgroundColor: 'action.hover',
+                          fontWeight: 600
+                        }
                       }}
                     >
                       <Button
@@ -495,9 +549,7 @@ const PDF_summary = ({ setIsAuthenticated, user, summary, setSummary }) => {
                           h2: (props) => <Typography variant="h5" gutterBottom {...props} />,
                           h3: (props) => <Typography variant="h6" gutterBottom {...props} />,
                           p: (props) => <Typography variant="body1" paragraph {...props} />,
-                          ul: (props) => <ul style={{ paddingLeft: 20, marginBottom: '1em' }} {...props} />,
-                          ol: (props) => <ol style={{ paddingLeft: 20, marginBottom: '1em' }} {...props} />,
-                          li: (props) => <li style={{ marginBottom: '0.5em' }}><Typography variant="body1" component="span" {...props} /></li>,
+                          a: (props) => <Link {...props} />,
                         }}
                       />
                     </Paper>
