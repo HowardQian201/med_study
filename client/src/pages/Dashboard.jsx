@@ -41,11 +41,23 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const [userText, setUserText] = useState('');
   const abortController = useRef(null);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isContentLocked, setIsContentLocked] = useState(false);
 
   // Display existing results if available
   useEffect(() => {
     if (summary) {
       console.log("Loading existing summary from session");
+    }
+  }, [summary]);
+
+  // Lock inputs when a summary is present, unlock when it's cleared
+  useEffect(() => {
+    if (summary) {
+      console.log("Summary is present, locking inputs.");
+      setIsContentLocked(true);
+    } else {
+      console.log("Summary is cleared, unlocking inputs.");
+      setIsContentLocked(false);
     }
   }, [summary]);
 
@@ -147,6 +159,8 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const clearResults = async () => {
     try {
       setSummary('');
+      setFiles([]);
+      setUserText('');
       await axios.post('/api/clear-results', {}, {
         withCredentials: true
       });
@@ -160,17 +174,11 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
     setError('');
     setSummary(''); // Clear previous summary before regenerating
 
-    const payload = {
-      userText: userText.trim() || undefined,
-    };
-
     try {
       const response = await fetch('/api/regenerate-summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        // Samesite cookie isn't sent with fetch by default
-        credentials: 'omit', // Change to 'include' if you face auth issues
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -324,6 +332,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                   accept="application/pdf"
                   onChange={handleFileSelect}
                   multiple
+                  disabled={isContentLocked || isUploading}
                         style={{
                           width: '100%',
                           padding: '8px',
@@ -377,6 +386,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       value={userText}
                       onChange={(e) => setUserText(e.target.value)}
                       variant="outlined"
+                      disabled={isContentLocked || isUploading}
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           '& fieldset': {
@@ -393,7 +403,7 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                   <Box display="flex" justifyContent="center">
                     <Button
                       onClick={uploadPDFs}
-                      disabled={(files.length === 0 && !userText.trim()) || isUploading}
+                      disabled={isContentLocked || (files.length === 0 && !userText.trim()) || isUploading}
                       variant="contained"
                       size="large"
                       startIcon={isUploading ? <CircularProgress size={24} color="inherit" /> : <CloudUpload />}

@@ -1,7 +1,8 @@
 
 URGENT:
-use database to store user uploaded documents and previous questions - ssl handshake error on prod also
-    - switch to supabase
+Create new home page
+    - allow users to access previous question sets and add more questions
+every question set update/insert, store one sentence summary about the question topics
 
 
 IDEAS:

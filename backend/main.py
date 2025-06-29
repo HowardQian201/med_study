@@ -97,10 +97,9 @@ def login():
         session['email'] = user['email']
         
         # Ensure PDF results are empty on fresh login
-        session['pdf_results'] = {}
-        session['user_text'] = ""
         session['summary'] = ""
         session['quiz_questions'] = []
+        session['total_extracted_text'] = ""
         
         return jsonify({'success': True})
 
@@ -285,11 +284,11 @@ def upload_multiple():
         
         print(f"Text length being sent to AI: {len(total_extracted_text)} characters")
         
+        session['total_extracted_text'] = total_extracted_text
+        
         if not STREAMING_ENABLED:
             summary = gpt_summarize_transcript(total_extracted_text, stream=STREAMING_ENABLED)
             session['summary'] = summary
-            session['pdf_results'] = results
-            session['user_text'] = user_text
             session.modified = True
             log_memory_usage("upload complete")
             return jsonify({'success': True, 'results': summary})
@@ -309,8 +308,6 @@ def upload_multiple():
 
         # Before streaming, save file-related info to the session. This is okay
         # because it happens within the initial request context.
-        session['pdf_results'] = results
-        session['user_text'] = user_text
         session.modified = True
 
         return Response(stream_generator(total_extracted_text), mimetype='text/plain')
@@ -333,12 +330,12 @@ def clear_results():
     try:
         if 'user_id' in session:
             if 'summary' in session:
-                session['pdf_results'] = {}
                 session['summary'] = ""
-                session['user_text'] = ""  # Clear user text as well
+                session['total_extracted_text'] = ""
                 session['quiz_questions'] = []
                 session['content_hash'] = ""
                 session['content_name_list'] = []
+                
             return jsonify({'success': True})
         return jsonify({'error': 'Unauthorized'}), 401
     except Exception as e:
@@ -357,6 +354,7 @@ def generate_quiz():
         user_id = session['user_id']
         content_hash = session.get('content_hash')
         content_name_list = session.get('content_name_list', [])
+        total_extracted_text = session.get('total_extracted_text', '')
         
         # Check if there's a summary to work with
         summary = session.get('summary', '')
@@ -376,7 +374,7 @@ def generate_quiz():
         questions, question_hashes = generate_quiz_questions(summary, user_id, content_hash)
         
         # Upsert the question set to the database
-        upsert_question_set(content_hash, user_id, question_hashes, content_name_list)
+        upsert_question_set(content_hash, user_id, question_hashes, content_name_list, total_extracted_text)
         
         # Store questions in session
         quiz_questions = session.get('quiz_questions', [])
@@ -405,6 +403,7 @@ def generate_more_questions():
         user_id = session['user_id']
         content_hash = session.get('content_hash')
         content_name_list = session.get('content_name_list', [])
+        total_extracted_text = session.get('total_extracted_text', '')
 
         # Check if there's a summary to work with
         summary = session.get('summary', '')
@@ -420,7 +419,7 @@ def generate_more_questions():
         new_questions, new_question_hashes = generate_focused_questions(summary, incorrect_question_ids, previous_questions, user_id, content_hash)
         
         # Upsert the new question set to the database
-        upsert_question_set(content_hash, user_id, new_question_hashes, content_name_list)
+        upsert_question_set(content_hash, user_id, new_question_hashes, content_name_list, total_extracted_text)
         
         # Store new questions in session
         quiz_questions = session.get('quiz_questions', [])
@@ -526,53 +525,24 @@ def save_quiz_answers():
 
 @app.route('/api/regenerate-summary', methods=['POST'])
 def regenerate_summary():
-    """Endpoint to regenerate the summary from stored PDF text and optional new user text"""
+    """Endpoint to regenerate the summary from stored text"""
     print("regenerate_summary()")
     try:
         # Check if user is authenticated
         if 'user_id' not in session:
             return jsonify({'error': 'Unauthorized'}), 401
         
-        # Get request data
-        data = request.json or {}
-        new_user_text = data.get('userText', '').strip() if data.get('userText') else ''
-        
-        # Get stored data
-        pdf_results = session.get('pdf_results', {})
-        stored_user_text = session.get('user_text', '')
-        
-        # Use new user text if provided, otherwise use stored user text
-        user_text = new_user_text if new_user_text else stored_user_text
-        
-        # Must have either PDF text or user text
-        if not pdf_results and not user_text:
-            return jsonify({'error': 'No PDF text or user text available. Please upload PDFs or enter text.'}), 400
-        
-        # Combine all text sources
-        total_extracted_text = ""
-        filenames = ""
-        
-        # Add PDF text
-        for key, value in pdf_results.items():
-            filenames += key + " "
-            total_extracted_text += value
-        
-        # Add user text if provided
-        if user_text:
-            total_extracted_text += f"\n\nAdditional Notes:\n{user_text}"
-            if filenames:
-                filenames += "+ Additional Text"
-            else:
-                filenames = "User Text"
-        
-        filenames = filenames.strip()
+        # Get stored data from session
+        total_extracted_text = session.get('total_extracted_text', '')
+
+        # Must have text to regenerate from
+        if not total_extracted_text:
+            return jsonify({'error': 'No text available to regenerate summary from. Please upload content first.'}), 400
         
         # Generate new summary
         if not STREAMING_ENABLED:
             summary = gpt_summarize_transcript(total_extracted_text, stream=STREAMING_ENABLED)
-            summary = f"Summary of: {filenames}\n\n{summary}"
             session['summary'] = summary
-            session['user_text'] = user_text
             session['quiz_questions'] = []
             session.modified = True
             return jsonify({'success': True, 'summary': summary})
@@ -588,9 +558,8 @@ def regenerate_summary():
             # Session cannot be modified here.
             print("Session not modified, streaming complete (regenerate).")
 
-        # Update user_text in session before streaming
-        session['user_text'] = user_text
-        session['quiz_questions'] = []  # Clear old questions
+        # Clear old questions
+        session['quiz_questions'] = []
         session.modified = True
 
         return Response(stream_generator(total_extracted_text), mimetype='text/plain')
