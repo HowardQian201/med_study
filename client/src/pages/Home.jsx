@@ -181,9 +181,22 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                 ) : sets.length === 0 ? (
                     <Alert severity="info">You don't have any previous study sets. Start a new session to begin!</Alert>
                 ) : (
-                    <Grid container spacing={2}>
+                    <Grid container spacing={3}>
                         {sets.map((set) => (
-                            <Grid item xs={12} sm={6} md={4} lg={3} sx={{ maxWidth: '300px' }} key={set.hash}>
+                            <Grid item xs={12} sm={6} md={4} lg={3} sx={{ 
+                                width: {
+                                    xs: '100%',
+                                    sm: 'calc((100% - 24px) / 2)',  // 2 items per row with 24px gap
+                                    md: 'calc((100% - 48px) / 3)',  // 3 items per row with 2 gaps
+                                    lg: 'calc((100% - 72px) / 4)'   // 4 items per row with 3 gaps
+                                },
+                                maxWidth: {
+                                    xs: 'none',
+                                    sm: 'calc((1200px - 24px) / 2)',
+                                    md: 'calc((1200px - 48px) / 3)',
+                                    lg: 'calc((1200px - 72px) / 4)'
+                                }
+                            }} key={set.hash}>
                                 <Card 
                                     elevation={1} 
                                     sx={{ 
