@@ -367,11 +367,8 @@ def get_full_study_set_data(content_hash: str, user_id: int) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "error_type": type(e).__name__
-        }
+        print(f"Error getting full study set data: {e}")
+        return {"success": False, "error": str(e), "data": None}
 
 def upload_pdf_to_storage(file_content: bytes, file_hash: str, original_filename: str) -> Dict[str, Any]:
     """
@@ -427,3 +424,27 @@ def upload_pdf_to_storage(file_content: bytes, file_hash: str, original_filename
             "error": error_message,
             "error_type": type(e).__name__
         }
+
+def update_question_set_title(content_hash, user_id, new_title):
+    """Updates the short_summary (title) of a specific question set."""
+    try:
+        supabase = get_supabase_client()
+        # Ensure new_title is not empty
+        if not new_title or not new_title.strip():
+            return {"success": False, "error": "Title cannot be empty."}
+
+        # Update the record in the question_sets table
+        result = supabase.table('question_sets').update({
+            'short_summary': new_title.strip()
+        }).match({
+            'hash': content_hash,
+            'user_id': user_id
+        }).execute()
+
+        if len(result.data) == 0:
+            return {"success": False, "error": "No matching set found to update or no change made."}
+            
+        return {"success": True, "data": result.data}
+    except Exception as e:
+        print(f"Error updating question set title: {e}")
+        return {"success": False, "error": str(e)}

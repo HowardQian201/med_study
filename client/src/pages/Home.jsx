@@ -14,13 +14,19 @@ import {
   Alert,
   Stack,
   Paper,
-  Grid
+  Grid,
+  TextField,
+  IconButton,
+  ButtonBase
 } from '@mui/material';
 import {
   Logout,
   ArrowForward,
   Book,
-  History
+  History,
+  Edit as EditIcon,
+  Save as SaveIcon,
+  Cancel as CancelIcon,
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { format } from 'date-fns';
@@ -31,6 +37,10 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [loadingSet, setLoadingSet] = useState(null);
+  
+  // State for editing titles
+  const [editingSetHash, setEditingSetHash] = useState(null);
+  const [editingTitle, setEditingTitle] = useState('');
 
   useEffect(() => {
     const fetchSets = async () => {
@@ -96,6 +106,51 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
         setLoadingSet(null);
     }
   }
+
+  const handleEditStart = (set) => {
+    setEditingSetHash(set.hash);
+    setEditingTitle(set.short_summary || '');
+  };
+
+  const handleEditCancel = () => {
+    setEditingSetHash(null);
+    setEditingTitle('');
+  };
+
+  const handleEditSave = async (contentHash) => {
+    if (!editingTitle.trim()) {
+        setError('Title cannot be empty.');
+        return;
+    }
+
+    // Get the current set being edited
+    const currentSet = sets.find(s => s.hash === contentHash);
+    if (currentSet && currentSet.short_summary === editingTitle.trim()) {
+        // If title hasn't changed, just exit edit mode
+        handleEditCancel();
+        return;
+    }
+    
+    try {
+        const response = await axios.post('/api/update-set-title', {
+            content_hash: contentHash,
+            new_title: editingTitle
+        }, {
+            withCredentials: true
+        });
+
+        if (response.data.success) {
+            // Update the local state to reflect the change immediately
+            setSets(sets.map(s => s.hash === contentHash ? { ...s, short_summary: editingTitle } : s));
+            handleEditCancel(); // Exit editing mode
+        } else {
+            setError('Failed to update the title.');
+        }
+    } catch (err) {
+        setError(err.response?.data?.error || 'An error occurred while saving the title.');
+    }
+  };
+
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -186,9 +241,9 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                             <Grid item xs={12} sm={6} md={4} lg={3} sx={{ 
                                 width: {
                                     xs: '100%',
-                                    sm: 'calc((100% - 24px) / 2)',  // 2 items per row with 24px gap
-                                    md: 'calc((100% - 48px) / 3)',  // 3 items per row with 2 gaps
-                                    lg: 'calc((100% - 72px) / 4)'   // 4 items per row with 3 gaps
+                                    sm: 'calc((100% - 24px) / 2)',
+                                    md: 'calc((100% - 48px) / 3)',
+                                    lg: 'calc((100% - 72px) / 4)'
                                 },
                                 maxWidth: {
                                     xs: 'none',
@@ -207,30 +262,81 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                         border: '1px solid',
                                         borderColor: 'divider',
                                         transition: 'all 0.2s ease',
-                                        height: '100%'  // Ensure all cards have same height
+                                        height: '100%'
                                     }}
                                 >
                                     <CardContent>
                                         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                                             <Box sx={{ mb: 1 }}>
-                                                <Typography variant="h6" fontWeight="bold" sx={{ 
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    display: '-webkit-box',
-                                                    WebkitLineClamp: 3,
-                                                    WebkitBoxOrient: 'vertical',
-                                                    lineHeight: 1.3,
-                                                    height: '3.9em',
-                                                    mb: 1,
-                                                    '& > span': {
-                                                        paddingBottom: '2.6em',
-                                                        display: 'inline-block'
-                                                    }
-                                                }}>
-                                                    <span>
-                                                        {(set.short_summary || 'Untitled Set')}
-                                                    </span>
-                                                </Typography>
+                                                {editingSetHash === set.hash ? (
+                                                    <TextField
+                                                        value={editingTitle}
+                                                        onChange={(e) => setEditingTitle(e.target.value)}
+                                                        variant="outlined"
+                                                        size="small"
+                                                        fullWidth
+                                                        autoFocus
+                                                        multiline
+                                                        rows={3}
+                                                        onBlur={() => {
+                                                            // Small delay to allow save button click to register
+                                                            setTimeout(() => {
+                                                                handleEditCancel();
+                                                            }, 50);
+                                                        }}
+                                                        sx={{ 
+                                                            mb: 2,
+                                                            '& .MuiInputBase-input': {
+                                                                textAlign: 'center',
+                                                                height: '3.9em !important',
+                                                                overflow: 'hidden',
+                                                                lineHeight: '1.3',
+                                                                resize: 'none',
+                                                                fontSize: 'h6.fontSize',
+                                                                fontWeight: 'bold',
+                                                                padding: '4px !important'
+                                                            },
+                                                            '& .MuiOutlinedInput-root': {
+                                                                height: '3.9em',
+                                                                padding: 0
+                                                            },
+                                                            '& .MuiOutlinedInput-notchedOutline': {
+                                                                borderRadius: 1
+                                                            }
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <ButtonBase 
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            handleEditStart(set);
+                                                        }}
+                                                        sx={{ 
+                                                            display: 'block', 
+                                                            textAlign: 'left', 
+                                                            width: '100%',
+                                                            borderRadius: 1,
+                                                            '&:hover': {
+                                                                backgroundColor: 'action.hover'
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Typography variant="h6" fontWeight="bold" sx={{ 
+                                                            height: '3.9em', 
+                                                            lineHeight: 1.3,
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 3,
+                                                            WebkitBoxOrient: 'vertical',
+                                                            p: '4px',
+                                                            textAlign: 'center',
+                                                            mb: 1.5
+                                                        }}>
+                                                            {set.short_summary || 'Untitled Set'}
+                                                        </Typography>
+                                                    </ButtonBase>
+                                                )}
                                                 <Typography variant="body2" color="text.secondary" sx={{
                                                     overflow: 'hidden',
                                                     textOverflow: 'ellipsis',
@@ -242,22 +348,24 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                                     Created: {format(new Date(set.created_at), "PPP p")}
                                                 </Typography>
                                             </Box>
-                                            <Box sx={{ 
-                                                mt: 'auto', 
-                                                display: 'flex', 
-                                                justifyContent: 'center',
-                                                pt: 1
-                                            }}>
-                                                <Button
-                                                    variant="contained"
-                                                    onClick={() => handleLoadSet(set.hash)}
-                                                    disabled={loadingSet === set.hash}
-                                                    endIcon={loadingSet === set.hash ? <CircularProgress size={16} /> : <ArrowForward />}
-                                                    fullWidth
-                                                    sx={{ maxWidth: '200px' }}
-                                                >
-                                                    {loadingSet === set.hash ? 'Loading' : 'Review'}
-                                                </Button>
+                                            <Box sx={{ mt: 'auto', display: 'flex', justifyContent: 'center', pt: 1 }}>
+                                                {editingSetHash === set.hash ? (
+                                                    <Stack direction="row" spacing={1} width="100%">
+                                                        <Button onClick={handleEditCancel} variant="contained" size="small" fullWidth startIcon={<CancelIcon />}>Cancel</Button>
+                                                        <Button onClick={() => handleEditSave(set.hash)} variant="contained" size="small" fullWidth startIcon={<SaveIcon />}>Save</Button>
+                                                    </Stack>
+                                                ) : (
+                                                    <Button
+                                                        variant="contained"
+                                                        onClick={() => handleLoadSet(set.hash)}
+                                                        disabled={loadingSet === set.hash}
+                                                        endIcon={loadingSet === set.hash ? <CircularProgress size={16} /> : <ArrowForward />}
+                                                        fullWidth
+                                                        sx={{ maxWidth: '200px' }}
+                                                    >
+                                                        {loadingSet === set.hash ? 'Loading' : 'Review'}
+                                                    </Button>
+                                                )}
                                             </Box>
                                         </Box>
                                     </CardContent>
@@ -273,4 +381,4 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
   );
 };
 
-export default Home; 
+export default Home;
