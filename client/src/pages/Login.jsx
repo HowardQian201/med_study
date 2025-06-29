@@ -52,7 +52,7 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
           setIsAuthenticated(true);
           setUser(userResponse.data.user);
           setSummary(userResponse.data.summary || '');
-          navigate('/dashboard');
+          navigate('/pdf_summary');
         }
       }
     } catch (err) {
