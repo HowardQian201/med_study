@@ -431,7 +431,7 @@ def generate_more_questions():
         new_questions, new_question_hashes = generate_focused_questions(summary, incorrect_question_ids, previous_questions, user_id, content_hash)
         
         # Upsert the new question set to the database
-        upsert_question_set(content_hash, user_id, new_question_hashes, content_name_list, total_extracted_text)
+        upsert_question_set(content_hash, user_id, new_question_hashes, content_name_list, total_extracted_text, '')
         
         # Store new questions in session
         quiz_questions = session.get('quiz_questions', [])
