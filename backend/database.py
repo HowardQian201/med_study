@@ -72,7 +72,7 @@ def upsert_to_table(
 # Example usage functions for common patterns
 def upsert_pdf_results(pdf_results: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Upsert pdf results data to pdf_results table.
+    Upsert pdf results data to pdfs table.
     
     Args:
         pdf_results (Dict): Pdf results data with fields like id, user_id, pdf_id, etc.
@@ -80,7 +80,7 @@ def upsert_pdf_results(pdf_results: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict containing the result
     """
-    return upsert_to_table("pdf_docs", pdf_results)
+    return upsert_to_table("pdfs", pdf_results)
 
 def generate_file_hash(file_content: bytes, algorithm: str = "sha256") -> str:
     """
