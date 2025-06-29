@@ -3,6 +3,7 @@ import hashlib
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from typing import Dict, Any, List, Union, Optional
+from datetime import datetime, timezone
 
 # Load environment variables from .env file
 load_dotenv()
@@ -243,6 +244,7 @@ def upsert_question_set(
         Dict containing the result
     """
     try:
+        print("Upserting question set to database")
         supabase = get_supabase_client()
         
         # Check if a record with this content_hash already exists for this user
@@ -261,7 +263,8 @@ def upsert_question_set(
                 'metadata': {
                     'question_hashes': updated_hashes,
                     'content_names': existing_metadata.get('content_names', content_names)
-                }
+                },
+                'created_at': datetime.now(timezone.utc).isoformat()
             }
 
             result = supabase.table('question_sets').update(update_data).eq('hash', content_hash).eq('user_id', user_id).execute()
@@ -281,7 +284,8 @@ def upsert_question_set(
                 'metadata': new_metadata,
                 'text_content': total_extracted_text,
                 'short_summary': short_summary,
-                'content_summary': summary
+                'content_summary': summary,
+                'created_at': datetime.now(timezone.utc).isoformat()
             }
 
             result = supabase.table('question_sets').insert(insert_data).execute()
@@ -426,25 +430,46 @@ def upload_pdf_to_storage(file_content: bytes, file_hash: str, original_filename
         }
 
 def update_question_set_title(content_hash, user_id, new_title):
-    """Updates the short_summary (title) of a specific question set."""
+    """
+    Updates the 'short_summary' (title) of a specific question set.
+    """
+    print("Updating question set title")
+    if not new_title or not isinstance(new_title, str) or not new_title.strip():
+        return {"success": False, "error": "New title must be a non-empty string."}
+        
     try:
         supabase = get_supabase_client()
-        # Ensure new_title is not empty
-        if not new_title or not new_title.strip():
-            return {"success": False, "error": "Title cannot be empty."}
-
+        
         # Update the record in the question_sets table
         result = supabase.table('question_sets').update({
-            'short_summary': new_title.strip()
-        }).match({
-            'hash': content_hash,
-            'user_id': user_id
-        }).execute()
-
+            'short_summary': new_title.strip(),
+            'created_at': datetime.now(timezone.utc).isoformat()
+        }).eq('hash', content_hash).eq('user_id', user_id).execute()
+        
         if len(result.data) == 0:
             return {"success": False, "error": "No matching set found to update or no change made."}
             
         return {"success": True, "data": result.data}
     except Exception as e:
         print(f"Error updating question set title: {e}")
+        return {"success": False, "error": str(e)}
+
+def touch_question_set(content_hash: str, user_id: int) -> Dict[str, Any]:
+    """Updates the created_at timestamp of a specific question set to the current time."""
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.table('question_sets').update({
+            'created_at': datetime.now(timezone.utc).isoformat()
+        }).eq('hash', content_hash).eq('user_id', user_id).execute()
+
+        if result.data and len(result.data) > 0:
+            return {"success": True, "data": result.data}
+        else:
+            # This is not a critical error for the calling function, so just log it.
+            print(f"Could not find question set with hash {content_hash} for user {user_id} to touch.")
+            return {"success": False, "error": "Set not found to update timestamp"}
+
+    except Exception as e:
+        print(f"Error touching question set: {e}")
         return {"success": False, "error": str(e)}

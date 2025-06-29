@@ -82,8 +82,17 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
     }
   };
 
-  const handleStartNewSession = () => {
-    navigate('/pdf_summary');
+  const handleStartNewSession = async () => {
+    try {
+      // Clear session content on the server
+      await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+      // Navigate to pdf_summary
+      navigate('/pdf_summary');
+    } catch (err) {
+      console.error('Failed to clear session content:', err);
+      // Still attempt to navigate even if clearing fails
+      navigate('/pdf_summary');
+    }
   };
   
   const handleLoadSet = async (contentHash) => {
@@ -140,9 +149,9 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
             withCredentials: true
         });
 
-        if (response.data.success) {
-            // Update the local state to reflect the change immediately
-            setSets(sets.map(s => s.hash === contentHash ? { ...s, short_summary: editingTitle } : s));
+        if (response.data.success && response.data.data) {
+            const updatedSet = response.data.data[0];
+            setSets(sets.map(s => (s.hash === contentHash ? updatedSet : s)));
             handleEditCancel(); // Exit editing mode
         } else {
             setError('Failed to update the title.');
@@ -279,12 +288,6 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                                         autoFocus
                                                         multiline
                                                         rows={3}
-                                                        onBlur={() => {
-                                                            // Small delay to allow save button click to register
-                                                            setTimeout(() => {
-                                                                handleEditCancel();
-                                                            }, 50);
-                                                        }}
                                                         sx={{ 
                                                             mb: 2,
                                                             '& .MuiInputBase-input': {
@@ -360,11 +363,11 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                                 }}>
                                                     Sources: {set.metadata?.content_names?.join(', ') || 'N/A'}
                                                 </Typography>
-                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ 
+                                                <Typography variant="body2" color="text.secondary" display="block" sx={{ 
                                                     textAlign: 'center',
                                                     mb: -0.5
                                                 }}>
-                                                    Created: {format(new Date(set.created_at), "PPP p")}
+                                                    Modified: {format(new Date(set.created_at), "P p")}
                                                 </Typography>
                                             </Box>
                                             <Box sx={{ mt: 'auto', display: 'flex', justifyContent: 'center', pt: 1 }}>

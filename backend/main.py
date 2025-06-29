@@ -3,7 +3,13 @@ from flask_cors import CORS
 import traceback
 from .logic import extract_text_from_pdf_memory, set_process_priority, log_memory_usage, check_memory, get_container_memory_limit
 from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_focused_questions, generate_short_title
-from .database import upsert_pdf_results, generate_file_hash, check_file_exists, authenticate_user, generate_content_hash, upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title
+from .database import (
+    upsert_pdf_results,
+    check_file_exists, generate_content_hash, generate_file_hash,
+    authenticate_user, 
+    upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title,
+    touch_question_set
+)
 from flask_session import Session
 import os
 import re
@@ -637,6 +643,12 @@ def load_study_set():
     if not content_hash:
         return jsonify({'error': 'content_hash is required'}), 400
         
+    # Update the 'modified_at' timestamp (via created_at field)
+    touch_result = touch_question_set(content_hash, user_id)
+    if not touch_result['success']:
+        # This is not a fatal error for loading, so we just log a warning.
+        print(f"Warning: could not update timestamp for set {content_hash}. Reason: {touch_result.get('error')}")
+
     result = get_full_study_set_data(content_hash, user_id)
     print(f"get_full_study_set_data() result:")
     for i, q_set in enumerate(result['data']['quiz_questions']):
