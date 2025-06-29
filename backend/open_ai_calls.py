@@ -104,7 +104,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash):
     
     prompt = f"""
     Based on the following medical text summary, create 5 VERY challenging USMLE clinical vignette style \
-        multiple-choice questions to test the student's understanding. 
+        multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
     
     For each question:
     1. Create a clear, specific, and very challenging question about key concepts in the text
@@ -234,7 +234,8 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
 
     prompt = f"""
     Based on the following medical text summary and struggled concepts, create 5 VERY challenging USMLE clinical vignette style multiple-choice questions.
-    
+    Make sure to include all the key concepts and information from the summary and previously missed questions.
+
     The user previously struggled with these specific concepts:
     {json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"}
     
