@@ -214,3 +214,69 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
             "error": str(e),
             "error_type": type(e).__name__
         }
+
+def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[str], content_names: List[str]) -> Dict[str, Any]:
+    """
+    Upsert a question set to the question_sets table.
+    
+    If content_hash exists, append new question_hashes to the existing list.
+    If not, create a new record.
+    
+    Args:
+        content_hash (str): The hash of the content (PDFs, user text)
+        user_id (int): The ID of the user
+        question_hashes (List[str]): List of hashes of the generated questions
+        content_names (List[str]): List of names of the content files/sources
+    
+    Returns:
+        Dict containing the result
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if a record with this content_hash already exists
+        existing_set = supabase.table('question_sets').select("metadata").eq('hash', content_hash).eq('user_id', user_id).execute()
+        
+        if existing_set.data:
+            # If exists, append to question_hashes in metadata
+            existing_metadata = existing_set.data[0].get('metadata', {})
+            existing_question_hashes = existing_metadata.get('question_hashes', [])
+            
+            # Use a set to avoid duplicates, then convert back to list
+            updated_hashes = list(set(existing_question_hashes + question_hashes))
+            
+            # Update metadata
+            new_metadata = {
+                'question_hashes': updated_hashes,
+                'content_names': existing_metadata.get('content_names', content_names)
+            }
+            
+            result = supabase.table('question_sets').update({
+                'metadata': new_metadata,
+                'user_id': user_id  # Also update user_id in case it changes
+            }).eq('hash', content_hash).execute()
+            
+            print("Upserted question set to database (Append)")
+            return {"success": True, "operation": "append", "data": result.data}
+
+        else:
+            # If not exists, create a new record
+            new_metadata = {
+                'question_hashes': question_hashes,
+                'content_names': content_names
+            }
+            
+            result = supabase.table('question_sets').insert({
+                'hash': content_hash,
+                'user_id': user_id,
+                'metadata': new_metadata
+            }).execute()
+            print("Upserted question set to database (Insert)")
+            return {"success": True, "operation": "insert", "data": result.data}
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
