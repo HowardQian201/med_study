@@ -93,7 +93,7 @@ def gpt_summarize_transcript(text, stream=False):
     text = completion.choices[0].message.content.strip()
     return text
 
-def generate_quiz_questions(summary_text):
+def generate_quiz_questions(summary_text, user_id, content_hash):
     """Generate quiz questions from a summary text using OpenAI's API"""
     
     log_memory_usage("quiz generation start")
@@ -182,7 +182,9 @@ def generate_quiz_questions(summary_text):
 
                     batch_data.append({
                         "hash": question_hash,
-                        "question": question
+                        "question": question,
+                        "user_id": user_id,
+                        "question_set_hash": content_hash
                     })
                 
                 # Batch upsert all questions
@@ -214,7 +216,7 @@ def generate_quiz_questions(summary_text):
 
     raise Exception("Failed to generate quiz questions after all retries.")
 
-def generate_focused_questions(summary_text, incorrect_question_ids, previous_questions):
+def generate_focused_questions(summary_text, incorrect_question_ids, previous_questions, user_id, content_hash):
     """Generate more targeted quiz questions focusing on areas where the user had difficulty"""
     
     # Extract incorrect questions
@@ -314,7 +316,9 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
 
                     batch_data.append({
                         "hash": question_hash,
-                        "question": question
+                        "question": question,
+                        "user_id": user_id,
+                        "question_set_hash": content_hash
                     })
                 
                 # Batch upsert all questions

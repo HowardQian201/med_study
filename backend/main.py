@@ -3,7 +3,7 @@ from flask_cors import CORS
 import traceback
 from .logic import extract_text_from_pdf_memory, set_process_priority, log_memory_usage, check_memory, get_container_memory_limit
 from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_focused_questions
-from .database import upsert_pdf_results, generate_file_hash, check_file_exists, authenticate_user, generate_content_hash
+from .database import upsert_pdf_results, generate_file_hash, check_file_exists, authenticate_user, generate_content_hash, upsert_question_set
 from flask_session import Session
 import os
 import re
@@ -354,12 +354,15 @@ def generate_quiz():
             print(f"No user_id in session - returning 401")
             return jsonify({'error': 'Unauthorized'}), 401
             
+        user_id = session['user_id']
+        content_hash = session.get('content_hash')
+        content_name_list = session.get('content_name_list', [])
+        
         # Check if there's a summary to work with
         summary = session.get('summary', '')
-        if not summary:
-            print(f"No summary available - returning 400")
-            return jsonify({'error': 'No summary available. Please upload PDFs first.'}), 400
-        
+        if not summary or not content_hash:
+            print(f"No summary or content_hash available - returning 400")
+            return jsonify({'error': 'No summary available. Please upload content first.'}), 400
         # Check if we already have questions for this summary (prevent duplicates)
         existing_questions = session.get('quiz_questions', [])
         if existing_questions:
@@ -369,9 +372,11 @@ def generate_quiz():
                 'success': True,
                 'questions': latest_questions
             })
-            
         # Generate questions
-        questions, question_hashes = generate_quiz_questions(summary)
+        questions, question_hashes = generate_quiz_questions(summary, user_id, content_hash)
+        
+        # Upsert the question set to the database
+        upsert_question_set(content_hash, user_id, question_hashes, content_name_list)
         
         # Store questions in session
         quiz_questions = session.get('quiz_questions', [])
@@ -397,20 +402,25 @@ def generate_more_questions():
         if 'user_id' not in session:
             return jsonify({'error': 'Unauthorized'}), 401
             
+        user_id = session['user_id']
+        content_hash = session.get('content_hash')
+        content_name_list = session.get('content_name_list', [])
+
         # Check if there's a summary to work with
         summary = session.get('summary', '')
-        if not summary:
-            return jsonify({'error': 'No summary available. Please upload PDFs first.'}), 400
+        if not summary or not content_hash:
+            return jsonify({'error': 'No summary available. Please upload content first.'}), 400
             
         # Get the request data
         data = request.json
         incorrect_question_ids = data.get('incorrectQuestionIds', [])
         previous_questions = data.get('previousQuestions', [])
-        print(incorrect_question_ids)
-        print(previous_questions)
         
         # Generate new questions
-        new_questions, new_question_hashes = generate_focused_questions(summary, incorrect_question_ids, previous_questions)
+        new_questions, new_question_hashes = generate_focused_questions(summary, incorrect_question_ids, previous_questions, user_id, content_hash)
+        
+        # Upsert the new question set to the database
+        upsert_question_set(content_hash, user_id, new_question_hashes, content_name_list)
         
         # Store new questions in session
         quiz_questions = session.get('quiz_questions', [])

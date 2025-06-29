@@ -71,16 +71,16 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
       setError('Please select at least one file or enter some text');
       return;
     }
-
-    setIsUploading(true);
-    setError('');
-    setSummary('');
-    abortController.current = new AbortController();
-
-    const formData = new FormData();
-    files.forEach(file => {
-      formData.append('files', file);
-    });
+  
+      setIsUploading(true);
+      setError('');
+      setSummary('');
+      abortController.current = new AbortController();
+  
+      const formData = new FormData();
+      files.forEach(file => {
+        formData.append('files', file);
+      });
     if (userText.trim()) {
       formData.append('userText', userText.trim());
     }
@@ -204,9 +204,9 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
 
         // After stream is complete, save the final summary to the session
         await axios.post('/api/save-summary', { summary: finalSummary }, {
-          withCredentials: true
-        });
-
+        withCredentials: true
+      });
+      
       } else {
         throw new Error(`Unexpected content type: ${contentType}`);
       }
@@ -267,13 +267,13 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                 </Typography>
                 <ThemeToggle size="small" />
                 <Button
-                  onClick={handleLogout}
+                onClick={handleLogout}
                   variant="outlined"
                   color="primary"
                   startIcon={<Logout />}
                   size="small"
-                >
-                  Logout
+              >
+                Logout
                 </Button>
               </Stack>
             </Toolbar>
@@ -319,11 +319,11 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                     }}
                   >
                     <Stack spacing={2} alignItems="center" sx={{ height: '100%' }}>
-                      <input
-                        type="file"
-                        accept="application/pdf"
-                        onChange={handleFileSelect}
-                        multiple
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleFileSelect}
+                  multiple
                         style={{
                           width: '100%',
                           padding: '8px',
@@ -334,13 +334,13 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         }}
                       />
                       
-                      {files.length > 0 && (
+                {files.length > 0 && (
                         <Box sx={{ width: '100%', mt: 2, overflow: 'auto', maxHeight: 120 }}>
                           <Typography variant="body2" color="text.secondary" gutterBottom>
-                            Selected: {files.length} file(s)
+                    Selected: {files.length} file(s)
                           </Typography>
                           <List dense>
-                            {files.map((file, index) => (
+                      {files.map((file, index) => (
                               <ListItem key={index} sx={{ pl: 0 }}>
                                 <Description sx={{ mr: 1, color: 'primary.main' }} />
                                 <ListItemText 
@@ -403,10 +403,10 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                     </Button>
                   </Box>
 
-                  {/* Error Message */}
-                  {error && (
+              {/* Error Message */}
+              {error && (
                     <Alert severity="error" sx={{ borderRadius: 2 }}>
-                      {error}
+                  {error}
                     </Alert>
                   )}
                 </Stack>
@@ -535,10 +535,10 @@ const Dashboard = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       startIcon={<Quiz />}
                       sx={{ minWidth: 'fit-content' }}
                     >
-                      Quiz Me
+                        Quiz Me
                     </Button>
                     <Button
-                      onClick={clearResults}
+                        onClick={clearResults}
                       disabled={!summary || isUploading}
                       variant="outlined"
                       color="error"
