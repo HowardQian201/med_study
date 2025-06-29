@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, session, send_from_directory, Respons
 from flask_cors import CORS
 import traceback
 from .logic import extract_text_from_pdf_memory, set_process_priority, log_memory_usage, check_memory, get_container_memory_limit
-from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_focused_questions
+from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_focused_questions, generate_short_title
 from .database import upsert_pdf_results, generate_file_hash, check_file_exists, authenticate_user, generate_content_hash, upsert_question_set
 from flask_session import Session
 import os
@@ -373,8 +373,9 @@ def generate_quiz():
         # Generate questions
         questions, question_hashes = generate_quiz_questions(summary, user_id, content_hash)
         
+        short_summary = generate_short_title(total_extracted_text)
         # Upsert the question set to the database
-        upsert_question_set(content_hash, user_id, question_hashes, content_name_list, total_extracted_text)
+        upsert_question_set(content_hash, user_id, question_hashes, content_name_list, total_extracted_text, short_summary)
         
         # Store questions in session
         quiz_questions = session.get('quiz_questions', [])

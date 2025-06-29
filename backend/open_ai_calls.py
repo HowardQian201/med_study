@@ -348,3 +348,54 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
             raise e
 
     raise Exception("Failed to generate focused questions after all retries.") 
+
+def generate_short_title(text_to_summarize: str) -> str:
+    """
+    Generates a short, max 10-word title for a given text.
+
+    Args:
+        text_to_summarize (str): The text to summarize into a title.
+
+    Returns:
+        str: A title of 10 words or less.
+    """
+    if not text_to_summarize:
+        return "Untitled"
+
+    try:
+        # We only need the beginning of the text to generate a title
+        prompt = f"""
+        Based on the following text, create a very short, concise title.
+        The title must be a maximum of 10 words.
+        Do not use quotes or any introductory phrases like "Title:".
+        
+        Text:
+        {text_to_summarize}
+        """
+
+        completion = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert at creating short, descriptive titles from text. You always follow length constraints and instructions precisely."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.5,
+            max_tokens=25,  # Generous buffer for 10 words
+            n=1,
+            stop=None,
+        )
+
+        title = completion.choices[0].message.content.strip()
+
+        # Enforce the 10-word limit just in case
+        words = title.split()
+        if len(words) > 10:
+            title = " ".join(words[:10])
+
+        print(f"Generated short title: {title}")
+        return title
+
+    except Exception as e:
+        print(f"Error generating short title: {e}")
+        # Fallback title in case of an error
+        return "Untitled" 

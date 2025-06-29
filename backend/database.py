@@ -215,7 +215,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
             "error_type": type(e).__name__
         }
 
-def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[str], content_names: List[str], total_extracted_text: str) -> Dict[str, Any]:
+def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[str], content_names: List[str], total_extracted_text: str, short_summary: str) -> Dict[str, Any]:
     """
     Upsert a question set to the question_sets table.
     
@@ -270,7 +270,8 @@ def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[s
                 'hash': content_hash,
                 'user_id': user_id,
                 'metadata': new_metadata,
-                'text_content': total_extracted_text
+                'text_content': total_extracted_text,
+                'short_summary': short_summary
             }).execute()
             print("Upserted question set to database (Insert)")
             return {"success": True, "operation": "insert", "data": result.data}
