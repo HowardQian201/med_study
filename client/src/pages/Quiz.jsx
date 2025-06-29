@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Box,
   AppBar,
@@ -35,6 +37,7 @@ import {
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { alpha } from '@mui/material/styles';
+import { Link } from '@mui/material';
 
 const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) => {
   const navigate = useNavigate();
@@ -45,6 +48,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [showResults, setShowResults] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(true);
   const [isGeneratingMoreQuestions, setIsGeneratingMoreQuestions] = useState(false);
   const [showAllPreviousQuestions, setShowAllPreviousQuestions] = useState(false);
   const [allPreviousQuestions, setAllPreviousQuestions] = useState([]);
@@ -137,6 +141,10 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     setTimeout(() => saveUserAnswers(), 100);
   };
 
+  const handleStartQuiz = () => {
+    setIsPreviewing(false);
+  };
+
   const moveToNextQuestion = () => {
     if (currentQuestion < questions.length - 1) {
       const nextQuestionIndex = currentQuestion + 1;
@@ -181,6 +189,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     setVisibleExplanation(null);
     setCurrentQuestion(0);
     setShowResults(false);
+    setIsPreviewing(true);
   };
 
   const generateMoreQuestions = async () => {
@@ -208,7 +217,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         setAllPreviousQuestions([]);
         // Always show current quiz after generating new questions
         setShowAllPreviousQuestions(false);
-        resetQuiz();
+        
+        // Reset state for the new quiz and go to the preview screen
+        setSelectedAnswers({});
+        setSubmittedAnswers({});
+        setVisibleExplanation(null);
+        setCurrentQuestion(0);
+        setShowResults(false);
+        setIsPreviewing(true);
       } else {
         setError('Failed to generate more questions');
       }
@@ -389,7 +405,11 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                 fontWeight="bold"
                 color="text.primary"
               >
-                {showResults ? "Quiz Results" : "Quiz Questions"}
+                {showResults 
+                    ? "Quiz Results" 
+                    : isPreviewing 
+                        ? "Quiz Preview" 
+                        : "Quiz Questions"}
               </Typography>
               <Button
                 onClick={handleBack}
@@ -749,6 +769,115 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         )}
                       </Box>
                     )}
+                  </Box>
+                ) : isPreviewing ? (
+                  <Box>
+                    <Box display="flex" justifyContent="center" mb={4}>
+                      <Button
+                        onClick={handleStartQuiz}
+                        variant="contained"
+                        color="primary"
+                        size="large"
+                        startIcon={<ArrowForward />}
+                      >
+                        Start Answering Quiz Questions
+                      </Button>
+                    </Box>
+
+                    <Typography variant="h2" component="h3" fontWeight="600" mb={2}>
+                      Questions in this Set ({questions.length})
+                    </Typography>
+                    <Stack spacing={2} mb={4}>
+                      {questions.map((question, index) => (
+                        <Paper 
+                          key={question.id} 
+                          elevation={1} 
+                          sx={{ p: 2, bgcolor: 'action.hover' }}
+                        >
+                          <Typography variant="body1">
+                            <Box component="span" fontWeight="bold" mr={1}>
+                              {index + 1}.
+                            </Box>
+                            {question.text}
+                          </Typography>
+                        </Paper>
+                      ))}
+                    </Stack>
+
+                    <Paper elevation={1} sx={{ p: 3, bgcolor: 'background.paper' }}>
+                      <Typography variant="h2" component="h3" fontWeight="600" gutterBottom>
+                        Content Summary
+                      </Typography>
+                      <Box sx={{ 
+                        textAlign: 'left',
+                        '& h1': { fontSize: '1.7rem', fontWeight: 600, mb: 2, mt: 3, textAlign: 'left' },
+                        '& h2': { fontSize: '1.4rem', fontWeight: 600, mb: 1.5, mt: 2.5, textAlign: 'left' },
+                        '& h3': { fontSize: '1.2rem', fontWeight: 600, mb: 1, mt: 2, textAlign: 'left' },
+                        '& p': { mb: 1.5, fontSize: '1rem', lineHeight: 1.6, textAlign: 'left' },
+                        '& ul, & ol': { mb: 1.5, pl: 3, textAlign: 'left' },
+                        '& li': { mb: 0.5, textAlign: 'left' },
+                        '& code': {
+                          backgroundColor: 'action.hover',
+                          px: 0.8,
+                          py: 0.3,
+                          borderRadius: 1,
+                          fontSize: '0.9em'
+                        },
+                        '& pre': {
+                          backgroundColor: 'action.hover',
+                          p: 2,
+                          borderRadius: 1,
+                          overflow: 'auto',
+                          mb: 2,
+                          textAlign: 'left'
+                        },
+                        '& blockquote': {
+                          borderLeft: 4,
+                          borderColor: 'divider',
+                          pl: 2,
+                          ml: 0,
+                          my: 2,
+                          fontStyle: 'italic',
+                          textAlign: 'left'
+                        },
+                        '& a': {
+                          color: 'primary.main',
+                          textDecoration: 'none',
+                          '&:hover': {
+                            textDecoration: 'underline'
+                          }
+                        },
+                        '& table': {
+                          borderCollapse: 'collapse',
+                          width: '100%',
+                          mb: 2,
+                          textAlign: 'left'
+                        },
+                        '& th, & td': {
+                          border: 1,
+                          borderColor: 'divider',
+                          p: 1,
+                          textAlign: 'left'
+                        },
+                        '& th': {
+                          backgroundColor: 'action.hover',
+                          fontWeight: 600
+                        }
+                      }}>
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            h1: ({...props}) => <Typography variant="h1" {...props} />,
+                            h2: ({...props}) => <Typography variant="h2" {...props} />,
+                            h3: ({...props}) => <Typography variant="h3" {...props} />,
+                            p: ({...props}) => <Typography variant="body1" paragraph {...props} />,
+                            a: ({...props}) => <Link {...props} />,
+                          }}
+                        >
+                          {propSummary}
+                        </ReactMarkdown>
+                      </Box>
+                    </Paper>
                   </Box>
                 ) : (
                   /* Quiz Taking Interface */
