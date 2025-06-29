@@ -215,19 +215,29 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
             "error_type": type(e).__name__
         }
 
-def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[str], content_names: List[str], total_extracted_text: str, short_summary: str) -> Dict[str, Any]:
+def upsert_question_set(
+    content_hash: str, 
+    user_id: int, 
+    question_hashes: List[str], 
+    content_names: List[str], 
+    total_extracted_text: Optional[str] = '', 
+    short_summary: Optional[str] = '', 
+    summary: Optional[str] = ''
+) -> Dict[str, Any]:
     """
     Upsert a question set to the question_sets table.
     
     If content_hash exists, append new question_hashes to the existing list.
-    If not, create a new record.
+    If not, create a new record. For new records, total_extracted_text and short_summary are required.
     
     Args:
         content_hash (str): The hash of the content (PDFs, user text)
         user_id (int): The ID of the user
         question_hashes (List[str]): List of hashes of the generated questions
         content_names (List[str]): List of names of the content files/sources
-        total_extracted_text (str): The full text content that was summarized.
+        total_extracted_text (Optional[str]): The full text content that was summarized.
+        short_summary (Optional[str]): A short, AI-generated title for the content.
+        summary (Optional[str]): The full summary text.
     
     Returns:
         Dict containing the result
@@ -246,36 +256,116 @@ def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[s
             # Use a set to avoid duplicates, then convert back to list
             updated_hashes = list(set(existing_question_hashes + question_hashes))
             
-            # Update metadata
-            new_metadata = {
-                'question_hashes': updated_hashes,
-                'content_names': existing_metadata.get('content_names', content_names)
+            # Prepare data for update
+            update_data = {
+                'metadata': {
+                    'question_hashes': updated_hashes,
+                    'content_names': existing_metadata.get('content_names', content_names)
+                }
             }
-            
-            result = supabase.table('question_sets').update({
-                'metadata': new_metadata,
-            }).eq('hash', content_hash).eq('user_id', user_id).execute()
+
+            result = supabase.table('question_sets').update(update_data).eq('hash', content_hash).eq('user_id', user_id).execute()
             
             print("Upserted question set to database (Append)")
             return {"success": True, "operation": "append", "data": result.data}
 
         else:
-            # If not exists, create a new record
             new_metadata = {
                 'question_hashes': question_hashes,
                 'content_names': content_names
             }
             
-            result = supabase.table('question_sets').insert({
+            insert_data = {
                 'hash': content_hash,
                 'user_id': user_id,
                 'metadata': new_metadata,
                 'text_content': total_extracted_text,
-                'short_summary': short_summary
-            }).execute()
+                'short_summary': short_summary,
+                'content_summary': summary
+            }
+
+            result = supabase.table('question_sets').insert(insert_data).execute()
+
             print("Upserted question set to database (Insert)")
             return {"success": True, "operation": "insert", "data": result.data}
 
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
+def get_question_sets_for_user(user_id: int) -> Dict[str, Any]:
+    """
+    Retrieves all question sets for a given user, ordered by most recent.
+    
+    Args:
+        user_id (int): The ID of the user.
+        
+    Returns:
+        Dict containing the result.
+    """
+    try:
+        supabase = get_supabase_client()
+        result = supabase.table('question_sets').select(
+            "*"
+        ).eq('user_id', user_id).order('created_at', desc=True).execute()
+        
+        return {"success": True, "data": result.data}
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
+def get_full_study_set_data(content_hash: str, user_id: int) -> Dict[str, Any]:
+    """
+    Retrieves the full data for a study set, including all related questions.
+
+    Args:
+        content_hash (str): The hash identifying the study set.
+        user_id (int): The ID of the user.
+
+    Returns:
+        A dictionary with the full study set data.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # 1. Get the question set base data
+        set_result = supabase.table('question_sets').select("*").eq('hash', content_hash).eq('user_id', user_id).maybe_single().execute()
+        
+        if not set_result.data:
+            return {"success": False, "error": "Study set not found"}
+            
+        study_set = set_result.data
+        question_hashes = study_set.get('metadata', {}).get('question_hashes', [])
+        
+        all_questions = []
+        if question_hashes:
+            # 2. Get all questions associated with the set
+            questions_result = supabase.table('quiz_questions').select("question, created_at").in_('hash', question_hashes).execute()
+            
+            if questions_result.data:
+                # The frontend Quiz page expects questions grouped into sets (rounds).
+                # For simplicity here, we will group them all into one primary set.
+                # A more advanced implementation could try to reconstruct the original rounds.
+                all_questions = [item['question'] for item in questions_result.data]
+
+        return {
+            "success": True,
+            "data": {
+                "summary": study_set.get('content_summary'),
+                "short_summary": study_set.get('short_summary'),
+                "total_extracted_text": study_set.get('text_content'),
+                "content_hash": study_set.get('hash'),
+                "content_name_list": study_set.get('metadata', {}).get('content_names', []),
+                "quiz_questions": [all_questions] if all_questions else [] # Nest questions in an array
+            }
+        }
+        
     except Exception as e:
         return {
             "success": False,

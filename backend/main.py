@@ -3,7 +3,7 @@ from flask_cors import CORS
 import traceback
 from .logic import extract_text_from_pdf_memory, set_process_priority, log_memory_usage, check_memory, get_container_memory_limit
 from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_focused_questions, generate_short_title
-from .database import upsert_pdf_results, generate_file_hash, check_file_exists, authenticate_user, generate_content_hash, upsert_question_set, upload_pdf_to_storage
+from .database import upsert_pdf_results, generate_file_hash, check_file_exists, authenticate_user, generate_content_hash, upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data
 from flask_session import Session
 import os
 import re
@@ -386,7 +386,7 @@ def generate_quiz():
         
         short_summary = generate_short_title(total_extracted_text)
         # Upsert the question set to the database
-        upsert_question_set(content_hash, user_id, question_hashes, content_name_list, total_extracted_text, short_summary)
+        upsert_question_set(content_hash, user_id, question_hashes, content_name_list, total_extracted_text, short_summary, summary)
         
         # Store questions in session
         quiz_questions = session.get('quiz_questions', [])
@@ -431,7 +431,7 @@ def generate_more_questions():
         new_questions, new_question_hashes = generate_focused_questions(summary, incorrect_question_ids, previous_questions, user_id, content_hash)
         
         # Upsert the new question set to the database
-        upsert_question_set(content_hash, user_id, new_question_hashes, content_name_list, total_extracted_text, '')
+        upsert_question_set(content_hash, user_id, new_question_hashes, content_name_list)
         
         # Store new questions in session
         quiz_questions = session.get('quiz_questions', [])
@@ -606,6 +606,82 @@ def save_summary():
     except Exception as e:
         print(f"Error saving summary: {str(e)}")
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/get-question-sets', methods=['GET'])
+def get_question_sets():
+    """Endpoint to retrieve all study sets for the logged-in user."""
+    print("get_question_sets()")
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user_id = session['user_id']
+    result = get_question_sets_for_user(user_id)
+    
+    if not result['success']:
+        return jsonify({'error': result.get('error', 'Failed to get question sets')}), 500
+        
+    return jsonify({'success': True, 'sets': result['data']})
+
+@app.route('/api/load-study-set', methods=['POST'])
+def load_study_set():
+    """Endpoint to load a full study set into the user's session."""
+    print("load_study_set()")
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user_id = session['user_id']
+    data = request.json
+    content_hash = data.get('content_hash')
+    
+    if not content_hash:
+        return jsonify({'error': 'content_hash is required'}), 400
+        
+    result = get_full_study_set_data(content_hash, user_id)
+    print(f"get_full_study_set_data() result:")
+    for i, q_set in enumerate(result['data']['quiz_questions']):
+        for j, question in enumerate(q_set):
+            print(f"{i}.{j}: {question['text']}")
+    
+    if not result['success']:
+        print(f"Failed to get study set data: {result.get('error')}")
+        return jsonify({'error': result.get('error', 'Failed to load study set')}), 500
+    
+    # Load data into session
+    set_data = result['data']
+    # Ensure summary is a string, not None, to prevent crashes.
+    summary_text = set_data.get('summary', '')
+    session['summary'] = summary_text
+    session['short_summary'] = set_data.get('short_summary', '')
+    session['quiz_questions'] = set_data.get('quiz_questions', [])
+    session['total_extracted_text'] = set_data.get('total_extracted_text', '')
+    session['content_hash'] = set_data.get('content_hash', '')
+    session['content_name_list'] = set_data.get('content_name_list', [])
+    session.modified = True
+    
+    print(f"Loaded {len(session.get('quiz_questions', []))} question sets into session.")
+    print(f"Summary loaded (first 100 chars): {summary_text[:100]}")
+    return jsonify({'success': True, 'summary': summary_text})
+
+@app.route('/api/clear-session-content', methods=['POST'])
+def clear_session_content():
+    """Endpoint to clear session data related to a study set."""
+    print("clear_session_content()")
+    try:
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        session.pop('summary', None)
+        session.pop('quiz_questions', None)
+        session.pop('content_hash', None)
+        session.pop('content_name_list', None)
+        session.pop('short_summary', None)
+        session.pop('total_extracted_text', None)
+        session.modified = True
+        
+        return jsonify({'success': True, 'message': 'Session content cleared.'})
+    except Exception as e:
+        print(f"Error clearing session content: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # Serve the React frontend

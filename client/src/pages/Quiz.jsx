@@ -27,15 +27,16 @@ import {
   Refresh,
   Add,
   History,
-  Dashboard as DashboardIcon,
+  Home as HomeIcon,
   Logout,
   CheckCircle,
   Cancel,
   HelpOutline
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
+import { alpha } from '@mui/material/styles';
 
-const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
+const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) => {
   const navigate = useNavigate();
   const [questions, setQuestions] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -45,15 +46,12 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
   const [error, setError] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [isGeneratingMoreQuestions, setIsGeneratingMoreQuestions] = useState(false);
-  const [summary, setSummary] = useState(propSummary || '');
   const [showAllPreviousQuestions, setShowAllPreviousQuestions] = useState(false);
   const [allPreviousQuestions, setAllPreviousQuestions] = useState([]);
   const [isLoadingPreviousQuestions, setIsLoadingPreviousQuestions] = useState(false);
   const [visibleExplanation, setVisibleExplanation] = useState(null);
 
   // Use refs to prevent duplicate calls
-  const hasFetchedQuiz = useRef(false);
-  const currentSummary = useRef('');
   const isFetching = useRef(false);
 
   // Helper function to clean option text and remove existing A), B), C), D) prefixes
@@ -62,69 +60,31 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
     return option.replace(/^[A-D][.)]\s*/, '').trim();
   };
 
-  // Check auth and fetch summary if needed
+  // Fetch questions from the API when the component mounts or the summary changes.
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await axios.get('/api/auth/check', {
-          withCredentials: true
-        });
-        
-        if (response.data.authenticated) {
-          // If we have summary from props, use it
-          if (propSummary) {
-            setSummary(propSummary);
-          } 
-          // Otherwise use summary from the auth check response
-          else if (response.data.summary) {
-            setSummary(response.data.summary);
-          }
-        } else {
-          // If not authenticated, redirect to login
-          setIsAuthenticated(false);
-          navigate('/login');
-        }
-      } catch (err) {
-        console.error('Auth check failed:', err);
-        navigate('/login');
-      }
-    };
-
     if (!propSummary) {
-      checkAuth();
-    }
-  }, [propSummary, navigate, setIsAuthenticated]);
-
-  // Fetch questions from the API when the component mounts
-  useEffect(() => {
-    if (!summary) {
       setIsLoading(false);
       return;
     }
     
-    // Don't start a new fetch if we already have questions for this summary or are currently fetching
-    if ((hasFetchedQuiz.current && currentSummary.current === summary) || isFetching.current) {
+    if (isFetching.current) {
       return;
     }
 
     const fetchQuiz = async () => {
-      try {
-        isFetching.current = true;
+      isFetching.current = true;
         setIsLoading(true);
         setError('');
         
-        // First try to get existing questions
+      try {
+        // First try to get existing questions from the session
         const existingResponse = await axios.get('/api/get-quiz', {
           withCredentials: true
         });
         
         if (existingResponse.data.success && existingResponse.data.questions.length > 0) {
           setQuestions(existingResponse.data.questions);
-          hasFetchedQuiz.current = true;
-          currentSummary.current = summary;
-          return;
-        }
-        
+        } else {
         // If no existing questions, generate new ones
         const response = await axios.get('/api/generate-quiz', {
           withCredentials: true
@@ -132,17 +92,13 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
         
         if (response.data.success && response.data.questions) {
           setQuestions(response.data.questions);
-          hasFetchedQuiz.current = true;
-          currentSummary.current = summary;
         } else {
           setError('Failed to generate quiz questions');
+        }
         }
       } catch (err) {
         console.error('Error fetching quiz questions:', err);
         setError(err.response?.data?.error || 'Failed to generate quiz questions');
-        // Reset the flags on error so user can retry
-        hasFetchedQuiz.current = false;
-        currentSummary.current = '';
       } finally {
         setIsLoading(false);
         isFetching.current = false;
@@ -150,7 +106,12 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
     };
 
     fetchQuiz();
-  }, [summary]);
+    
+    // Cleanup function to prevent fetching if component unmounts
+    return () => {
+        isFetching.current = false;
+    }
+  }, [propSummary]);
 
   const handleAnswerSelect = (questionId, optionIndex) => {
     // Only allow selection if the answer hasn't been submitted yet
@@ -259,8 +220,21 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
     }
   };
 
-  const handleBack = () => {
-    navigate('/pdf_summary');
+  const handleBack = async () => {
+    try {
+      // Clear session content on the server
+      await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+      // Clear summary in App.js state
+      if (setSummary) {
+        setSummary('');
+      }
+      // Navigate to home
+      navigate('/');
+    } catch (err) {
+      console.error('Failed to clear session and navigate:', err);
+      // Still attempt to navigate even if clearing fails
+      navigate('/');
+    }
   };
 
   const handleLogout = async () => {
@@ -394,8 +368,8 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                   color="primary"
                   startIcon={<Logout />}
                   size="small"
-                >
-                  Logout
+              >
+                Logout
                 </Button>
               </Stack>
             </Toolbar>
@@ -420,10 +394,10 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
               <Button
                 onClick={handleBack}
                 variant="outlined"
-                startIcon={<DashboardIcon />}
+                startIcon={<HomeIcon />}
                 size="small"
               >
-                Back to PDF Summary Page
+                Back to Home
               </Button>
             </Box>
 
@@ -534,7 +508,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                         </Button>
                       </Stack>
                     </Box>
-
+                    
                     {/* Current Quiz Results */}
                     {!showAllPreviousQuestions && (
                       <Box>
@@ -567,7 +541,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                     color={question.isAnswered
                                       ? (question.isCorrect ? 'success' : 'error')
                                       : 'default'
-                                    }
+                                  }
                                     size="small"
                                     sx={{ mr: 2 }}
                                   />
@@ -575,8 +549,9 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                     {question.text}
                                   </Typography>
                                 </Box>
-                                
+                              
                                 <Box ml={2}>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
                                 {question.options.map((option, index) => (
                                     <Paper
                                     key={index}
@@ -584,7 +559,9 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                       onClick={() => handleAnswerSelect(question.id, index)}
                                       sx={{
                                         p: 2,
-                                        mb: 1,
+                                        minHeight: '40px',
+                                        display: 'flex',
+                                        alignItems: 'center',
                                         border: '2px solid',
                                         borderColor: submittedAnswers[question.id] 
                                         ? (index === question.correctAnswer
@@ -610,20 +587,21 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                           ? (index === question.correctAnswer ? 'success.dark' : 'text.primary')
                                           : (selectedAnswers[question.id] === index ? 'primary.dark' : 'text.primary')
                                         }
-                                      >
+                                  >
                                         <Box component="span" fontWeight="600" mr={1}>
                                           {String.fromCharCode(65 + index)}.
                                         </Box>
                                         {cleanOptionText(option)}
                                         {submittedAnswers[question.id] && index === question.correctAnswer && (
                                           <Chip label="Correct answer" color="success" size="small" sx={{ ml: 1 }} />
-                                        )}
+                                    )}
                                         {submittedAnswers[question.id] && selectedAnswers[question.id] === index && selectedAnswers[question.id] !== question.correctAnswer && (
                                           <Chip label="Your answer" color="error" size="small" sx={{ ml: 1 }} />
-                                        )}
+                                    )}
                                       </Typography>
                                     </Paper>
-                                  ))}
+                                ))}
+                                  </Box>
                                   
                                   {submittedAnswers[question.id] && (
                                     <Paper elevation={0} sx={{ p: 2, mt: 2, bgcolor: 'action.hover' }}>
@@ -631,7 +609,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                         <Box component="span" fontWeight="600">Explanation:</Box> {question.reason}
                                       </Typography>
                                     </Paper>
-                                  )}
+                                )}
                                 </Box>
                               </CardContent>
                             </Card>
@@ -639,7 +617,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                         </Stack>
                       </Box>
                     )}
-
+                    
                     {/* All Previous Questions View */}
                     {showAllPreviousQuestions && (
                       <Box>
@@ -707,10 +685,11 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                               sx={{ mr: 2 }}
                                             />
                                             <Typography variant="body1" fontWeight="500">
-                                              Question {qIndex + 1}: {question.text}
+                                      Question {qIndex + 1}: {question.text}
                                             </Typography>
                                           </Box>
                                           <Box ml={2}>
+                                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
                                             {question.options.map((option, optIndex) => {
                                               const isCorrectAnswer = optIndex === question.correctAnswer;
                                               const isUserAnswer = question.userAnswer === optIndex;
@@ -722,8 +701,9 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                                   elevation={0}
                                                   sx={{
                                                     p: 2,
-                                                    mb: 1,
-                                                    bgcolor: 'transparent',
+                                                    minHeight: '40px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
                                                     border: '2px solid',
                                                     borderColor: wasAnswered
                                                       ? (isCorrectAnswer
@@ -735,7 +715,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                                         ? 'success.main'
                                                         : 'divider'
                                                   }}
-                                                >
+                                        >
                                                   <Typography variant="body2">
                                                     <Box component="span" fontWeight="600" mr={1}>
                                                       {String.fromCharCode(65 + optIndex)}.
@@ -746,11 +726,12 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                                     )}
                                                     {wasAnswered && isUserAnswer && !isCorrectAnswer && (
                                                       <Chip label="Your answer" color="error" size="small" sx={{ ml: 1 }} />
-                                                    )}
+                                          )}
                                                   </Typography>
                                                 </Paper>
                                               );
                                             })}
+                                            </Box>
                                             <Paper elevation={0} sx={{ p: 2, mt: 2, bgcolor: 'action.hover' }}>
                                               <Typography variant="body2" color="text.primary">
                                                 <Box component="span" fontWeight="600">Explanation:</Box> {question.reason}
@@ -782,7 +763,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                           variant="determinate" 
                           value={((currentQuestion + 1) / questions.length) * 100}
                           sx={{ borderRadius: 1, height: 8 }}
-                        />
+                          />
                       </Box>
                     )}
 
@@ -796,7 +777,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                             </Typography>
                             
                             <FormControl component="fieldset" sx={{ width: '100%', mt: 3 }}>
-                              <Stack spacing={2}>
+                              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
                             {questions[currentQuestion].options.map((option, index) => {
                               const questionId = questions[currentQuestion].id;
                               const isSelected = selectedAnswers[questionId] === index;
@@ -813,7 +794,9 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                   onClick={() => handleAnswerSelect(questionId, index)}
                                       sx={{
                                         p: 2,
-                                        mb: 1,
+                                        minHeight: '40px',
+                                        display: 'flex',
+                                        alignItems: 'center',
                                         border: '2px solid',
                                         borderColor: isSubmitted 
                                       ? (isCorrect
@@ -834,31 +817,34 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                           bgcolor: 'action.hover'
                                         }
                                       }}
-                                    >
+                                >
                                       <Box display="flex" alignItems="center">
                                         <Box
                                           sx={{
                                             width: 24,
                                             height: 24,
+                                            minWidth: 24,  // Ensure fixed width
+                                            minHeight: 24,  // Ensure fixed height
                                             borderRadius: '50%',
                                             border: '2px solid',
                                             borderColor: isSubmitted 
-                                        ? (isCorrect
-                                                  ? 'success.main'
-                                            : isIncorrect
-                                                    ? 'error.main'
-                                              : isCorrectAnswer
-                                                      ? 'success.main'
-                                                      : 'divider')
-                                        : (isSelected
-                                                  ? 'primary.main'
-                                                  : 'divider'),
+                                                ? (isCorrect
+                                                    ? 'success.main'
+                                                    : isIncorrect
+                                                        ? 'error.main'
+                                                        : isCorrectAnswer
+                                                            ? 'success.main'
+                                                            : 'divider')
+                                                : (isSelected
+                                                    ? 'primary.main'
+                                                    : 'divider'),
                                             bgcolor: isSubmitted
-                                              ? (isCorrect || isCorrectAnswer ? 'success.main' : isIncorrect ? 'error.main' : 'transparent')
-                                              : (isSelected ? 'primary.main' : 'transparent'),
+                                                ? (isCorrect || isCorrectAnswer ? 'success.main' : isIncorrect ? 'error.main' : 'transparent')
+                                                : (isSelected ? 'primary.main' : 'transparent'),
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
+                                            flexShrink: 0,  // Prevent circle from shrinking
                                             mr: 2
                                           }}
                                         >
@@ -884,7 +870,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                                     </Paper>
                               );
                             })}
-                              </Stack>
+                              </Box>
                             </FormControl>
                           </CardContent>
                         </Card>
@@ -937,22 +923,38 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                           {visibleExplanation && (
                             <Alert
                               severity={visibleExplanation.isCorrect ? 'success' : 'error'}
-                              sx={{ mb: 2 }}
+                              sx={{ 
+                                mb: 2,
+                                bgcolor: theme => theme.palette.mode === 'dark'
+                                  ? (visibleExplanation.isCorrect 
+                                      ? alpha(theme.palette.success.main, 0.2)
+                                      : alpha(theme.palette.error.main, 0.2))
+                                  : (visibleExplanation.isCorrect 
+                                      ? 'success.light'
+                                      : undefined),
+                                '& .MuiAlert-icon': {
+                                  color: theme => theme.palette.mode === 'dark' 
+                                    ? (visibleExplanation.isCorrect 
+                                        ? 'success.light' 
+                                        : 'error.light')
+                                    : undefined
+                                }
+                              }}
                               icon={visibleExplanation.isCorrect ? <CheckCircle /> : <Cancel />}
                             >
                               <Typography variant="h6" gutterBottom>
                                 {visibleExplanation.isCorrect ? 'Correct!' : 'Incorrect!'}
                               </Typography>
-                              <Typography variant="body2">
+                              <Typography variant="body1" color="text.primary">
                                 {visibleExplanation.reason}
                               </Typography>
                             </Alert>
-                          )}
+                    )}
                         </Collapse>
                       </Box>
-                    )}
-                  </Box>
                 )}
+                  </Box>
+            )}
               </Box>
             )}
           </CardContent>

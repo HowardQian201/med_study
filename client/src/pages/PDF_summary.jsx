@@ -27,7 +27,8 @@ import {
   Cancel,
   Logout,
   Description,
-  ContentCopy
+  ContentCopy,
+  Home as HomeIcon
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import ReactMarkdown from 'react-markdown';
@@ -293,16 +294,37 @@ const PDF_summary = ({ setIsAuthenticated, user, summary, setSummary }) => {
       <Container maxWidth="xl" sx={{ py: 3 }}>
         <Card elevation={3} sx={{ maxWidth: '100%', mx: 'auto' }}>
           <CardContent sx={{ p: 4 }}>
-            <Typography 
-              variant="h4" 
-              component="h2" 
-              align="center" 
-              gutterBottom
-              fontWeight="bold"
-              color="text.primary"
-            >
-              PDF/Text Summarizer
-            </Typography>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+              <Typography 
+                variant="h4" 
+                component="h2" 
+                fontWeight="bold"
+                color="text.primary"
+              >
+                PDF/Text Summarizer
+              </Typography>
+              <Button
+                onClick={async () => {
+                  try {
+                    // Clear session content on the server
+                    await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+                    // Clear summary in App.js state
+                    setSummary('');
+                    // Navigate to home
+                    navigate('/');
+                  } catch (err) {
+                    console.error('Failed to clear session and navigate:', err);
+                    // Still attempt to navigate even if clearing fails
+                    navigate('/');
+                  }
+                }}
+                variant="outlined"
+                startIcon={<HomeIcon />}
+                size="small"
+              >
+                Back to Home
+              </Button>
+            </Box>
 
             <Box sx={{ display: 'flex', gap: 4, flexDirection: { xs: 'column', md: 'row' } }}>
               {/* Left Column - Upload and Text Input */}

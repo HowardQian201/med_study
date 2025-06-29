@@ -56,11 +56,15 @@ def randomize_answer_choices(question):
 def gpt_summarize_transcript(text, stream=False):
     print(f"gpt_summarize_transcript called with stream={stream}")
     gpt_time_start = time.time()
-    prompt = f"""Provide me with a detailed, thorough, and comprehensive study guide/summary based on this transcript. 
-        The output should be in Markdown format. 
-        Use Markdown for structure, including headers (#, ##), bold text (**bold**), italics (*italics*), and bulleted lists (-) to organize the information clearly. 
+    prompt = f"""Provide me with a detailed, thorough, and comprehensive study
+        guide/summary based on this transcript. Be sure to include information for EACH page of the transcript.
+        Provide high yield information that is most likely to be on the USMLE and COMLEX and medical school exams.
         Ensure all key information and mentioned clinical correlates are included.
         Give explanations with real world examples. 
+        Make the summary as thorough as a Gemini summary
+        The output should be in Markdown format. 
+        Use Markdown for structure, including headers (#, ##), bold text (**bold**), italics (*italics*), and bulleted lists (-) to organize the information clearly. 
+        
         
         Transcript:
         {text}
@@ -71,7 +75,7 @@ def gpt_summarize_transcript(text, stream=False):
         messages=[
             {"role": "system", "content": "You are a helpful teaching assistant \
              for US medical school. You are extremely knowledgable and \
-             want your students to succeed by providing them with extremely detailed and thorough study guides/summaries. \
+             want your students to succeed by providing them with extremely detailed, thorough, and Gemini level study guides/summaries. \
              You also double check all your responses for accuracy."},
             {"role": "user", "content": prompt},
         ],
