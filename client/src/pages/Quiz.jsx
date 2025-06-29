@@ -70,7 +70,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       setIsLoading(false);
       return;
     }
-    
+
     if (isFetching.current) {
       return;
     }
@@ -129,7 +129,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
 
   const handleSubmitAnswer = (questionId) => {
     setSubmittedAnswers({ ...submittedAnswers, [questionId]: true });
-    
+
     const question = questions.find(q => q.id === questionId);
     const wasCorrect = selectedAnswers[questionId] === question.correctAnswer;
     
@@ -156,7 +156,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
           isCorrect: wasCorrect,
           reason: nextQuestion.reason
         });
-      } else {
+    } else {
         setVisibleExplanation(null);
       }
       setCurrentQuestion(nextQuestionIndex);
@@ -337,7 +337,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       
       if (allPreviousQuestions.length === 0) {
       await fetchAllPreviousQuestions();
-      } else {
+    } else {
         setShowAllPreviousQuestions(true);
       }
     } else {
@@ -717,7 +717,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                               
                                               return (
                                                 <Paper
-                                                  key={optIndex}
+                                          key={optIndex}
                                                   elevation={0}
                                                   sx={{
                                                     p: 2,
@@ -766,7 +766,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               </Card>
                             ))}
                           </Stack>
-                        )}
+                                          )}
                       </Box>
                     )}
                   </Box>
@@ -957,14 +957,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                             borderRadius: '50%',
                                             border: '2px solid',
                                             borderColor: isSubmitted 
-                                                ? (isCorrect
+                                        ? (isCorrect
                                                     ? 'success.main'
-                                                    : isIncorrect
+                                            : isIncorrect
                                                         ? 'error.main'
-                                                        : isCorrectAnswer
+                                              : isCorrectAnswer
                                                             ? 'success.main'
                                                             : 'divider')
-                                                : (isSelected
+                                        : (isSelected
                                                     ? 'primary.main'
                                                     : 'divider'),
                                             bgcolor: isSubmitted
@@ -1078,7 +1078,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                 {visibleExplanation.reason}
                               </Typography>
                             </Alert>
-                    )}
+            )}
                         </Collapse>
                       </Box>
                 )}
