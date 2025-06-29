@@ -6,6 +6,7 @@ import './App.css'
 import Login from './pages/Login'
 import PDF_summary from './pages/PDF_summary'
 import Quiz from './pages/Quiz'
+import Home from './pages/Home'
 import axios from 'axios'
 
 function App() {
@@ -72,7 +73,7 @@ function App() {
           path="/login" 
           element={
             isAuthenticated ? (
-              <Navigate to="/pdf_summary" replace />
+              <Navigate to="/" replace />
             ) : (
               <Login 
                 setIsAuthenticated={setIsAuthenticated} 
@@ -81,6 +82,20 @@ function App() {
               />
             )
           } 
+        />
+        <Route 
+          path="/"
+          element={
+            isAuthenticated ? (
+              <Home
+                setIsAuthenticated={setIsAuthenticated}
+                user={user}
+                setSummary={setSummary}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
         <Route 
           path="/pdf_summary" 
@@ -105,6 +120,7 @@ function App() {
                 setIsAuthenticated={setIsAuthenticated} 
                 user={user}
                 summary={summary}
+                setSummary={setSummary}
               />
             ) : (
               <Navigate to="/login" replace />
@@ -113,11 +129,11 @@ function App() {
         />
         <Route 
           path="/" 
-          element={<Navigate to={isAuthenticated ? "/pdf_summary" : "/login"} replace />} 
+          element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />} 
         />
         <Route 
           path="*" 
-          element={<Navigate to={isAuthenticated ? "/pdf_summary" : "/login"} replace />} 
+          element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />} 
         />
       </Routes>
     </Router>
