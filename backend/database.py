@@ -111,7 +111,7 @@ def check_file_exists(file_hash: str) -> Dict[str, Any]:
     try:
         supabase = get_supabase_client()
         
-        result = supabase.table('pdf_docs').select("*").eq('file_hash', file_hash).execute()
+        result = supabase.table('pdfs').select("*").eq('hash', file_hash).execute()
         
         return {
             "success": True,
@@ -130,3 +130,16 @@ def check_file_exists(file_hash: str) -> Dict[str, Any]:
             "count": 0
         }
 
+
+def upsert_quiz_questions_batch(questions_with_hashes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Batch upsert multiple quiz questions with individual hashes.
+    
+    Args:
+        questions_with_hashes (List[Dict]): List of objects with 'hash' and 'question' fields
+                                          [{"hash": "abc123...", "question": {...}}, ...]
+    
+    Returns:
+        Dict containing the result
+    """
+    return upsert_to_table("quiz_questions", questions_with_hashes)
