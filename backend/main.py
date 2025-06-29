@@ -3,7 +3,7 @@ from flask_cors import CORS
 import traceback
 from .logic import extract_text_from_pdf_memory, set_process_priority, log_memory_usage, check_memory, get_container_memory_limit
 from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_focused_questions, generate_short_title
-from .database import upsert_pdf_results, generate_file_hash, check_file_exists, authenticate_user, generate_content_hash, upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data
+from .database import upsert_pdf_results, generate_file_hash, check_file_exists, authenticate_user, generate_content_hash, upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title
 from flask_session import Session
 import os
 import re
@@ -662,6 +662,28 @@ def load_study_set():
     print(f"Loaded {len(session.get('quiz_questions', []))} question sets into session.")
     print(f"Summary loaded (first 100 chars): {summary_text[:100]}")
     return jsonify({'success': True, 'summary': summary_text})
+
+@app.route('/api/update-set-title', methods=['POST'])
+def update_set_title():
+    """Endpoint to update the title of a study set."""
+    print("update_set_title()")
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user_id = session['user_id']
+    data = request.json
+    content_hash = data.get('content_hash')
+    new_title = data.get('new_title')
+    
+    if not content_hash or not new_title:
+        return jsonify({'error': 'content_hash and new_title are required'}), 400
+        
+    result = update_question_set_title(content_hash, user_id, new_title)
+    
+    if not result['success']:
+        return jsonify({'error': result.get('error', 'Failed to update title')}), 500
+        
+    return jsonify({'success': True, 'data': result['data']})
 
 @app.route('/api/clear-session-content', methods=['POST'])
 def clear_session_content():
