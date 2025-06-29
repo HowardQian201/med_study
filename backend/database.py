@@ -282,3 +282,58 @@ def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[s
             "error": str(e),
             "error_type": type(e).__name__
         }
+
+def upload_pdf_to_storage(file_content: bytes, file_hash: str, original_filename: str) -> Dict[str, Any]:
+    """
+    Uploads a PDF file to the Supabase Storage bucket.
+
+    Args:
+        file_content (bytes): The raw content of the PDF file.
+        file_hash (str): The SHA-256 hash of the file content.
+        original_filename (str): The original name of the file.
+
+    Returns:
+        Dict containing the result of the upload operation.
+    """
+    try:
+        supabase = get_supabase_client()
+        bucket_name = "pdfs"
+        
+        # Use the hash as the filename to prevent duplicates and ensure a unique path
+        file_path = f"{file_hash}.pdf"
+        
+        # Upload the file. `file_options={"upsert": "false"}` prevents re-uploading.
+        supabase.storage.from_(bucket_name).upload(
+            path=file_path,
+            file=file_content,
+            file_options={"upsert": "false", "content-type": "application/pdf"}
+        )
+
+        # Get the public URL to store in our database metadata
+        public_url = supabase.storage.from_(bucket_name).get_public_url(file_path)
+        
+        return {
+            "success": True,
+            "path": file_path,
+            "public_url": public_url,
+            "message": f"File '{original_filename}' uploaded successfully to '{file_path}'."
+        }
+        
+    except Exception as e:
+        error_message = str(e)
+        # If the error indicates the file already exists, we treat it as a success for our workflow.
+        if "resource already exists" in error_message.lower():
+             file_path = f"{file_hash}.pdf"
+             public_url = get_supabase_client().storage.from_('pdfs').get_public_url(file_path)
+             return {
+                "success": True,
+                "message": "File already exists in storage.",
+                "path": file_path,
+                "public_url": public_url
+             }
+
+        return {
+            "success": False,
+            "error": error_message,
+            "error_type": type(e).__name__
+        }

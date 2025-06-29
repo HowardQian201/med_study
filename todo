@@ -12,6 +12,4 @@ optimize gpt prompts -
 Login page use google
 Allow users to download quiz questions?
 Allow users to select number of questions to generate
-Favicon not showing on deployed version
-Add running total of questions answered
 Create visual diagrams from summary

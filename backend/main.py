@@ -3,7 +3,7 @@ from flask_cors import CORS
 import traceback
 from .logic import extract_text_from_pdf_memory, set_process_priority, log_memory_usage, check_memory, get_container_memory_limit
 from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_focused_questions, generate_short_title
-from .database import upsert_pdf_results, generate_file_hash, check_file_exists, authenticate_user, generate_content_hash, upsert_question_set
+from .database import upsert_pdf_results, generate_file_hash, check_file_exists, authenticate_user, generate_content_hash, upsert_question_set, upload_pdf_to_storage
 from flask_session import Session
 import os
 import re
@@ -231,11 +231,22 @@ def upload_multiple():
                     if extracted_text:
                         results[filename] = extracted_text
                         
-                        # Store with content hash as ID for future duplicate detection
+                        # Upload the raw PDF to Supabase Storage
+                        storage_result = upload_pdf_to_storage(file_content, file_hash, filename)
+
+                        if storage_result["success"]:
+                            print(f"Successfully uploaded '{filename}' to Supabase Storage.")
+                            storage_url = storage_result["public_url"]
+                        else:
+                            print(f"Failed to upload '{filename}' to storage: {storage_result.get('error')}")
+                            storage_url = None
+
+                        # Store metadata with content hash and storage URL
                         upsert_result = upsert_pdf_results({
-                            "hash": file_hash,  # Store hash for duplicate detection
+                            "hash": file_hash,
                             "filename": filename,
-                            "text": extracted_text
+                            "text": extracted_text,
+                            "storage_url": storage_url
                         })
                         
                         if upsert_result["success"]:
