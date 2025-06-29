@@ -97,6 +97,32 @@ def generate_file_hash(file_content: bytes, algorithm: str = "sha256") -> str:
     hash_obj.update(file_content)
     return hash_obj.hexdigest()
 
+def generate_content_hash(content_set: set, algorithm: str = "sha256") -> str:
+    """
+    Generate a unique hash for a set of content (files, text, etc.).
+    
+    Args:
+        content_set (set): Set of content items (bytes or strings)
+        algorithm (str): Hashing algorithm to use (default: "sha256")
+    
+    Returns:
+        str: Hexadecimal hash string that uniquely identifies the combined content
+    """
+    hash_obj = hashlib.new(algorithm)
+    
+    # Sort the content to ensure consistent hashing regardless of set order
+    sorted_content = sorted(content_set, key=lambda x: x if isinstance(x, bytes) else str(x).encode('utf-8'))
+    
+    for content in sorted_content:
+        if isinstance(content, str):
+            hash_obj.update(content.encode('utf-8'))
+        elif isinstance(content, bytes):
+            hash_obj.update(content)
+        else:
+            # Convert other types to string then bytes
+            hash_obj.update(str(content).encode('utf-8'))
+    
+    return hash_obj.hexdigest()
 
 def check_file_exists(file_hash: str) -> Dict[str, Any]:
     """
@@ -143,3 +169,48 @@ def upsert_quiz_questions_batch(questions_with_hashes: List[Dict[str, Any]]) -> 
         Dict containing the result
     """
     return upsert_to_table("quiz_questions", questions_with_hashes)
+
+def authenticate_user(email: str, password: str) -> Dict[str, Any]:
+    """
+    Authenticate a user by checking email and password against the users table.
+    
+    Args:
+        email (str): User's email address
+        password (str): User's password (plain text - should be hashed in production)
+    
+    Returns:
+        Dict containing authentication result and user data if successful
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Query for user with matching email and password
+        result = supabase.table('users').select("*").eq('email', email).eq('password', password).execute()
+        
+        if result.data and len(result.data) > 0:
+            user_data = result.data[0]
+            return {
+                "success": True,
+                "authenticated": True,
+                "user": {
+                    "id": user_data.get("id"),
+                    "name": user_data.get("name"),
+                    "email": user_data.get("email")
+                }
+            }
+        else:
+            return {
+                "success": True,
+                "authenticated": False,
+                "user": None,
+                "message": "Invalid email or password"
+            }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "authenticated": False,
+            "user": None,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }

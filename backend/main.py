@@ -3,7 +3,7 @@ from flask_cors import CORS
 import traceback
 from .logic import extract_text_from_pdf_memory, set_process_priority, log_memory_usage, check_memory, get_container_memory_limit
 from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_focused_questions
-from .database import upsert_pdf_results, generate_file_hash, check_file_exists
+from .database import upsert_pdf_results, generate_file_hash, check_file_exists, authenticate_user, generate_content_hash
 from flask_session import Session
 import os
 import re
@@ -34,19 +34,6 @@ app.config['SESSION_FILE_THRESHOLD'] = 100  # Maximum number of sessions to stor
 app.config['SESSION_FILE_DIR'] = 'flask_session'
 app.config['CLEANUP_INTERVAL'] = 300  # Cleanup every 5 minutes
 
-# Mock user database (replace with actual database in production)
-USERS = {
-    'test@example.com': {
-        'name': 'Test User 1',
-        'password': 'password123',  # In production, store hashed passwords
-        'id': 1
-    },
-    'test2@example.com': {
-        'name': 'Test User 2',
-        'password': 'password123',  # In production, store hashed passwords
-        'id': 2
-    }
-}
 # Email validation regex
 EMAIL_REGEX = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
@@ -87,18 +74,27 @@ def login():
         if not re.match(EMAIL_REGEX, email):
             return jsonify({'message': 'Invalid email format'}), 400
 
-        user = USERS.get(email)
-        if not user or user['password'] != password:
-            print(f"Invalid credentials for email: {email} and password: {password}")
+        # Authenticate user against database
+        auth_result = authenticate_user(email, password)
+        
+        if not auth_result["success"]:
+            print(f"Database error during authentication: {auth_result.get('error', 'Unknown error')}")
+            return jsonify({'message': 'Authentication service unavailable'}), 500
+            
+        if not auth_result["authenticated"]:
+            print(f"Invalid credentials for email: {email}")
             return jsonify({'message': 'Invalid credentials'}), 401
 
+        print(f"User authenticated: {auth_result['user']}")
+        user = auth_result["user"]
+        
         # Clear any existing session data
         session.clear()
         
         # Set new session data
         session['user_id'] = user['id']
         session['name'] = user['name']
-        session['email'] = email
+        session['email'] = user['email']
         
         # Ensure PDF results are empty on fresh login
         session['pdf_results'] = {}
@@ -152,9 +148,7 @@ def upload_multiple():
         # Check if user is authenticated
         if 'user_id' not in session:
             return jsonify({'error': 'Unauthorized'}), 401
-        
-        user_id = session['user_id']
-        
+                
         # Get memory limits for file size validation
         try:
             memory_limit = get_container_memory_limit()
@@ -181,6 +175,7 @@ def upload_multiple():
         
         results = {}
         total_extracted_text = ""
+        files_usertext_content = set()
         
         # Process each file
         for file in files:
@@ -193,6 +188,7 @@ def upload_multiple():
             
             # Read the file into an in-memory buffer to prevent "closed file" errors.
             file_content = file.read()
+            files_usertext_content.add(file_content)
 
             # Generate hash for the file content
             file_hash = generate_file_hash(file_content)
@@ -262,12 +258,24 @@ def upload_multiple():
         # Add user text if provided
         print(f"User text: {user_text[:100]}")
         if user_text:
+            files_usertext_content.add(user_text)
             total_extracted_text += f"\n\nAdditional Notes:\n{user_text}"
             if filenames:
                 filenames += "+ Additional Text"
             else:
                 filenames = "User Text"
         
+        content_hash = generate_content_hash(files_usertext_content)
+        # Create a list of filenames
+        content_name_list = list(results.keys())
+        # Add "user text" to the list if user text was submitted
+        if user_text:
+            content_name_list.append("user text")
+
+        session['content_hash'] = content_hash
+        session['content_name_list'] = content_name_list
+        session.modified = True
+
         if not total_extracted_text:
             raise Exception("No text could be extracted from PDFs and no additional text provided")
         
@@ -329,6 +337,8 @@ def clear_results():
                 session['summary'] = ""
                 session['user_text'] = ""  # Clear user text as well
                 session['quiz_questions'] = []
+                session['content_hash'] = ""
+                session['content_name_list'] = []
             return jsonify({'success': True})
         return jsonify({'error': 'Unauthorized'}), 401
     except Exception as e:
@@ -361,7 +371,7 @@ def generate_quiz():
             })
             
         # Generate questions
-        questions = generate_quiz_questions(summary)
+        questions, question_hashes = generate_quiz_questions(summary)
         
         # Store questions in session
         quiz_questions = session.get('quiz_questions', [])
@@ -400,7 +410,7 @@ def generate_more_questions():
         print(previous_questions)
         
         # Generate new questions
-        new_questions = generate_focused_questions(summary, incorrect_question_ids, previous_questions)
+        new_questions, new_question_hashes = generate_focused_questions(summary, incorrect_question_ids, previous_questions)
         
         # Store new questions in session
         quiz_questions = session.get('quiz_questions', [])
@@ -631,6 +641,3 @@ def serve_static(path):
         return send_from_directory(app.static_folder, 'index.html')
     
     
-# if __name__ == '__main__':
-#     # app.run(debug=True)
-#     app.run(host='0.0.0.0', port=5000)

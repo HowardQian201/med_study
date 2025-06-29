@@ -169,6 +169,7 @@ def generate_quiz_questions(summary_text):
             for q in questions:
                 randomize_answer_choices(q)
 
+            question_hashes = []
             # Store questions in database - hash each question individually and batch upsert
             try:
                 # Prepare batch data with individual hashes
@@ -177,7 +178,8 @@ def generate_quiz_questions(summary_text):
                     # Generate a hash for this specific question
                     question_text = json.dumps(question, sort_keys=True)
                     question_hash = hashlib.sha256(question_text.encode('utf-8')).hexdigest()
-                    
+                    question_hashes.append(question_hash)
+
                     batch_data.append({
                         "hash": question_hash,
                         "question": question
@@ -194,7 +196,7 @@ def generate_quiz_questions(summary_text):
                 # Don't fail the entire operation if database storage fails
             
             log_memory_usage("quiz generation complete")
-            return questions
+            return questions, question_hashes
 
         except (json.JSONDecodeError, ValueError) as e:
             print(f"Attempt {attempt + 1} failed to get valid JSON. Error: {e}")
@@ -299,6 +301,7 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
             for q in questions:
                 randomize_answer_choices(q)
 
+            question_hashes = []
             # Store questions in database - hash each question individually and batch upsert
             try:
                 # Prepare batch data with individual hashes
@@ -307,7 +310,8 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
                     # Generate a hash for this specific question
                     question_text = json.dumps(question, sort_keys=True)
                     question_hash = hashlib.sha256(question_text.encode('utf-8')).hexdigest()
-                    
+                    question_hashes.append(question_hash)
+
                     batch_data.append({
                         "hash": question_hash,
                         "question": question
@@ -323,7 +327,7 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
                 print(f"Error storing focused quiz questions in database: {str(e)}")
                 # Don't fail the entire operation if database storage fails
             
-            return questions
+            return questions, question_hashes
 
         except (json.JSONDecodeError, ValueError) as e:
             print(f"Attempt {attempt + 1} failed to get valid JSON for focused questions. Error: {e}")
