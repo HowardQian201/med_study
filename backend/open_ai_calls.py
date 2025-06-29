@@ -6,8 +6,9 @@ import time
 import uuid
 import random
 import traceback
+import hashlib
 from .logic import log_memory_usage, check_memory, analyze_memory_usage
-
+from .database import upsert_quiz_questions_batch
 
 load_dotenv()
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -164,9 +165,33 @@ def generate_quiz_questions(summary_text):
                 if not isinstance(q.get('correctAnswer'), int) or not (0 <= q['correctAnswer'] <= 3):
                     raise ValueError(f"Invalid correctAnswer: {q}")
 
-            # If validation is successful, randomize and return
+            # If validation is successful, randomize and store in database
             for q in questions:
                 randomize_answer_choices(q)
+
+            # Store questions in database - hash each question individually and batch upsert
+            try:
+                # Prepare batch data with individual hashes
+                batch_data = []
+                for question in questions:
+                    # Generate a hash for this specific question
+                    question_text = json.dumps(question, sort_keys=True)
+                    question_hash = hashlib.sha256(question_text.encode('utf-8')).hexdigest()
+                    
+                    batch_data.append({
+                        "hash": question_hash,
+                        "question": question
+                    })
+                
+                # Batch upsert all questions
+                db_result = upsert_quiz_questions_batch(batch_data)
+                if db_result["success"]:
+                    print(f"Successfully stored {db_result['count']} quiz questions in database (batch)")
+                else:
+                    print(f"Failed to store quiz questions: {db_result.get('error', 'Unknown error')}")
+            except Exception as e:
+                print(f"Error storing quiz questions in database: {str(e)}")
+                # Don't fail the entire operation if database storage fails
             
             log_memory_usage("quiz generation complete")
             return questions
@@ -270,9 +295,33 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
                 if not isinstance(q.get('correctAnswer'), int) or not (0 <= q['correctAnswer'] <= 3):
                     raise ValueError(f"Invalid correctAnswer: {q}")
             
-            # If validation is successful, randomize and return
+            # If validation is successful, randomize and store in database
             for q in questions:
                 randomize_answer_choices(q)
+
+            # Store questions in database - hash each question individually and batch upsert
+            try:
+                # Prepare batch data with individual hashes
+                batch_data = []
+                for question in questions:
+                    # Generate a hash for this specific question
+                    question_text = json.dumps(question, sort_keys=True)
+                    question_hash = hashlib.sha256(question_text.encode('utf-8')).hexdigest()
+                    
+                    batch_data.append({
+                        "hash": question_hash,
+                        "question": question
+                    })
+                
+                # Batch upsert all questions
+                db_result = upsert_quiz_questions_batch(batch_data)
+                if db_result["success"]:
+                    print(f"Successfully stored {db_result['count']} focused quiz questions in database (batch)")
+                else:
+                    print(f"Failed to store focused quiz questions: {db_result.get('error', 'Unknown error')}")
+            except Exception as e:
+                print(f"Error storing focused quiz questions in database: {str(e)}")
+                # Don't fail the entire operation if database storage fails
             
             return questions
 
