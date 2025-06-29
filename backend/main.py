@@ -238,8 +238,7 @@ def upload_multiple():
                         
                         # Store with content hash as ID for future duplicate detection
                         upsert_result = upsert_pdf_results({
-                            "id": str(uuid.uuid4()),  # Generate proper UUID for id field
-                            "file_hash": file_hash,  # Store hash for duplicate detection
+                            "hash": file_hash,  # Store hash for duplicate detection
                             "filename": filename,
                             "text": extracted_text
                         })

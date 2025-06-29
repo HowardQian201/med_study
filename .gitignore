@@ -1,4 +1,3 @@
-backend/openai_apikey.py
 backend/__pycache__/
 backend/.env
 instructions.txt
