@@ -215,7 +215,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
             "error_type": type(e).__name__
         }
 
-def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[str], content_names: List[str]) -> Dict[str, Any]:
+def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[str], content_names: List[str], total_extracted_text: str) -> Dict[str, Any]:
     """
     Upsert a question set to the question_sets table.
     
@@ -227,6 +227,7 @@ def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[s
         user_id (int): The ID of the user
         question_hashes (List[str]): List of hashes of the generated questions
         content_names (List[str]): List of names of the content files/sources
+        total_extracted_text (str): The full text content that was summarized.
     
     Returns:
         Dict containing the result
@@ -234,7 +235,7 @@ def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[s
     try:
         supabase = get_supabase_client()
         
-        # Check if a record with this content_hash already exists
+        # Check if a record with this content_hash already exists for this user
         existing_set = supabase.table('question_sets').select("metadata").eq('hash', content_hash).eq('user_id', user_id).execute()
         
         if existing_set.data:
@@ -253,8 +254,7 @@ def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[s
             
             result = supabase.table('question_sets').update({
                 'metadata': new_metadata,
-                'user_id': user_id  # Also update user_id in case it changes
-            }).eq('hash', content_hash).execute()
+            }).eq('hash', content_hash).eq('user_id', user_id).execute()
             
             print("Upserted question set to database (Append)")
             return {"success": True, "operation": "append", "data": result.data}
@@ -269,7 +269,8 @@ def upsert_question_set(content_hash: str, user_id: int, question_hashes: List[s
             result = supabase.table('question_sets').insert({
                 'hash': content_hash,
                 'user_id': user_id,
-                'metadata': new_metadata
+                'metadata': new_metadata,
+                'text_content': total_extracted_text
             }).execute()
             print("Upserted question set to database (Insert)")
             return {"success": True, "operation": "insert", "data": result.data}

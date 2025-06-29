@@ -48,8 +48,8 @@ def extract_text_with_ocr_from_pdf(file_obj, page_num):
                 aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
                 region_name=AWS_REGION,
                 config=Config(
-                    connect_timeout=30,
-                    read_timeout=30,
+                    connect_timeout=15,
+                    read_timeout=15,
                     retries={'max_attempts': 3}
                 )
             )
