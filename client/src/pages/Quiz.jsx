@@ -914,7 +914,7 @@ const Quiz = ({ user, summary: propSummary, setIsAuthenticated }) => {
                               <Button
                                 onClick={completeQuiz}
                                 variant="contained"
-                                color="secondary"
+                                color="primary"
                                 startIcon={<CheckCircle />}
                               >
                                 Complete Quiz
