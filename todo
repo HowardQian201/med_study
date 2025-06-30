@@ -1,19 +1,16 @@
 
 URGENT:
 
-Generate more questions on the preview page results in 2 separate quiz sets when looking at the show previous questions page
-
 optimize gpt prompts
 
+Allow editting questions set (remove questions, randomize order)
+Allow users to select number of questions to generate
 
 
 IDEAS:
-randomize question order on load set
 implement some progress memorization from previous sessions
 Stream quiz questions
 switch to replit or vercel for deployment
-optimize gpt prompts - 
 Login page use google
 Allow users to download quiz questions?
-Allow users to select number of questions to generate
 Create visual diagrams from summary

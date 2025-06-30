@@ -224,7 +224,7 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
     # Extract incorrect questions
     incorrect_questions = []
     correct_questions = []
-    if previous_questions and incorrect_question_ids:
+    if previous_questions and incorrect_question_ids is not None:
         incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
         correct_questions = [q['text'] for q in previous_questions if q['id'] not in incorrect_question_ids]
     
