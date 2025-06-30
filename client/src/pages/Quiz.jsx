@@ -33,7 +33,8 @@ import {
   Logout,
   CheckCircle,
   Cancel,
-  HelpOutline
+  HelpOutline,
+  Shuffle as ShuffleIcon
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { alpha } from '@mui/material/styles';
@@ -145,6 +146,18 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     setIsPreviewing(false);
   };
 
+  // const shuffleQuestions = () => {
+  //   // Fisher-Yates shuffle algorithm
+  //   setQuestions(currentQuestions => {
+  //     const shuffled = [...currentQuestions];
+  //     for (let i = shuffled.length - 1; i > 0; i--) {
+  //       const j = Math.floor(Math.random() * (i + 1));
+  //       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  //     }
+  //     return shuffled;
+  //   });
+  // };
+
   const moveToNextQuestion = () => {
     if (currentQuestion < questions.length - 1) {
       const nextQuestionIndex = currentQuestion + 1;
@@ -192,7 +205,34 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     setIsPreviewing(true);
   };
 
-  const generateMoreQuestions = async () => {
+  const generateAdditionalQuestions = async () => {
+    try {
+      setIsGeneratingMoreQuestions(true);
+      setError('');
+
+      const response = await axios.post('/api/generate-more-questions', {
+        incorrectQuestionIds: [],
+        previousQuestions: questions,
+        isPreviewing: true
+      }, {
+        withCredentials: true
+      });
+
+      if (response.data.success && response.data.questions) {
+        // Add new questions to the existing set
+        setQuestions(prevQuestions => [...prevQuestions, ...response.data.questions]);
+      } else {
+        setError('Failed to generate more questions');
+      }
+    } catch (err) {
+      console.error('Error generating more questions:', err);
+      setError(err.response?.data?.error || 'Failed to generate more questions');
+    } finally {
+      setIsGeneratingMoreQuestions(false);
+    }
+  };
+
+  const generateFocusedQuestions = async () => {
     try {
       setIsGeneratingMoreQuestions(true);
       
@@ -206,7 +246,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       
       const response = await axios.post('/api/generate-more-questions', {
         incorrectQuestionIds,
-        previousQuestions: questions
+        previousQuestions: questions,
+        isPreviewing: false
       }, {
         withCredentials: true
       });
@@ -439,95 +480,94 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                 {showResults ? (
                   <Box sx={{ py: 3 }}>
                     {/* Quiz Statistics */}
-                    <Box textAlign="center" mb={4}>
-                      <Typography variant="h5" fontWeight="600" gutterBottom>
-                        Quiz Complete!
-                      </Typography>
-                      
-                      {allQuestionsAnswered ? (
-                        <Paper elevation={1} sx={{ display: 'inline-block', p: 4, mb: 3, borderRadius: 3 }}>
-                          <Box display="flex" alignItems="center" justifyContent="center">
-                            <Box position="relative" display="inline-flex">
-                              <CircularProgress
-                                variant="determinate"
-                                value={100}
-                                size={120}
-                                thickness={4}
-                                sx={{ color: 'grey.300' }}
-                              />
-                              <CircularProgress
-                                variant="determinate"
-                                value={stats.percentage}
-                                size={120}
-                                thickness={4}
-                                sx={{
-                                  color: stats.percentage >= 70 ? 'success.main' : 
-                                         stats.percentage >= 40 ? 'warning.main' : 'error.main',
-                                  position: 'absolute',
-                                  left: 0,
-                                }}
-                              />
-                              <Box
-                                sx={{
-                                  top: 0,
-                                  left: 0,
-                                  bottom: 0,
-                                  right: 0,
-                                  position: 'absolute',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <Typography variant="h4" component="div" fontWeight="bold">
-                                  {stats.percentage}%
-                                </Typography>
-                              </Box>
-                            </Box>
-                          </Box>
-                          <Typography variant="body1" color="text.secondary" mt={2}>
-                            {stats.correct} correct out of {stats.total} questions
+                    {(() => {
+                      const cumulativeStats = {
+                        correct: allPreviousQuestions.flat().filter(q => q.isAnswered && q.userAnswer === q.correctAnswer).length,
+                        total: allPreviousQuestions.flat().length,
+                        get percentage() { return this.total > 0 ? Math.round((this.correct / this.total) * 100) : 0; }
+                      };
+                      const displayStats = showAllPreviousQuestions ? cumulativeStats : stats;
+                      const showStatsCircle = showAllPreviousQuestions ? displayStats.total > 0 : allQuestionsAnswered;
+
+                      return (
+                        <Box textAlign="center" mb={4}>
+                          <Typography variant="h5" fontWeight="600" gutterBottom>
+                            {showAllPreviousQuestions ? 'Cumulative Performance' : 'Quiz Performance'}
                           </Typography>
-                        </Paper>
-                      ) : (
-                        <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
-                          You haven't answered all questions yet. Your current score is based on the questions you've completed.
-                        </Alert>
-                      )}
-                      
-                      {/* Action Buttons */}
-                      <Stack direction="row" spacing={2} justifyContent="center">
-                        <Button
-                          onClick={resetQuiz}
-                          variant="outlined"
-                          startIcon={<Refresh />}
-                        >
-                          Try Again
-                        </Button>
-                        <Button
-                          onClick={generateMoreQuestions}
-                          disabled={isGeneratingMoreQuestions}
-                          variant="contained"
-                          color="primary"
-                          startIcon={isGeneratingMoreQuestions ? <CircularProgress size={16} color="inherit" /> : <Add />}
-                        >
-                          {isGeneratingMoreQuestions ? 'Generating...' : 'Generate New Questions'}
-                        </Button>
-                        <Button
-                          onClick={togglePreviousQuestions}
-                          disabled={isLoadingPreviousQuestions}
-                          variant="outlined"
-                          startIcon={isLoadingPreviousQuestions ? <CircularProgress size={16} color="inherit" /> : <History />}
-                        >
-                          {isLoadingPreviousQuestions 
-                            ? 'Loading...' 
-                            : showAllPreviousQuestions 
-                              ? 'Show Current Quiz' 
-                              : 'View All Previous Questions'
-                          }
-                        </Button>
-                      </Stack>
-                    </Box>
+                          
+                          {!showStatsCircle && !showAllPreviousQuestions ? (
+                            <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+                              You haven't answered all questions yet. Your current score is based on the questions you've completed.
+                            </Alert>
+                          ) : (
+                            showStatsCircle && (
+                              <Paper elevation={1} sx={{ display: 'inline-block', p: 4, mb: 3, borderRadius: 3 }}>
+                                <Box display="flex" alignItems="center" justifyContent="center">
+                                  <Box position="relative" display="inline-flex">
+                                    <CircularProgress variant="determinate" value={100} size={120} thickness={4} sx={{ color: 'grey.300' }} />
+                                    <CircularProgress
+                                      variant="determinate"
+                                      value={displayStats.percentage}
+                                      size={120}
+                                      thickness={4}
+                                      sx={{
+                                        color: displayStats.percentage >= 70 ? 'success.main' :
+                                              displayStats.percentage >= 40 ? 'warning.main' : 'error.main',
+                                        position: 'absolute',
+                                        left: 0,
+                                      }}
+                                    />
+                                    <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Typography variant="h4" component="div" fontWeight="bold">
+                                        {displayStats.percentage}%
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+                                </Box>
+                                <Typography variant="body1" color="text.secondary" mt={2}>
+                                  {displayStats.correct} correct out of {displayStats.total} questions
+                                  {showAllPreviousQuestions && allPreviousQuestions.length > 0 && ` across ${allPreviousQuestions.length} set${allPreviousQuestions.length !== 1 ? 's' : ''}`}
+                                </Typography>
+                              </Paper>
+                            )
+                          )}
+                          
+                          {/* Action Buttons */}
+                          <Stack direction="row" spacing={2} justifyContent="center">
+                            <Button
+                              onClick={resetQuiz}
+                              variant="outlined"
+                              startIcon={<Refresh />}
+                              disabled={isGeneratingMoreQuestions}
+                            >
+                              Try Again
+                            </Button>
+                            <Button
+                              onClick={generateFocusedQuestions}
+                              disabled={isGeneratingMoreQuestions}
+                              variant="contained"
+                              color="primary"
+                              startIcon={isGeneratingMoreQuestions ? <CircularProgress size={16} color="inherit" /> : <Add />}
+                            >
+                              {isGeneratingMoreQuestions ? 'Generating...' : 'Generate New Questions'}
+                            </Button>
+                            <Button
+                              onClick={togglePreviousQuestions}
+                              disabled={isLoadingPreviousQuestions}
+                              variant="outlined"
+                              startIcon={isLoadingPreviousQuestions ? <CircularProgress size={16} color="inherit" /> : <History />}
+                            >
+                              {isLoadingPreviousQuestions 
+                                ? 'Loading...' 
+                                : showAllPreviousQuestions 
+                                  ? 'Show Current Quiz' 
+                                  : 'View All Previous Questions'
+                              }
+                            </Button>
+                          </Stack>
+                        </Box>
+                      );
+                    })()}
                     
                     {/* Current Quiz Results */}
                     {!showAllPreviousQuestions && (
@@ -536,7 +576,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                           Question Review
                         </Typography>
                         <Stack spacing={3}>
-                          {stats.questionsWithStatus.map((question) => (
+                          {stats.questionsWithStatus.map((question, index) => (
                             <Card 
                               key={question.id} 
                               elevation={1}
@@ -566,7 +606,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                     sx={{ mr: 2 }}
                                   />
                                   <Typography variant="body1" fontWeight="500">
-                                    {question.text}
+                                    Question {index + 1}: {question.text}
                                   </Typography>
                                 </Box>
                               
@@ -772,13 +812,34 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                   </Box>
                 ) : isPreviewing ? (
                   <Box>
-                    <Box display="flex" justifyContent="center" mb={4}>
+                    <Box display="flex" justifyContent="center" gap={2} mb={4}>
+                      {/* <Button
+                        onClick={shuffleQuestions}
+                        variant="contained"
+                        color="primary"
+                        size="large"
+                        startIcon={<ShuffleIcon />}
+                        disabled={questions.length < 2}
+                      >
+                        Shuffle Questions
+                      </Button> */}
+                      <Button
+                        onClick={generateAdditionalQuestions}
+                        variant="contained"
+                        color="primary"
+                        size="large"
+                        startIcon={isGeneratingMoreQuestions ? <CircularProgress size={24} color="inherit" /> : <Add />}
+                        disabled={isGeneratingMoreQuestions}
+                      >
+                        {isGeneratingMoreQuestions ? 'Generating...' : 'Generate More Questions'}
+                      </Button>
                       <Button
                         onClick={handleStartQuiz}
                         variant="contained"
                         color="primary"
                         size="large"
                         startIcon={<ArrowForward />}
+                        disabled={isGeneratingMoreQuestions}
                       >
                         Start Answering Quiz Questions
                       </Button>

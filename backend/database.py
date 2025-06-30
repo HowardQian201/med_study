@@ -1,5 +1,6 @@
 import os
 import hashlib
+import uuid
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from typing import Dict, Any, List, Union, Optional
@@ -353,14 +354,18 @@ def get_full_study_set_data(content_hash: str, user_id: int) -> Dict[str, Any]:
         
         all_questions = []
         if question_hashes:
-            # 2. Get all questions associated with the set
+            # Get all questions associated with the set
             questions_result = supabase.table('quiz_questions').select("question, created_at").in_('hash', question_hashes).execute()
             
             if questions_result.data:
-                # The frontend Quiz page expects questions grouped into sets (rounds).
-                # For simplicity here, we will group them all into one primary set.
-                # A more advanced implementation could try to reconstruct the original rounds.
+                # Get the list of question objects
                 all_questions = [item['question'] for item in questions_result.data]
+
+                # Re-assign unique IDs to all questions to prevent front-end conflicts.
+                # This handles both old integer IDs and ensures uniqueness for the session.
+                for question in all_questions:
+                    if isinstance(question, dict):
+                        question['id'] = str(uuid.uuid4())
 
         return {
             "success": True,
@@ -370,7 +375,8 @@ def get_full_study_set_data(content_hash: str, user_id: int) -> Dict[str, Any]:
                 "total_extracted_text": study_set.get('text_content'),
                 "content_hash": study_set.get('hash'),
                 "content_name_list": study_set.get('metadata', {}).get('content_names', []),
-                "quiz_questions": [all_questions] if all_questions else [] # Nest questions in an array
+                # The session expects a list containing one set of questions.
+                "quiz_questions": [all_questions] if all_questions else []
             }
         }
         
