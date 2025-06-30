@@ -439,10 +439,23 @@ def generate_more_questions():
         # Upsert the new question set to the database
         upsert_question_set(content_hash, user_id, new_question_hashes, content_name_list)
         
-        # Store new questions in session
-        quiz_questions = session.get('quiz_questions', [])
-        quiz_questions.append(new_questions)
-        session['quiz_questions'] = quiz_questions
+        if data.get('isPreviewing', False):
+            # Store new questions in session, appending to the last set
+            quiz_questions_sets = session.get('quiz_questions', [])
+            if not quiz_questions_sets:
+                # If there are no sets for some reason, create a new one.
+                quiz_questions_sets.append(new_questions)
+            else:
+                # Get the last question set and extend it with the new questions.
+                quiz_questions_sets[-1].extend(new_questions)
+
+            session['quiz_questions'] = quiz_questions_sets
+        else:
+            # Store new questions in session
+            quiz_questions = session.get('quiz_questions', [])
+            quiz_questions.append(new_questions)
+            session['quiz_questions'] = quiz_questions
+        
         session.modified = True
         
         return jsonify({

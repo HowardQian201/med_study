@@ -9,6 +9,7 @@ import traceback
 import hashlib
 from .logic import log_memory_usage, check_memory, analyze_memory_usage
 from .database import upsert_quiz_questions_batch
+from typing import List, Tuple, Dict, Any
 
 load_dotenv()
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -173,34 +174,31 @@ def generate_quiz_questions(summary_text, user_id, content_hash):
             for q in questions:
                 randomize_answer_choices(q)
 
+            questions_with_ids = []
             question_hashes = []
-            # Store questions in database - hash each question individually and batch upsert
-            try:
-                # Prepare batch data with individual hashes
-                batch_data = []
-                for question in questions:
-                    # Generate a hash for this specific question
-                    question_text = json.dumps(question, sort_keys=True)
-                    question_hash = hashlib.sha256((question_text + str(user_id)).encode('utf-8')).hexdigest()
-                    question_hashes.append(question_hash)
 
-                    batch_data.append({
-                        "hash": question_hash,
-                        "question": question,
-                        "user_id": user_id,
-                        "question_set_hash": content_hash
-                    })
+            for q in questions:
+                q['id'] = str(uuid.uuid4())
+                question_text = q.get('text', '')
                 
-                # Batch upsert all questions
-                db_result = upsert_quiz_questions_batch(batch_data)
-                if db_result["success"]:
-                    print(f"Successfully stored {db_result['count']} quiz questions in database (batch)")
-                else:
-                    print(f"Failed to store quiz questions: {db_result.get('error', 'Unknown error')}")
-            except Exception as e:
-                print(f"Error storing quiz questions in database: {str(e)}")
-                # Don't fail the entire operation if database storage fails
+                # Create a hash for the question content
+                question_hash = hashlib.sha256((question_text + str(user_id)).encode('utf-8')).hexdigest()
+                question_hashes.append(question_hash)
+
+                questions_with_ids.append({
+                    "hash": question_hash,
+                    "question": q,
+                    "user_id": user_id,
+                    "question_set_hash": content_hash
+                })
             
+            # Batch upsert all questions
+            db_result = upsert_quiz_questions_batch(questions_with_ids)
+            if db_result["success"]:
+                print(f"Successfully stored {db_result['count']} quiz questions in database (batch)")
+            else:
+                print(f"Failed to store quiz questions: {db_result.get('error', 'Unknown error')}")
+
             log_memory_usage("quiz generation complete")
             return questions, question_hashes
 
@@ -225,20 +223,25 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
     
     # Extract incorrect questions
     incorrect_questions = []
+    correct_questions = []
     if previous_questions and incorrect_question_ids:
         incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
+        correct_questions = [q['text'] for q in previous_questions if q['id'] not in incorrect_question_ids]
     
     # Create a prompt with more focus on areas the user missed
-    print("incorrect_questions")
-    print({json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"})
+    print("incorrect_questions", len(incorrect_questions))
+    print("correct_questions", len(correct_questions))
 
     prompt = f"""
     Based on the following medical text summary and struggled concepts, create 5 VERY challenging USMLE clinical vignette style multiple-choice questions.
     Make sure to include all the key concepts and information from the summary and previously missed questions.
 
-    The user previously struggled with these specific concepts:
+    The user previously answered the following questions INCORRECTLY and should be tested on these topics as well as others:
     {json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"}
     
+    The user previously answered the following questions CORRECTLY and should be tested on different topics:
+    {json.dumps(correct_questions) if correct_questions else "No specific areas - generate new questions on the key topics"}
+
     For each question:
     1. Create very challenging questions that test understanding of key concepts
     2. If the user struggled with specific areas above, focus at least 3 questions on similar topics, but make sure they are not too similar/repetitive.
@@ -308,34 +311,31 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
             for q in questions:
                 randomize_answer_choices(q)
 
+            questions_with_ids = []
             question_hashes = []
-            # Store questions in database - hash each question individually and batch upsert
-            try:
-                # Prepare batch data with individual hashes
-                batch_data = []
-                for question in questions:
-                    # Generate a hash for this specific question
-                    question_text = json.dumps(question, sort_keys=True)
-                    question_hash = hashlib.sha256((question_text + str(user_id)).encode('utf-8')).hexdigest()
-                    question_hashes.append(question_hash)
 
-                    batch_data.append({
-                        "hash": question_hash,
-                        "question": question,
-                        "user_id": user_id,
-                        "question_set_hash": content_hash
-                    })
+            for q in questions:
+                q['id'] = str(uuid.uuid4())
+                question_text = q.get('text', '')
                 
-                # Batch upsert all questions
-                db_result = upsert_quiz_questions_batch(batch_data)
-                if db_result["success"]:
-                    print(f"Successfully stored {db_result['count']} focused quiz questions in database (batch)")
-                else:
-                    print(f"Failed to store focused quiz questions: {db_result.get('error', 'Unknown error')}")
-            except Exception as e:
-                print(f"Error storing focused quiz questions in database: {str(e)}")
-                # Don't fail the entire operation if database storage fails
+                # Create a hash for the question content
+                question_hash = hashlib.sha256((question_text + str(user_id)).encode('utf-8')).hexdigest()
+                question_hashes.append(question_hash)
+
+                questions_with_ids.append({
+                    "hash": question_hash,
+                    "question": q,
+                    "user_id": user_id,
+                    "question_set_hash": content_hash
+                })
             
+            # Batch upsert all questions
+            db_result = upsert_quiz_questions_batch(questions_with_ids)
+            if db_result["success"]:
+                print(f"Successfully stored {db_result['count']} focused quiz questions in database (batch)")
+            else:
+                print(f"Failed to store focused quiz questions: {db_result.get('error', 'Unknown error')}")
+
             return questions, question_hashes
 
         except (json.JSONDecodeError, ValueError) as e:
@@ -384,7 +384,8 @@ def generate_short_title(text_to_summarize: str) -> str:
                 {"role": "system", "content": "You are an expert at creating short, descriptive titles from text. You always follow length constraints and instructions precisely."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.5,
+            presence_penalty=0.5,
+            temperature=1.2,
             max_tokens=25,  # Generous buffer for 10 words
             n=1,
             stop=None,

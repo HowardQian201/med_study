@@ -1,15 +1,15 @@
 
 URGENT:
 
-Questions set hashes should be unique to the user and not just files/text inputted
-
+Generate more questions on the preview page results in 2 separate quiz sets when looking at the show previous questions page
 
 optimize gpt prompts
-implement some progress memorization from previous sessions
-randomize question order on load set
+
+
 
 IDEAS:
-
+randomize question order on load set
+implement some progress memorization from previous sessions
 Stream quiz questions
 switch to replit or vercel for deployment
 optimize gpt prompts - 
