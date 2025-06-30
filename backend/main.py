@@ -281,7 +281,8 @@ def upload_multiple():
             else:
                 filenames = "User Text"
         
-        content_hash = generate_content_hash(files_usertext_content)
+        user_id = session.get('user_id')
+        content_hash = generate_content_hash(files_usertext_content, user_id)
         # Create a list of filenames
         content_name_list = list(results.keys())
         # Add "user text" to the list if user text was submitted
@@ -421,7 +422,6 @@ def generate_more_questions():
         user_id = session['user_id']
         content_hash = session.get('content_hash')
         content_name_list = session.get('content_name_list', [])
-        total_extracted_text = session.get('total_extracted_text', '')
 
         # Check if there's a summary to work with
         summary = session.get('summary', '')

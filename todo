@@ -1,7 +1,12 @@
 
 URGENT:
 
+Questions set hashes should be unique to the user and not just files/text inputted
+
+
 optimize gpt prompts
+implement some progress memorization from previous sessions
+randomize question order on load set
 
 IDEAS:
 
