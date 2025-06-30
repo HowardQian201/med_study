@@ -181,7 +181,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash):
                 for question in questions:
                     # Generate a hash for this specific question
                     question_text = json.dumps(question, sort_keys=True)
-                    question_hash = hashlib.sha256(question_text.encode('utf-8')).hexdigest()
+                    question_hash = hashlib.sha256((question_text + str(user_id)).encode('utf-8')).hexdigest()
                     question_hashes.append(question_hash)
 
                     batch_data.append({
@@ -316,7 +316,7 @@ def generate_focused_questions(summary_text, incorrect_question_ids, previous_qu
                 for question in questions:
                     # Generate a hash for this specific question
                     question_text = json.dumps(question, sort_keys=True)
-                    question_hash = hashlib.sha256(question_text.encode('utf-8')).hexdigest()
+                    question_hash = hashlib.sha256((question_text + str(user_id)).encode('utf-8')).hexdigest()
                     question_hashes.append(question_hash)
 
                     batch_data.append({

@@ -98,18 +98,22 @@ def generate_file_hash(file_content: bytes, algorithm: str = "sha256") -> str:
     hash_obj.update(file_content)
     return hash_obj.hexdigest()
 
-def generate_content_hash(content_set: set, algorithm: str = "sha256") -> str:
+def generate_content_hash(content_set: set, user_id: int, algorithm: str = "sha256") -> str:
     """
-    Generate a unique hash for a set of content (files, text, etc.).
+    Generate a unique hash for a set of content (files, text, etc.) that includes the user_id.
     
     Args:
         content_set (set): Set of content items (bytes or strings)
+        user_id (int): User ID to include in the hash
         algorithm (str): Hashing algorithm to use (default: "sha256")
     
     Returns:
-        str: Hexadecimal hash string that uniquely identifies the combined content
+        str: Hexadecimal hash string that uniquely identifies the combined content for this user
     """
     hash_obj = hashlib.new(algorithm)
+    
+    # Include user_id in the hash to make it unique per user
+    hash_obj.update(str(user_id).encode('utf-8'))
     
     # Sort the content to ensure consistent hashing regardless of set order
     sorted_content = sorted(content_set, key=lambda x: x if isinstance(x, bytes) else str(x).encode('utf-8'))
