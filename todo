@@ -4,6 +4,7 @@ URGENT:
 clear results have 2 duplicate functions/endpoints
 
 optimize gpt prompts
+  - use openai playground to test
 
 Allow editting questions set (remove questions, randomize order)
 Allow users to select number of questions to generate
