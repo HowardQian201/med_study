@@ -243,16 +243,19 @@ def upload_multiple():
                         if storage_result["success"]:
                             print(f"Successfully uploaded '{filename}' to Supabase Storage.")
                             storage_url = storage_result["public_url"]
+                            storage_file_path = storage_result["file_path"]
                         else:
                             print(f"Failed to upload '{filename}' to storage: {storage_result.get('error')}")
                             storage_url = None
+                            storage_file_path = None
 
                         # Store metadata with content hash and storage URL
                         upsert_result = upsert_pdf_results({
                             "hash": file_hash,
                             "filename": filename,
                             "text": extracted_text,
-                            "storage_url": storage_url
+                            "storage_url": storage_url,
+                            "storage_file_path": storage_file_path
                         })
                         
                         if upsert_result["success"]:
