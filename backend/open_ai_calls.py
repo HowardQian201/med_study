@@ -118,13 +118,16 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
     incorrect_questions = []
     correct_questions = []
 
-    incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
-    correct_questions = [q['text'] for q in previous_questions if q['id'] not in incorrect_question_ids]
+    is_questions = previous_questions is not None and incorrect_question_ids is not None
 
-    print("incorrect_questions", len(incorrect_questions))
-    print("correct_questions", len(correct_questions))
-    print(json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics")
-    print(json.dumps(correct_questions) if correct_questions else "No specific areas - generate new questions on the key topics")
+    if is_questions:
+        incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
+        correct_questions = [q['text'] for q in previous_questions if q['id'] not in incorrect_question_ids]
+
+        print("incorrect_questions", len(incorrect_questions))
+        print("correct_questions", len(correct_questions))
+        print(json.dumps(incorrect_questions) if is_questions and incorrect_questions else "No specific areas - generate new questions on the key topics")
+        print(json.dumps(correct_questions) if is_questions and correct_questions else "No specific areas - generate new questions on the key topics")
     
     # Create appropriate prompt based on whether this is focused or initial generation
     prompt = f"""
@@ -132,10 +135,10 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
     Make sure to include all the key concepts and information from the summary and previously missed questions.
 
     The user previously answered the following questions INCORRECTLY and should be tested on these topics as well as others:
-    {json.dumps(incorrect_questions) if incorrect_questions else "No specific areas - generate new questions on the key topics"}
+    {json.dumps(incorrect_questions) if is_questions and incorrect_questions else "No specific areas - generate new questions on the key topics of the summary"}
     
     The user previously answered the following questions CORRECTLY and should be tested on different topics:
-    {json.dumps(correct_questions) if correct_questions else "No specific areas - generate new questions on the key topics"}
+    {json.dumps(correct_questions) if is_questions and correct_questions else "No specific areas - generate new questions on the key topics of the summary"}
 
     For each question:
     1. Create very challenging questions that test understanding of key concepts
