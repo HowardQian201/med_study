@@ -243,7 +243,7 @@ def upload_multiple():
                         if storage_result["success"]:
                             print(f"Successfully uploaded '{filename}' to Supabase Storage.")
                             storage_url = storage_result["public_url"]
-                            storage_file_path = storage_result["file_path"]
+                            storage_file_path = storage_result["path"]
                         else:
                             print(f"Failed to upload '{filename}' to storage: {storage_result.get('error')}")
                             storage_url = None

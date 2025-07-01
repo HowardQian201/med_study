@@ -417,7 +417,6 @@ def upload_pdf_to_storage(file_content: bytes, file_hash: str, original_filename
             "success": True,
             "path": file_path,
             "public_url": public_url,
-            'file_path': file_path,
             "message": f"File '{original_filename}' uploaded successfully to '{file_path}'."
         }
         
