@@ -136,9 +136,9 @@ def generate_quiz_questions(summary_text, user_id, content_hash):
             completion = openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are an expert medical professor that creates \
-                    accurate, challenging multiple choice questions in the style of clinical vignettes. \
-                    You respond ONLY with the requested JSON format."},
+                    {"role": "system", "content": """You are an expert medical professor that creates 
+                    accurate, challenging multiple choice questions in the style of clinical vignettes. 
+                    You respond ONLY with the requested JSON format."""},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=1.2,

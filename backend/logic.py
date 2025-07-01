@@ -10,6 +10,7 @@ import uuid
 import gc
 from io import BytesIO
 from .aws_ocr import extract_text_with_ocr_from_pdf
+from typing import Optional
 
 load_dotenv()
 
@@ -22,7 +23,13 @@ OCR_DPI = 300  # DPI for OCR image conversion (balance between quality and memor
 # Global variable to track peak memory usage
 _peak_memory_usage = 0
 
-def get_container_memory_limit():
+# Constants
+HIGH_MEMORY_THRESHOLD = 0.85
+CRITICAL_MEMORY_THRESHOLD = 0.95
+DEFAULT_MEMORY_LIMIT = 512 * 1024 * 1024
+OCR_TEXT_THRESHOLD = 50
+
+def get_container_memory_limit() -> int:
     """Get the actual memory limit for the container"""
     try:
         
@@ -61,7 +68,7 @@ def get_container_memory_limit():
         print(f"Error detecting memory limit: {e}")
         return 512 * 1024 * 1024  # Default to 512MB
 
-def get_container_memory_usage():
+def get_container_memory_usage() -> int:
     """Get current memory usage that respects container limits"""
     try:
         # First try to read current usage from cgroups v2 (most accurate for containers)
@@ -99,7 +106,7 @@ def get_container_memory_usage():
         print("Using system memory as final fallback")
         return memory.used
 
-def log_memory_usage(stage):
+def log_memory_usage(stage: str) -> Optional[float]:
     """Log current memory usage with container awareness and peak tracking"""
     global _peak_memory_usage
     
@@ -115,13 +122,13 @@ def log_memory_usage(stage):
         print(f"Memory at {stage}: {memory_percent:.1f}% used ({memory_used/(1024*1024):.1f}MB/{memory_limit/(1024*1024):.1f}MB) [Peak: {_peak_memory_usage/(1024*1024):.1f}MB]")
         return memory_percent
     except Exception as e:
-        print(f"Error in memory logging: {e}")
-        # Fallback to psutil
-        memory = psutil.virtual_memory()
-        print(f"Memory at {stage}: {memory.percent}% used ({memory.used/(1024*1024):.1f}MB/{memory.total/(1024*1024):.1f}MB) [HOST]")
-        return memory.percent
-
-
+        try:
+            mem = psutil.virtual_memory()
+            print(f"Error logging memory, falling back to system memory: {mem.percent}%")
+            return mem.percent
+        except Exception as fallback_e:
+            print(f"Could not log memory usage at all. Stage: {stage}. Error: {e}, Fallback error: {fallback_e}")
+            return None
 
 def extract_text_from_pdf_memory(file_obj, filename=""):
     """Extract text from a PDF file object directly from memory with OCR fallback"""
@@ -226,36 +233,39 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
         return ""
 
 def set_process_priority():
-    """Configure process priority based on OS"""
-    current_process = psutil.Process()
+    """Sets the process priority to low to prevent freezing the system."""
     try:
-        if platform.system() == 'Windows':
+        current_process = psutil.Process()
+        if os.name == 'nt':  # Windows
             current_process.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
-        else:
-            current_process.nice(10)  # Unix-like systems
-    except:
-        print("Could not set process priority")
+        else:  # Linux/macOS
+            current_process.nice(19)
+        print(f"Process priority set to low (PID: {current_process.pid}).")
+    except Exception as e:
+        print(f"Could not set process priority: {e}")
 
-def check_memory():
+def check_memory(force_gc: bool = True):
     """Check if system has enough memory with proactive garbage collection and container awareness"""
     try:
+        memory_usage = get_container_memory_usage()
         memory_limit = get_container_memory_limit()
-        memory_used = get_container_memory_usage()
-        memory_percent = (memory_used / memory_limit) * 100
         
-        if memory_percent > 75:  # Lower threshold for containers (was 85%)
-            print(f"High memory usage detected: {memory_percent:.1f}% - forcing garbage collection")
-            gc.collect()  # Force garbage collection
+        if memory_limit > 0:
+            usage_percent = memory_usage / memory_limit
             
-            # Check again after garbage collection
-            memory_used = get_container_memory_usage()
-            memory_percent = (memory_used / memory_limit) * 100
-            print(f"Memory after GC: {memory_percent:.1f}%")
+            if usage_percent >= CRITICAL_MEMORY_THRESHOLD:
+                print(f"Memory usage critical: {usage_percent:.1%} ({memory_usage/(1024*1024):.1f}MB/{memory_limit/(1024*1024):.1f}MB)")
+                raise MemoryError("Critical memory threshold exceeded.")
             
-        if memory_percent > 90:  # Critical threshold for containers (was 95%)
-            print(f"Memory usage critical: {memory_percent:.1f}% ({memory_used/(1024*1024):.1f}MB/{memory_limit/(1024*1024):.1f}MB)")
-        
-        return memory_percent
+            if usage_percent >= HIGH_MEMORY_THRESHOLD:
+                print(f"High memory usage detected: {usage_percent:.1%} - forcing garbage collection")
+                if force_gc:
+                    gc.collect()
+                    memory_usage_after_gc = get_container_memory_usage()
+                    usage_percent_after_gc = memory_usage_after_gc / memory_limit
+                    print(f"Memory after GC: {usage_percent_after_gc:.1%}")
+
+        return usage_percent
         
     except Exception as e:
         if "Memory usage critical" in str(e):
@@ -275,51 +285,6 @@ def check_memory():
         
         return memory.percent
 
-def analyze_memory_usage(stage):
-    """Detailed memory analysis to identify memory consumers"""
-    try:
-        current_process = psutil.Process()
-        memory_info = current_process.memory_info()
-        memory_percent = current_process.memory_percent()
-        
-        # Get number of open file descriptors
-        try:
-            num_fds = current_process.num_fds()
-        except:
-            num_fds = "N/A"
-        
-        # Get thread count
-        num_threads = current_process.num_threads()
-        
-        # Try to get container memory for comparison
-        container_memory = None
-        try:
-            with open('/sys/fs/cgroup/memory.current', 'r') as f:
-                container_memory = int(f.read().strip())
-        except:
-            try:
-                with open('/sys/fs/cgroup/memory/memory.usage_in_bytes', 'r') as f:
-                    container_memory = int(f.read().strip())
-            except:
-                pass
-        
-        print(f"=== Memory Analysis at {stage} ===")
-        print(f"Process RSS (Physical): {memory_info.rss/(1024*1024):.1f}MB")
-        print(f"Process VMS (Virtual): {memory_info.vms/(1024*1024):.1f}MB")
-        if container_memory:
-            print(f"Container Memory (cgroups): {container_memory/(1024*1024):.1f}MB")
-            print(f"Difference (Container - Process): {(container_memory - memory_info.rss)/(1024*1024):.1f}MB")
-        print(f"Memory %: {memory_percent:.1f}%")
-        print(f"Threads: {num_threads}")
-        print(f"File descriptors: {num_fds}")
-        
-        # Check for memory leaks by looking at object counts
-        import sys
-        print(f"Python objects: {len(gc.get_objects())}")
-        
-        # Return container memory if available, otherwise process memory
-        return container_memory if container_memory else memory_info.rss
-        
-    except Exception as e:
-        print(f"Error in memory analysis: {e}")
-        return 0
+def analyze_memory_usage(stage: str):
+    """Function to wrap memory logging for easy patching in tests"""
+    log_memory_usage(stage)

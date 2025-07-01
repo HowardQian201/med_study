@@ -344,24 +344,6 @@ def upload_multiple():
         gc.collect()
 
 
-@app.route('/api/clear-results', methods=['POST'])
-def clear_results():
-    """Endpoint to clear PDF results from session"""
-    print("clear_results()")
-    try:
-        if 'user_id' in session:
-            if 'summary' in session:
-                session['summary'] = ""
-                session['total_extracted_text'] = ""
-                session['quiz_questions'] = []
-                session['content_hash'] = ""
-                session['content_name_list'] = []
-                
-            return jsonify({'success': True})
-        return jsonify({'error': 'Unauthorized'}), 401
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/generate-quiz', methods=['GET'])
 def generate_quiz():
     """Endpoint to generate quiz questions from the stored summary"""
