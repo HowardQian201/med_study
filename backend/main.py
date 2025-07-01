@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, session, send_from_directory, Respons
 from flask_cors import CORS
 import traceback
 from .logic import extract_text_from_pdf_memory, set_process_priority, log_memory_usage, check_memory, get_container_memory_limit
-from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_focused_questions, generate_short_title
+from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_short_title
 from .database import (
     upsert_pdf_results,
     check_file_exists, generate_content_hash, generate_file_hash,
@@ -344,7 +344,7 @@ def upload_multiple():
         gc.collect()
 
 
-@app.route('/api/generate-quiz', methods=['GET'])
+@app.route('/api/generate-quiz', methods=['POST'])
 def generate_quiz():
     """Endpoint to generate quiz questions from the stored summary"""
     print("generate_quiz()")
@@ -364,26 +364,59 @@ def generate_quiz():
         if not summary or not content_hash:
             print(f"No summary or content_hash available - returning 400")
             return jsonify({'error': 'No summary available. Please upload content first.'}), 400
-        # Check if we already have questions for this summary (prevent duplicates)
-        existing_questions = session.get('quiz_questions', [])
-        if existing_questions:
-            latest_questions = existing_questions[-1]
-            print(f"Found existing questions ({len(latest_questions)} questions) - returning cached")
-            return jsonify({
-                'success': True,
-                'questions': latest_questions
-            })
-        # Generate questions
-        questions, question_hashes = generate_quiz_questions(summary, user_id, content_hash)
         
-        short_summary = generate_short_title(total_extracted_text)
-        # Upsert the question set to the database
-        upsert_question_set(content_hash, user_id, question_hashes, content_name_list, total_extracted_text, short_summary, summary)
+        # Get request data and determine question type
+        data = request.json or {}
+        question_type = data.get('type', 'initial')  # 'initial', 'focused', or 'additional'
+        incorrect_question_ids = data.get('incorrectQuestionIds', [])
+        previous_questions = data.get('previousQuestions', [])
+        is_previewing = data.get('isPreviewing', False)
+        
+        # For initial generation, check if we already have questions to prevent duplicates
+        if question_type == 'initial':
+            existing_questions = session.get('quiz_questions', [])
+            if existing_questions:
+                latest_questions = existing_questions[-1]
+                print(f"Found existing questions ({len(latest_questions)} questions) - returning cached")
+                return jsonify({
+                    'success': True,
+                    'questions': latest_questions
+                })
+        
+        # Generate questions (can be initial or focused based on parameters)
+        questions, question_hashes = generate_quiz_questions(
+            summary, user_id, content_hash, 
+            incorrect_question_ids=incorrect_question_ids, 
+            previous_questions=previous_questions
+        )
+        
+        # Only generate short title and upsert question set for initial generation
+        if question_type == 'initial':
+            short_summary = generate_short_title(total_extracted_text)
+            # Upsert the question set to the database
+            upsert_question_set(content_hash, user_id, question_hashes, content_name_list, total_extracted_text, short_summary, summary)
+        else:
+            # For focused/additional questions, just upsert the new questions
+            upsert_question_set(content_hash, user_id, question_hashes, content_name_list)
         
         # Store questions in session
-        quiz_questions = session.get('quiz_questions', [])
-        quiz_questions.append(questions)
-        session['quiz_questions'] = quiz_questions
+        if is_previewing:
+            # Store new questions in session, appending to the last set
+            quiz_questions_sets = session.get('quiz_questions', [])
+            if not quiz_questions_sets:
+                # If there are no sets for some reason, create a new one.
+                quiz_questions_sets.append(questions)
+            else:
+                # Get the last question set and extend it with the new questions.
+                quiz_questions_sets[-1].extend(questions)
+
+            session['quiz_questions'] = quiz_questions_sets
+        else:
+            # Store new questions in session
+            quiz_questions = session.get('quiz_questions', [])
+            quiz_questions.append(questions)
+            session['quiz_questions'] = quiz_questions
+        
         session.modified = True
         
         return jsonify({
@@ -395,62 +428,7 @@ def generate_quiz():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/generate-more-questions', methods=['POST'])
-def generate_more_questions():
-    """Endpoint to generate additional questions based on user performance"""
-    print("generate_more_questions()")
-    try:
-        # Check if user is authenticated
-        if 'user_id' not in session:
-            return jsonify({'error': 'Unauthorized'}), 401
-            
-        user_id = session['user_id']
-        content_hash = session.get('content_hash')
-        content_name_list = session.get('content_name_list', [])
 
-        # Check if there's a summary to work with
-        summary = session.get('summary', '')
-        if not summary or not content_hash:
-            return jsonify({'error': 'No summary available. Please upload content first.'}), 400
-            
-        # Get the request data
-        data = request.json
-        incorrect_question_ids = data.get('incorrectQuestionIds', [])
-        previous_questions = data.get('previousQuestions', [])
-        
-        # Generate new questions
-        new_questions, new_question_hashes = generate_focused_questions(summary, incorrect_question_ids, previous_questions, user_id, content_hash)
-        
-        # Upsert the new question set to the database
-        upsert_question_set(content_hash, user_id, new_question_hashes, content_name_list)
-        
-        if data.get('isPreviewing', False):
-            # Store new questions in session, appending to the last set
-            quiz_questions_sets = session.get('quiz_questions', [])
-            if not quiz_questions_sets:
-                # If there are no sets for some reason, create a new one.
-                quiz_questions_sets.append(new_questions)
-            else:
-                # Get the last question set and extend it with the new questions.
-                quiz_questions_sets[-1].extend(new_questions)
-
-            session['quiz_questions'] = quiz_questions_sets
-        else:
-            # Store new questions in session
-            quiz_questions = session.get('quiz_questions', [])
-            quiz_questions.append(new_questions)
-            session['quiz_questions'] = quiz_questions
-        
-        session.modified = True
-        
-        return jsonify({
-            'success': True,
-            'questions': new_questions
-        })
-    except Exception as e:
-        print(f"Error generating more questions: {str(e)}")
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/get-quiz', methods=['GET'])
 def get_quiz():

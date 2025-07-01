@@ -192,7 +192,9 @@ class TestMainRoutes(unittest.TestCase):
     
     def test_generate_quiz_unauthorized(self):
         """Test quiz generation without authentication"""
-        response = self.client.get('/api/generate-quiz')
+        response = self.client.post('/api/generate-quiz',
+                                   data=json.dumps({'type': 'initial'}),
+                                   content_type='application/json')
         self.assertEqual(response.status_code, 401)
     
     @patch('backend.main.generate_quiz_questions')
@@ -216,18 +218,90 @@ class TestMainRoutes(unittest.TestCase):
             ], ['hash1']
         )
         
-        response = self.client.get('/api/generate-quiz')
+        response = self.client.post('/api/generate-quiz',
+                                   data=json.dumps({'type': 'initial'}),
+                                   content_type='application/json')
         self.assertEqual(response.status_code, 200)
         # Check that the expected text exists in the response data
-        self.assertIn("Test question?", response.data.decode())
+        response_data = json.loads(response.data)
+        self.assertTrue(response_data['success'])
+        self.assertIn("Test question?", str(response_data['questions']))
     
     def test_generate_quiz_no_content(self):
         """Test quiz generation without content"""
         with self.client.session_transaction() as sess:
             sess['user_id'] = 1
         
-        response = self.client.get('/api/generate-quiz')
+        response = self.client.post('/api/generate-quiz',
+                                   data=json.dumps({'type': 'initial'}),
+                                   content_type='application/json')
         self.assertEqual(response.status_code, 400)
+    
+    @patch('backend.main.generate_quiz_questions')
+    def test_generate_focused_quiz_success(self, mock_generate):
+        """Test successful focused quiz generation"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['content_hash'] = 'test_hash'
+            sess['summary'] = 'Test summary for quiz'
+        
+        mock_generate.return_value = (
+            [
+                {
+                    "id": "2",
+                    "text": "Focused question?",
+                    "options": ["A", "B", "C", "D"],
+                    "correctAnswer": 1,
+                    "reason": "Focused reason"
+                }
+            ], ['hash2']
+        )
+        
+        response = self.client.post('/api/generate-quiz',
+                                   data=json.dumps({
+                                       'type': 'focused',
+                                       'incorrectQuestionIds': ['1'],
+                                       'previousQuestions': [{'id': '1', 'text': 'prev'}],
+                                       'isPreviewing': False
+                                   }),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.data)
+        self.assertTrue(response_data['success'])
+        self.assertIn("Focused question?", str(response_data['questions']))
+    
+    @patch('backend.main.generate_quiz_questions')
+    def test_generate_additional_quiz_success(self, mock_generate):
+        """Test successful additional quiz generation"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['content_hash'] = 'test_hash'
+            sess['summary'] = 'Test summary for quiz'
+        
+        mock_generate.return_value = (
+            [
+                {
+                    "id": "3",
+                    "text": "Additional question?",
+                    "options": ["A", "B", "C", "D"],
+                    "correctAnswer": 2,
+                    "reason": "Additional reason"
+                }
+            ], ['hash3']
+        )
+        
+        response = self.client.post('/api/generate-quiz',
+                                   data=json.dumps({
+                                       'type': 'additional',
+                                       'incorrectQuestionIds': [],
+                                       'previousQuestions': [{'id': '1', 'text': 'prev'}],
+                                       'isPreviewing': True
+                                   }),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.data)
+        self.assertTrue(response_data['success'])
+        self.assertIn("Additional question?", str(response_data['questions']))
     
     def test_get_quiz_unauthorized(self):
         """Test get quiz without authentication"""

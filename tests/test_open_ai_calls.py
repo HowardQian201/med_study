@@ -174,8 +174,8 @@ class TestOpenAICalls(unittest.TestCase):
     @patch('backend.open_ai_calls.openai_client')
     @patch('backend.open_ai_calls.upsert_quiz_questions_batch')
     def test_generate_focused_questions_success(self, mock_upsert, mock_client):
-        """Test successful focused question generation"""
-        from backend.open_ai_calls import generate_focused_questions
+        """Test successful focused question generation using generate_quiz_questions with optional parameters"""
+        from backend.open_ai_calls import generate_quiz_questions
         
         mock_response = MagicMock()
         mock_questions = [{'id': 1, 'text': 'Q1', 'options': ['A', 'B', 'C', 'D'], 'correctAnswer': 1, 'reason': 'R1'}]
@@ -185,7 +185,9 @@ class TestOpenAICalls(unittest.TestCase):
         mock_upsert.return_value = {"success": True, "count": 1}
         
         with patch('backend.open_ai_calls.check_memory'), patch('backend.open_ai_calls.log_memory_usage'):
-            result, hashes = generate_focused_questions("summary", ['id1'], [{'id': 'id1', 'text': 'prevQ'}], 1, "hash")
+            result, hashes = generate_quiz_questions("summary", 1, "hash", 
+                                                   incorrect_question_ids=['id1'], 
+                                                   previous_questions=[{'id': 'id1', 'text': 'prevQ'}])
         
         self.assertEqual(len(result), 1)
         mock_upsert.assert_called_once()

@@ -91,7 +91,9 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
           setQuestions(existingResponse.data.questions);
         } else {
         // If no existing questions, generate new ones
-        const response = await axios.get('/api/generate-quiz', {
+        const response = await axios.post('/api/generate-quiz', {
+          type: 'initial'
+        }, {
           withCredentials: true
         });
         
@@ -210,7 +212,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       setIsGeneratingMoreQuestions(true);
       setError('');
 
-      const response = await axios.post('/api/generate-more-questions', {
+      const response = await axios.post('/api/generate-quiz', {
+        type: 'additional',
         incorrectQuestionIds: [],
         previousQuestions: questions,
         isPreviewing: true
@@ -244,7 +247,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         .filter(q => selectedAnswers[q.id] !== undefined && selectedAnswers[q.id] !== q.correctAnswer)
         .map(q => q.id);
       
-      const response = await axios.post('/api/generate-more-questions', {
+      const response = await axios.post('/api/generate-quiz', {
+        type: 'focused',
         incorrectQuestionIds,
         previousQuestions: questions,
         isPreviewing: false
