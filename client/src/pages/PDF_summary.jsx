@@ -44,6 +44,7 @@ const PDF_summary = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const abortController = useRef(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isContentLocked, setIsContentLocked] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Display existing results if available
   useEffect(() => {
@@ -163,7 +164,10 @@ const PDF_summary = ({ setIsAuthenticated, user, summary, setSummary }) => {
       setSummary('');
       setFiles([]);
       setUserText('');
-      await axios.post('/api/clear-results', {}, {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      await axios.post('/api/clear-session-content', {}, {
         withCredentials: true
       });
     } catch (err) {
@@ -356,15 +360,16 @@ const PDF_summary = ({ setIsAuthenticated, user, summary, setSummary }) => {
                   onChange={handleFileSelect}
                   multiple
                   disabled={isContentLocked || isUploading}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          border: 'none',
-                          borderRadius: '8px',
-                          backgroundColor: 'transparent',
-                          cursor: 'pointer',
-                        }}
-                      />
+                  ref={fileInputRef}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: 'none',
+                    borderRadius: '8px',
+                    backgroundColor: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                />
                       
                 {files.length > 0 && (
                         <Box sx={{ width: '100%', mt: 2, overflow: 'auto', maxHeight: 120 }}>
