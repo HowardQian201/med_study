@@ -251,6 +251,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             # Create a hash for the question content
             question_hash = hashlib.sha256((question_text + str(user_id)).encode('utf-8')).hexdigest()
             question_hashes.append(question_hash)
+            q['hash'] = question_hash
 
             questions_with_ids.append({
                 "hash": question_hash,

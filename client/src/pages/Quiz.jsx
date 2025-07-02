@@ -34,7 +34,9 @@ import {
   CheckCircle,
   Cancel,
   HelpOutline,
-  Shuffle as ShuffleIcon
+  Shuffle as ShuffleIcon,
+  Star,
+  StarBorder
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { alpha } from '@mui/material/styles';
@@ -148,17 +150,28 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     setIsPreviewing(false);
   };
 
-  // const shuffleQuestions = () => {
-  //   // Fisher-Yates shuffle algorithm
-  //   setQuestions(currentQuestions => {
-  //     const shuffled = [...currentQuestions];
-  //     for (let i = shuffled.length - 1; i > 0; i--) {
-  //       const j = Math.floor(Math.random() * (i + 1));
-  //       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  //     }
-  //     return shuffled;
-  //   });
-  // };
+  const shuffleQuestions = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const response = await axios.post('/api/shuffle-quiz', {}, { withCredentials: true });
+      if (response.data.success && response.data.questions) {
+        setQuestions(response.data.questions);
+        // Reset quiz state to reflect new question order
+        setSelectedAnswers({});
+        setSubmittedAnswers({});
+        setVisibleExplanation(null);
+        setCurrentQuestion(0);
+      } else {
+        setError('Failed to shuffle questions');
+      }
+    } catch (err) {
+      console.error('Error shuffling questions:', err);
+      setError(err.response?.data?.error || 'Failed to shuffle questions');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const moveToNextQuestion = () => {
     if (currentQuestion < questions.length - 1) {
@@ -171,7 +184,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
           isCorrect: wasCorrect,
           reason: nextQuestion.reason
         });
-    } else {
+      } else {
         setVisibleExplanation(null);
       }
       setCurrentQuestion(nextQuestionIndex);
@@ -341,6 +354,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     questions.every(question => submittedAnswers[question.id]);
 
   const stats = calculateStats();
+  const starredQuestionsCount = questions.filter(q => q.starred).length;
 
   // Combine the functions to complete the quiz and show results
   const completeQuiz = async () => {
@@ -405,6 +419,59 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     }
   };
 
+  const handleToggleStar = async (questionId) => {
+    try {
+      const response = await axios.post('/api/toggle-star-question', { questionId }, { withCredentials: true });
+      if (response.data.success && response.data.question) {
+        setQuestions(prevQuestions =>
+          prevQuestions.map(q =>
+            q.id === questionId ? { ...q, starred: response.data.question.starred } : q
+          )
+        );
+
+        // Also update the allPreviousQuestions state if the question exists there
+        setAllPreviousQuestions(prevAllQuestionsSets =>
+          prevAllQuestionsSets.map(questionSet =>
+            questionSet.map(q =>
+              q.id === questionId ? { ...q, starred: response.data.question.starred } : q
+            )
+          )
+        );
+
+      } else {
+        setError('Failed to toggle star status');
+      }
+    } catch (err) {
+      console.error('Error toggling star status:', err);
+      setError(err.response?.data?.error || 'Failed to toggle star status');
+    }
+  };
+
+  const handleStartStarredQuiz = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const response = await axios.post('/api/start-starred-quiz', {}, { withCredentials: true });
+      if (response.data.success && response.data.questions) {
+        setQuestions(response.data.questions);
+        // Reset quiz state for the new starred quiz
+        setSelectedAnswers({});
+        setSubmittedAnswers({});
+        setVisibleExplanation(null);
+        setCurrentQuestion(0);
+        setShowResults(false);
+        setIsPreviewing(false); // Start the quiz immediately
+      } else {
+        setError(response.data.error || 'Failed to start starred quiz');
+      }
+    } catch (err) {
+      console.error('Error starting starred quiz:', err);
+      setError(err.response?.data?.error || 'Failed to start starred quiz');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* App Bar */}
@@ -417,6 +484,15 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                 <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
                   MedStudy.AI
                 </Typography>
+                <Button
+                  onClick={handleBack}
+                  variant="outlined"
+                  startIcon={<HomeIcon />}
+                  size="small"
+                  sx={{ ml: 3 }}
+                >
+                  Back to Home
+                </Button>
               </Box>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Typography variant="body2" color="text.secondary">
@@ -442,29 +518,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       <Container maxWidth="xl" sx={{ py: 4 }}>
         <Card elevation={3} sx={{ maxWidth: 1000, mx: 'auto' }}>
           <CardContent sx={{ p: 4 }}>
-            {/* Header */}
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-              <Typography 
-                variant="h4" 
-                component="h2" 
-                fontWeight="bold"
-                color="text.primary"
-              >
-                {showResults 
-                    ? "Quiz Results" 
-                    : isPreviewing 
-                        ? "Quiz Preview" 
-                        : "Quiz Questions"}
-              </Typography>
-              <Button
-                onClick={handleBack}
-                variant="outlined"
-                startIcon={<HomeIcon />}
-                size="small"
-              >
-                Back to Home
-              </Button>
-            </Box>
 
             {/* Loading State */}
             {isLoading ? (
@@ -609,9 +662,19 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                     size="small"
                                     sx={{ mr: 2 }}
                                   />
-                                  <Typography variant="body1" fontWeight="500">
+                                  <Typography variant="body1" fontWeight="500" sx={{ flexGrow: 1 }}>
                                     Question {index + 1}: {question.text}
                                   </Typography>
+                                  <Button 
+                                    onClick={() => handleToggleStar(question.id)}
+                                    sx={{
+                                      minWidth: 'auto', 
+                                      p: 0, 
+                                      '&:hover': { bgcolor: 'transparent' }
+                                    }}
+                                  >
+                                    {question.starred ? <Star color="warning" /> : <StarBorder color="warning" />}
+                                  </Button>
                                 </Box>
                               
                                 <Box ml={2}>
@@ -748,9 +811,19 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                               size="small"
                                               sx={{ mr: 2 }}
                                             />
-                                            <Typography variant="body1" fontWeight="500">
+                                            <Typography variant="body1" fontWeight="500" sx={{ flexGrow: 1 }}>
                                       Question {qIndex + 1}: {question.text}
                                             </Typography>
+                                            <Button 
+                                              onClick={() => handleToggleStar(question.id)}
+                                              sx={{
+                                                minWidth: 'auto', 
+                                                p: 0, 
+                                                '&:hover': { bgcolor: 'transparent' }
+                                              }}
+                                            >
+                                              {question.starred ? <Star color="warning" /> : <StarBorder color="warning" />}
+                                            </Button>
                                           </Box>
                                           <Box ml={2}>
                                             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
@@ -817,16 +890,16 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                 ) : isPreviewing ? (
                   <Box>
                     <Box display="flex" justifyContent="center" gap={2} mb={4}>
-                      {/* <Button
+                      <Button
                         onClick={shuffleQuestions}
                         variant="contained"
                         color="primary"
                         size="large"
                         startIcon={<ShuffleIcon />}
-                        disabled={questions.length < 2}
+                        disabled={questions.length < 2 || isGeneratingMoreQuestions}
                       >
-                        Shuffle Questions
-                      </Button> */}
+                        Shuffle
+                      </Button>
                       <Button
                         onClick={generateAdditionalQuestions}
                         variant="contained"
@@ -835,7 +908,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         startIcon={isGeneratingMoreQuestions ? <CircularProgress size={24} color="inherit" /> : <Add />}
                         disabled={isGeneratingMoreQuestions}
                       >
-                        {isGeneratingMoreQuestions ? 'Generating...' : 'Generate More Questions'}
+                        {isGeneratingMoreQuestions ? 'Generating...' : 'Generate More'}
                       </Button>
                       <Button
                         onClick={handleStartQuiz}
@@ -845,7 +918,17 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         startIcon={<ArrowForward />}
                         disabled={isGeneratingMoreQuestions}
                       >
-                        Start Answering Quiz Questions
+                        Start Quiz
+                      </Button>
+                      <Button
+                        onClick={handleStartStarredQuiz}
+                        variant="contained"
+                        color="primary"
+                        size="large"
+                        startIcon={<Star />}
+                        disabled={starredQuestionsCount === 0 || isGeneratingMoreQuestions}
+                      >
+                        Start Starred Quiz ({starredQuestionsCount})
                       </Button>
                     </Box>
 
@@ -857,14 +940,24 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         <Paper 
                           key={question.id} 
                           elevation={1} 
-                          sx={{ p: 2, bgcolor: 'action.hover' }}
+                          sx={{ p: 2, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                         >
-                          <Typography variant="body1">
+                          <Typography variant="body1" sx={{ flexGrow: 1 }}>
                             <Box component="span" fontWeight="bold" mr={1}>
                               {index + 1}.
                             </Box>
                             {question.text}
                           </Typography>
+                          <Button 
+                            onClick={() => handleToggleStar(question.id)}
+                            sx={{
+                              minWidth: 'auto', 
+                              p: 0, 
+                              '&:hover': { bgcolor: 'transparent' }
+                            }}
+                          >
+                            {question.starred ? <Star color="warning" /> : <StarBorder color="warning" />}
+                          </Button>
                         </Paper>
                       ))}
                     </Stack>
@@ -965,7 +1058,21 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     {questions.length > 0 && (
                       <Box>
                         <Card elevation={2} sx={{ mb: 4 }}>
-                          <CardContent sx={{ p: 4 }}>
+                          <CardContent sx={{ p: 4, position: 'relative' }}>
+                            <Button 
+                              onClick={() => handleToggleStar(questions[currentQuestion].id)}
+                              sx={{
+                                position: 'absolute',
+                                top: 16,
+                                right: 16,
+                                minWidth: 'auto', 
+                                p: 0,
+                                zIndex: 1,
+                                '&:hover': { bgcolor: 'transparent' }
+                              }}
+                            >
+                              {questions[currentQuestion].starred ? <Star color="warning" /> : <StarBorder color="warning" />}
+                            </Button>
                             <Typography variant="h5" fontWeight="500" gutterBottom>
                             {questions[currentQuestion].text}
                             </Typography>

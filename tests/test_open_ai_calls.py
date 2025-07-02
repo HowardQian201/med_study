@@ -100,9 +100,9 @@ class TestOpenAICalls(unittest.TestCase):
 
         mock_response = MagicMock()
         # The actual code expects a list, not an object with "questions" key
-        mock_questions = [
+        mock_questions = {'questions': [
             {'id': 1, 'text': 'Q1', 'options': ['A', 'B', 'C', 'D'], 'correctAnswer': 1, 'reason': 'R1'}
-        ]
+        ]}
         mock_response.choices[0].message.content = json.dumps(mock_questions)
         mock_client.chat.completions.create.return_value = mock_response
         
@@ -139,7 +139,7 @@ class TestOpenAICalls(unittest.TestCase):
         
         # Response is invalid - missing required fields
         invalid_response = MagicMock()
-        invalid_response.choices[0].message.content = '[{"id": 1}]' # Missing fields
+        invalid_response.choices[0].message.content = '{"questions": [{"id": 1}]}' # Missing fields
         
         mock_client.chat.completions.create.return_value = invalid_response
         mock_upsert.return_value = {"success": True, "count": 1}
@@ -173,7 +173,7 @@ class TestOpenAICalls(unittest.TestCase):
         from backend.open_ai_calls import generate_quiz_questions
         
         mock_response = MagicMock()
-        mock_questions = [{'id': 1, 'text': 'Q1', 'options': ['A', 'B', 'C', 'D'], 'correctAnswer': 1, 'reason': 'R1'}]
+        mock_questions = {'questions': [{'id': 1, 'text': 'Q1', 'options': ['A', 'B', 'C', 'D'], 'correctAnswer': 1, 'reason': 'R1'}]}
         mock_response.choices[0].message.content = json.dumps(mock_questions)
         mock_client.chat.completions.create.return_value = mock_response
         
