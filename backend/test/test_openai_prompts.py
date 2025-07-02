@@ -220,7 +220,58 @@ def generate_quiz_questions(summary_text):
         print(question["reason"])
 
 
+def gpt_summarize_transcript(text, stream=False):
+    print(f"gpt_summarize_transcript called with stream={stream}")
+
+
+
+    prompt = f"""Create a comprehensive, detailed study guide/summary from this transcript that covers ALL content thoroughly.
+
+    CRITICAL REQUIREMENTS:
+    - You MUST read and analyze the ENTIRE transcript from beginning to end, no matter how long it is
+    - Do NOT skip any sections, pages, or content - process everything completely
+    - Include information from EVERY single page, section, paragraph, and sentence of the transcript
+    - Focus on high-yield information for USMLE, COMLEX, and medical school exams
+    - Include ALL key concepts, clinical correlates, and important details mentioned throughout
+    - Provide real-world examples and clinical applications
+    - Make this as comprehensive and detailed as possible - leave nothing out
+    - Structure the content logically with clear organization
+    - If the transcript is very long, take your time to process it completely and thoroughly
+
+    FORMAT REQUIREMENTS:
+    - Use Markdown formatting throughout
+    - Use headers (# for main sections, ## for subsections)
+    - Use bold (**text**) for key terms and important concepts
+    - Use italics (*text*) for emphasis and definitions
+    - Use bulleted lists (-) for key points and examples
+    - Use numbered lists (1.) for step-by-step processes
+    - Include tables where appropriate for comparisons
+    - Use blockquotes (>) for important clinical pearls
+
+    IMPORTANT: This transcript contains {len(text)} characters. Please ensure you process every single character and include all details in your summary.
+
+    Transcript:
+    {text}
+    """
+
+    completion = openai_client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are an expert medical educator and USMLE/COMLEX tutor with extensive experience creating comprehensive study materials. Your goal is to create the most thorough, detailed, and well-organized study guides possible. You excel at identifying high-yield content, explaining complex concepts clearly, and structuring information in ways that maximize learning and retention. Always double-check your responses for accuracy and completeness."},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=1.2,
+        presence_penalty=0.6,
+        stream=stream,
+    )
+    
+
+    # Parse the response into lines
+    text = completion.choices[0].message.content.strip()
+    return text
 
 if __name__ == "__main__":
+    print(gpt_summarize_transcript(summary_text))
+    # generate_quiz_questions(summary_text)
     
-    generate_quiz_questions(summary_text)
+
