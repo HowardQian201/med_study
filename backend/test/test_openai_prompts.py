@@ -209,6 +209,10 @@ def generate_quiz_questions(summary_text):
     
     response_json = json.loads(response_text)
     questions = response_json["questions"]  # Extract the questions array from the response
+    print(f"Type of questions: {type(questions)}")
+    if not isinstance(questions, list) or not questions:
+      raise ValueError("Response is not a list or is empty.")
+    
     print(f"Number of questions: {len(questions)}")
     print(questions[0].keys())
     for question in questions:
@@ -271,7 +275,7 @@ def gpt_summarize_transcript(text, stream=False):
     return text
 
 if __name__ == "__main__":
-    print(gpt_summarize_transcript(summary_text))
-    # generate_quiz_questions(summary_text)
+    # print(gpt_summarize_transcript(summary_text))
+    generate_quiz_questions(summary_text)
     
 

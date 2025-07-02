@@ -172,6 +172,8 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
         if len(correct_questions) > 0:
             previous_questions_text += f"The user previously answered the following questions CORRECTLY and should be tested on different topics mentioned in the summary:\n{json.dumps(correct_questions)}\n"
 
+        print("previous_questions_text")
+        print(previous_questions_text)
         prompt = f"""
         Based on the following medical text summary, create 5 VERY challenging USMLE clinical vignette style \
             multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
@@ -219,7 +221,8 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
 
         response_text = response.choices[0].message.content.strip()
         
-        questions = json.loads(response_text)
+        response_json = json.loads(response_text)
+        questions = response_json["questions"]
         
         # Validate structure
         if not isinstance(questions, list) or not questions:
