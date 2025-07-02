@@ -502,3 +502,43 @@ def update_question_starred_status(question_hash: str, starred_status: bool) -> 
     except Exception as e:
         print(f"Error updating starred status for question {question_hash}: {e}")
         return {"success": False, "error": str(e)}
+
+def star_all_questions_by_hashes(question_hashes: List[str], starred_status: bool) -> Dict[str, Any]:
+    """
+    Updates the 'starred' status of multiple quiz questions in the database.
+    
+    Args:
+        question_hashes (List[str]): List of question hashes to update
+        starred_status (bool): The starred status to set for all questions
+    
+    Returns:
+        Dict containing the result of the bulk update operation
+    """
+    try:
+        if not question_hashes:
+            return {"success": True, "data": [], "updated_count": 0, "requested_count": 0}
+        
+        supabase = get_supabase_client()
+        
+        # Use the 'in_' filter to update multiple records at once
+        result = supabase.table('quiz_questions').update({
+            'starred': starred_status
+        }).in_('hash', question_hashes).execute()
+
+        updated_count = len(result.data) if result.data else 0
+        
+        return {
+            "success": True, 
+            "data": result.data,
+            "updated_count": updated_count,
+            "requested_count": len(question_hashes)
+        }
+
+    except Exception as e:
+        print(f"Error bulk updating starred status for {len(question_hashes)} questions: {e}")
+        return {
+            "success": False, 
+            "error": str(e),
+            "updated_count": 0,
+            "requested_count": len(question_hashes)
+        }

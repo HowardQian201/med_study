@@ -659,6 +659,140 @@ class TestMainRoutes(unittest.TestCase):
         self.assertEqual(len(data['questions']), 1)
         self.assertEqual(data['questions'][0]['id'], '2')
 
+    @patch('backend.database.star_all_questions_by_hashes')
+    def test_star_all_questions_success(self, mock_star_all):
+        """Test successfully starring all questions"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [[
+                {'id': '1', 'starred': False, 'text': 'Question 1', 'hash': 'hash1'},
+                {'id': '2', 'starred': False, 'text': 'Question 2', 'hash': 'hash2'}
+            ]]
+        
+        mock_star_all.return_value = {'success': True, 'updated_count': 2}
+        
+        response = self.client.post('/api/star-all-questions',
+                                   data=json.dumps({'action': 'star'}),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['questions']), 2)
+        self.assertTrue(all(q['starred'] for q in data['questions']))
+        mock_star_all.assert_called_once_with(['hash1', 'hash2'], True)
+
+    def test_star_all_questions_unauthorized(self):
+        """Test starring all questions without authentication"""
+        response = self.client.post('/api/star-all-questions',
+                                   data=json.dumps({'action': 'star'}),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 401)
+        data = json.loads(response.data)
+        self.assertEqual(data['error'], 'Unauthorized')
+
+    def test_star_all_questions_invalid_action(self):
+        """Test starring all questions with invalid action"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [[]]
+        
+        response = self.client.post('/api/star-all-questions',
+                                   data=json.dumps({'action': 'invalid'}),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertEqual(data['error'], 'Invalid action. Must be "star" or "unstar"')
+
+    def test_star_all_questions_default_action(self):
+        """Test starring all questions with default action (star)"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [[
+                {'id': '1', 'starred': False, 'text': 'Question 1', 'hash': 'hash1'}
+            ]]
+        
+        response = self.client.post('/api/star-all-questions',
+                                   data=json.dumps({}),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertTrue(data['questions'][0]['starred'])
+
+    def test_star_all_questions_empty_quiz(self):
+        """Test starring all questions with no quiz questions"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = []
+        
+        response = self.client.post('/api/star-all-questions',
+                                   data=json.dumps({'action': 'star'}),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(data['questions'], [])
+
+    @patch('backend.database.star_all_questions_by_hashes')
+    def test_star_all_questions_database_error(self, mock_star_all):
+        """Test starring all questions with database error"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [[
+                {'id': '1', 'starred': False, 'text': 'Question 1', 'hash': 'hash1'}
+            ]]
+        
+        mock_star_all.return_value = {'success': False, 'error': 'Database error'}
+        
+        response = self.client.post('/api/star-all-questions',
+                                   data=json.dumps({'action': 'star'}),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])  # Should still succeed in session even if DB fails
+        self.assertTrue(data['questions'][0]['starred'])
+
+    @patch('backend.database.star_all_questions_by_hashes')
+    def test_unstar_all_questions_success(self, mock_star_all):
+        """Test successfully unstarring all questions"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [[
+                {'id': '1', 'starred': True, 'text': 'Question 1', 'hash': 'hash1'},
+                {'id': '2', 'starred': True, 'text': 'Question 2', 'hash': 'hash2'}
+            ]]
+        
+        mock_star_all.return_value = {'success': True, 'updated_count': 2}
+        
+        response = self.client.post('/api/star-all-questions',
+                                   data=json.dumps({'action': 'unstar'}),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['questions']), 2)
+        self.assertTrue(all(not q['starred'] for q in data['questions']))
+        mock_star_all.assert_called_once_with(['hash1', 'hash2'], False)
+
+    @patch('backend.database.star_all_questions_by_hashes')
+    def test_unstar_all_questions_no_hashes(self, mock_star_all):
+        """Test unstarring all questions when questions have no hashes"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [[
+                {'id': '1', 'starred': True, 'text': 'Question 1'},  # No hash
+                {'id': '2', 'starred': True, 'text': 'Question 2'}   # No hash
+            ]]
+        
+        response = self.client.post('/api/star-all-questions',
+                                   data=json.dumps({'action': 'unstar'}),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertTrue(all(not q['starred'] for q in data['questions']))
+        mock_star_all.assert_not_called()  # Should not be called if no hashes
+
     def test_serve_index(self):
         """Test serving index page"""
         with patch('backend.main.send_from_directory') as mock_send:

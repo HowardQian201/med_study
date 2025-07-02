@@ -634,5 +634,138 @@ class TestDatabaseFunctions(unittest.TestCase):
         self.assertEqual(result['data']['hash'], 'test_hash')
         self.assertTrue(result['data']['starred'])
 
+    @patch('backend.database.get_supabase_client')
+    def test_star_all_questions_by_hashes_success(self, mock_get_client):
+        """Test successfully updating starred status for multiple questions"""
+        from backend.database import star_all_questions_by_hashes
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        mock_query1 = MagicMock()
+        mock_query2 = MagicMock()
+        mock_result = MagicMock()
+        mock_result.data = [
+            {'hash': 'hash1', 'starred': True},
+            {'hash': 'hash2', 'starred': True}
+        ]
+        
+        mock_client.table.return_value = mock_table
+        mock_table.update.return_value = mock_query1
+        mock_query1.in_.return_value = mock_query2
+        mock_query2.execute.return_value = mock_result
+        mock_get_client.return_value = mock_client
+        
+        result = star_all_questions_by_hashes(['hash1', 'hash2'], True)
+        
+        self.assertTrue(result['success'])
+        self.assertEqual(result['updated_count'], 2)
+        self.assertEqual(result['requested_count'], 2)
+        mock_table.update.assert_called_once_with({'starred': True})
+        mock_query1.in_.assert_called_once_with('hash', ['hash1', 'hash2'])
+
+    @patch('backend.database.get_supabase_client')
+    def test_star_all_questions_by_hashes_empty_list(self, mock_get_client):
+        """Test bulk star update with empty hash list"""
+        from backend.database import star_all_questions_by_hashes
+        
+        result = star_all_questions_by_hashes([], True)
+        
+        self.assertTrue(result['success'])
+        self.assertEqual(result['updated_count'], 0)
+        self.assertEqual(result['requested_count'], 0)
+        self.assertEqual(result['data'], [])
+        mock_get_client.assert_not_called()
+
+    @patch('backend.database.get_supabase_client')
+    def test_star_all_questions_by_hashes_unstar(self, mock_get_client):
+        """Test successfully unstarring multiple questions"""
+        from backend.database import star_all_questions_by_hashes
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        mock_query1 = MagicMock()
+        mock_query2 = MagicMock()
+        mock_result = MagicMock()
+        mock_result.data = [
+            {'hash': 'hash1', 'starred': False},
+            {'hash': 'hash2', 'starred': False},
+            {'hash': 'hash3', 'starred': False}
+        ]
+        
+        mock_client.table.return_value = mock_table
+        mock_table.update.return_value = mock_query1
+        mock_query1.in_.return_value = mock_query2
+        mock_query2.execute.return_value = mock_result
+        mock_get_client.return_value = mock_client
+        
+        result = star_all_questions_by_hashes(['hash1', 'hash2', 'hash3'], False)
+        
+        self.assertTrue(result['success'])
+        self.assertEqual(result['updated_count'], 3)
+        self.assertEqual(result['requested_count'], 3)
+        mock_table.update.assert_called_once_with({'starred': False})
+
+    @patch('backend.database.get_supabase_client')
+    def test_star_all_questions_by_hashes_partial_update(self, mock_get_client):
+        """Test bulk star update where only some questions are found"""
+        from backend.database import star_all_questions_by_hashes
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        mock_query1 = MagicMock()
+        mock_query2 = MagicMock()
+        mock_result = MagicMock()
+        mock_result.data = [{'hash': 'hash1', 'starred': True}]  # Only 1 of 3 found
+        
+        mock_client.table.return_value = mock_table
+        mock_table.update.return_value = mock_query1
+        mock_query1.in_.return_value = mock_query2
+        mock_query2.execute.return_value = mock_result
+        mock_get_client.return_value = mock_client
+        
+        result = star_all_questions_by_hashes(['hash1', 'hash2', 'hash3'], True)
+        
+        self.assertTrue(result['success'])
+        self.assertEqual(result['updated_count'], 1)
+        self.assertEqual(result['requested_count'], 3)
+
+    @patch('backend.database.get_supabase_client')
+    def test_star_all_questions_by_hashes_exception(self, mock_get_client):
+        """Test bulk star update with database exception"""
+        from backend.database import star_all_questions_by_hashes
+        
+        mock_get_client.side_effect = Exception('Database connection failed')
+        
+        result = star_all_questions_by_hashes(['hash1', 'hash2'], True)
+        
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error'], 'Database connection failed')
+        self.assertEqual(result['updated_count'], 0)
+        self.assertEqual(result['requested_count'], 2)
+
+    @patch('backend.database.get_supabase_client')
+    def test_star_all_questions_by_hashes_no_data_response(self, mock_get_client):
+        """Test bulk star update with None response data"""
+        from backend.database import star_all_questions_by_hashes
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        mock_query1 = MagicMock()
+        mock_query2 = MagicMock()
+        mock_result = MagicMock()
+        mock_result.data = None
+        
+        mock_client.table.return_value = mock_table
+        mock_table.update.return_value = mock_query1
+        mock_query1.in_.return_value = mock_query2
+        mock_query2.execute.return_value = mock_result
+        mock_get_client.return_value = mock_client
+        
+        result = star_all_questions_by_hashes(['hash1'], True)
+        
+        self.assertTrue(result['success'])
+        self.assertEqual(result['updated_count'], 0)
+        self.assertEqual(result['requested_count'], 1)
+
 if __name__ == '__main__':
     unittest.main() 
