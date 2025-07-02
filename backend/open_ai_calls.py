@@ -57,31 +57,43 @@ def randomize_answer_choices(question):
 def gpt_summarize_transcript(text, stream=False):
     print(f"gpt_summarize_transcript called with stream={stream}")
     gpt_time_start = time.time()
-    prompt = f"""Provide me with a detailed, thorough, and comprehensive study
-        guide/summary based on this transcript. Be sure to include information for EACH page of the transcript.
-        Provide high yield information that is most likely to be on the USMLE and COMLEX and medical school exams.
-        Ensure all key information and mentioned clinical correlates are included.
-        Give explanations with real world examples. 
-        Make the summary as thorough as a Gemini summary
-        The output should be in Markdown format. 
-        Use Markdown for structure, including headers (#, ##), bold text (**bold**), italics (*italics*), and bulleted lists (-) to organize the information clearly. 
-        
-        
-        Transcript:
-        {text}
-        """
+    prompt = f"""Create a comprehensive, detailed study guide/summary from this transcript that covers ALL content thoroughly.
+
+    CRITICAL REQUIREMENTS:
+    - You MUST read and analyze the ENTIRE transcript from beginning to end, no matter how long it is
+    - Do NOT skip any sections, pages, or content - process everything completely
+    - Include information from EVERY single page, section, paragraph, and sentence of the transcript
+    - Focus on high-yield information for USMLE, COMLEX, and medical school exams
+    - Include ALL key concepts, clinical correlates, and important details mentioned throughout
+    - Provide real-world examples and clinical applications
+    - Make this as comprehensive and detailed as possible - leave nothing out
+    - Structure the content logically with clear organization
+    - If the transcript is very long, take your time to process it completely and thoroughly
+
+    FORMAT REQUIREMENTS:
+    - Use Markdown formatting throughout
+    - Use headers (# for main sections, ## for subsections)
+    - Use bold (**text**) for key terms and important concepts
+    - Use italics (*text*) for emphasis and definitions
+    - Use bulleted lists (-) for key points and examples
+    - Use numbered lists (1.) for step-by-step processes
+    - Include tables where appropriate for comparisons
+    - Use blockquotes (>) for important clinical pearls
+
+    IMPORTANT: This transcript contains {len(text)} characters. Please ensure you process every single character and include all details in your summary.
+
+    Transcript:
+    {text}
+    """
 
     completion = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": "You are a helpful teaching assistant \
-             for US medical school. You are extremely knowledgable and \
-             want your students to succeed by providing them with extremely detailed, thorough, and Gemini level study guides/summaries. \
-             You also double check all your responses for accuracy."},
+            {"role": "system", "content": "You are an expert medical educator and USMLE/COMLEX tutor with extensive experience creating comprehensive study materials. Your goal is to create the most thorough, detailed, and well-organized study guides possible. You excel at identifying high-yield content, explaining complex concepts clearly, and structuring information in ways that maximize learning and retention. Always double-check your responses for accuracy and completeness."},
             {"role": "user", "content": prompt},
         ],
-        temperature = 1.2,
-        presence_penalty = 0.6,
+        temperature=1.2,
+        presence_penalty=0.6,
         stream=stream,
     )
 
