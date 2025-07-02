@@ -542,3 +542,46 @@ def star_all_questions_by_hashes(question_hashes: List[str], starred_status: boo
             "updated_count": 0,
             "requested_count": len(question_hashes)
         }
+
+def delete_question_set_and_questions(content_hash: str, user_id: int) -> Dict[str, Any]:
+    """
+    Deletes a question set and all its associated questions from the database.
+    
+    Args:
+        content_hash (str): The hash of the content/question set to delete
+        user_id (int): The ID of the user (for verification)
+    
+    Returns:
+        Dict containing the result of the delete operation
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # First, get the question set to retrieve the question hashes
+        set_result = supabase.table('question_sets').select("metadata").eq('hash', content_hash).eq('user_id', user_id).maybe_single().execute()
+        
+        if not set_result.data:
+            return {"success": False, "error": "Question set not found or you don't have permission to delete it"}
+        
+        question_hashes = set_result.data.get('metadata', {}).get('question_hashes', [])
+        
+        # Delete all associated questions if they exist
+        if question_hashes:
+            questions_delete_result = supabase.table('quiz_questions').delete().in_('hash', question_hashes).execute()
+            print(f"Deleted {len(questions_delete_result.data) if questions_delete_result.data else 0} questions")
+        
+        # Delete the question set
+        set_delete_result = supabase.table('question_sets').delete().eq('hash', content_hash).eq('user_id', user_id).execute()
+        
+        if not set_delete_result.data:
+            return {"success": False, "error": "Failed to delete question set"}
+        
+        return {
+            "success": True,
+            "deleted_questions": len(question_hashes),
+            "deleted_sets": len(set_delete_result.data)
+        }
+        
+    except Exception as e:
+        print(f"Error deleting question set {content_hash}: {e}")
+        return {"success": False, "error": str(e)}

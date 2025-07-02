@@ -28,6 +28,8 @@ import {
   Save as SaveIcon,
   Cancel as CancelIcon,
   HelpOutline,
+  Delete as DeleteIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { format } from 'date-fns';
@@ -42,6 +44,10 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
   // State for editing titles
   const [editingSetHash, setEditingSetHash] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
+  
+  // State for delete mode
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [deletingSetHash, setDeletingSetHash] = useState(null);
 
   useEffect(() => {
     const fetchSets = async () => {
@@ -161,6 +167,39 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
     }
   };
 
+  const handleDeleteModeToggle = () => {
+    setIsDeleteMode(!isDeleteMode);
+    // Exit edit mode when entering delete mode
+    if (!isDeleteMode) {
+      setEditingSetHash(null);
+      setEditingTitle('');
+    }
+  };
+
+  const handleDeleteSet = async (contentHash) => {
+    setDeletingSetHash(contentHash);
+    setError('');
+    
+    try {
+      const response = await axios.post('/api/delete-question-set', {
+        content_hash: contentHash
+      }, {
+        withCredentials: true
+      });
+
+      if (response.data.success) {
+        // Remove the deleted set from the state
+        setSets(sets.filter(s => s.hash !== contentHash));
+      } else {
+        setError('Failed to delete the study set.');
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'An error occurred while deleting the set.');
+    } finally {
+      setDeletingSetHash(null);
+    }
+  };
+
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -232,11 +271,24 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
 
             {/* Previous Sets */}
             <Paper elevation={2} sx={{ p: 3, width: '100%', maxWidth: 1200 }}>
-                <Box display="flex" alignItems="center" mb={2}>
-                    <History sx={{ mr: 1, color: 'text.secondary' }}/>
-                    <Typography variant="h5" component="h3" fontWeight="600">
-                        Previous Study Sets
-                    </Typography>
+                <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                    <Box display="flex" alignItems="center">
+                        <History sx={{ mr: 1, color: 'text.secondary' }}/>
+                        <Typography variant="h5" component="h3" fontWeight="600">
+                            Previous Study Sets
+                        </Typography>
+                    </Box>
+                    {sets.length > 0 && (
+                        <Button
+                            variant={isDeleteMode ? "contained" : "outlined"}
+                            color={isDeleteMode ? "error" : "primary"}
+                            size="small"
+                            startIcon={isDeleteMode ? <CloseIcon /> : <DeleteIcon />}
+                            onClick={handleDeleteModeToggle}
+                        >
+                            {isDeleteMode ? 'Cancel' : 'Edit Sets'}
+                        </Button>
+                    )}
                 </Box>
 
                 {isLoading ? (
@@ -267,15 +319,44 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                     sx={{ 
                                         '&:hover': {
                                             boxShadow: 4,
-                                            borderColor: 'primary.main'
+                                            borderColor: isDeleteMode ? 'error.main' : 'primary.main'
                                         },
                                         border: '1px solid',
-                                        borderColor: 'divider',
+                                        borderColor: isDeleteMode ? 'error.light' : 'divider',
                                         transition: 'all 0.2s ease',
-                                        height: '100%'
+                                        height: '100%',
+                                        position: 'relative'
                                     }}
                                 >
                                     <CardContent>
+                                        {isDeleteMode && (
+                                            <IconButton
+                                                onClick={() => handleDeleteSet(set.hash)}
+                                                disabled={deletingSetHash === set.hash}
+                                                sx={{
+                                                    position: 'absolute',
+                                                    top: 8,
+                                                    right: 8,
+                                                    backgroundColor: 'error.main',
+                                                    color: 'white',
+                                                    width: 32,
+                                                    height: 32,
+                                                    '&:hover': {
+                                                        backgroundColor: 'error.dark'
+                                                    },
+                                                    '&:disabled': {
+                                                        backgroundColor: 'error.light',
+                                                        color: 'white'
+                                                    }
+                                                }}
+                                            >
+                                                {deletingSetHash === set.hash ? (
+                                                    <CircularProgress size={16} color="inherit" />
+                                                ) : (
+                                                    <CloseIcon fontSize="small" />
+                                                )}
+                                            </IconButton>
+                                        )}
                                         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                                             <Box sx={{ mb: 1 }}>
                                                 {editingSetHash === set.hash ? (
@@ -313,15 +394,19 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                                     <ButtonBase 
                                                         onClick={(e) => {
                                                             e.preventDefault();
-                                                            handleEditStart(set);
+                                                            if (!isDeleteMode) {
+                                                                handleEditStart(set);
+                                                            }
                                                         }}
+                                                        disabled={isDeleteMode}
                                                         sx={{ 
                                                             display: 'block',
                                                             width: '100%',
                                                             borderRadius: 1,
                                                             '&:hover': {
-                                                                backgroundColor: 'action.hover'
-                                                            }
+                                                                backgroundColor: !isDeleteMode ? 'action.hover' : 'transparent'
+                                                            },
+                                                            opacity: isDeleteMode ? 0.6 : 1
                                                         }}
                                                     >
                                                         <Typography variant="h6" fontWeight="bold" sx={{ 
@@ -380,7 +465,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                                     <Button
                                                         variant="contained"
                                                         onClick={() => handleLoadSet(set.hash)}
-                                                        disabled={loadingSet === set.hash}
+                                                        disabled={loadingSet === set.hash || isDeleteMode}
                                                         endIcon={loadingSet === set.hash ? <CircularProgress size={16} /> : <ArrowForward />}
                                                         fullWidth
                                                         sx={{ maxWidth: '200px' }}
