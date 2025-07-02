@@ -355,17 +355,16 @@ def get_full_study_set_data(content_hash: str, user_id: int) -> Dict[str, Any]:
         all_questions = []
         if question_hashes:
             # Get all questions associated with the set
-            questions_result = supabase.table('quiz_questions').select("question, created_at").in_('hash', question_hashes).execute()
+            questions_result = supabase.table('quiz_questions').select("hash, question, created_at, starred").in_('hash', question_hashes).execute()
             
             if questions_result.data:
                 # Get the list of question objects
-                all_questions = [item['question'] for item in questions_result.data]
-
-                # Re-assign unique IDs to all questions to prevent front-end conflicts.
-                # This handles both old integer IDs and ensures uniqueness for the session.
-                for question in all_questions:
-                    if isinstance(question, dict):
-                        question['id'] = str(uuid.uuid4())
+                all_questions = []
+                for item in questions_result.data:
+                    item['question']['id'] = str(uuid.uuid4())
+                    item['question']['starred'] = item['starred']
+                    item['question']['hash'] = item['hash']
+                    all_questions.append(item['question'])
 
         return {
             "success": True,
@@ -482,4 +481,24 @@ def touch_question_set(content_hash: str, user_id: int) -> Dict[str, Any]:
 
     except Exception as e:
         print(f"Error touching question set: {e}")
+        return {"success": False, "error": str(e)}
+
+def update_question_starred_status(question_hash: str, starred_status: bool) -> Dict[str, Any]:
+    """
+    Updates the 'starred' status of a quiz question in the database.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.table('quiz_questions').update({
+            'starred': starred_status
+        }).eq('hash', question_hash).execute()
+
+        if result.data and len(result.data) > 0:
+            return {"success": True, "data": result.data[0]}
+        else:
+            return {"success": False, "error": "Question not found or status already set."}
+
+    except Exception as e:
+        print(f"Error updating starred status for question {question_hash}: {e}")
         return {"success": False, "error": str(e)}

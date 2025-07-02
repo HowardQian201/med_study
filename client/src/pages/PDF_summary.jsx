@@ -274,6 +274,28 @@ const PDF_summary = ({ setIsAuthenticated, user, summary, setSummary }) => {
                 <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
                   MedStudy.AI
                 </Typography>
+                <Button
+                  onClick={async () => {
+                    try {
+                      // Clear session content on the server
+                      await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+                      // Clear summary in App.js state
+                      setSummary('');
+                      // Navigate to home
+                      navigate('/');
+                    } catch (err) {
+                      console.error('Failed to clear session and navigate:', err);
+                      // Still attempt to navigate even if clearing fails
+                      navigate('/');
+                    }
+                  }}
+                  variant="outlined"
+                  startIcon={<HomeIcon />}
+                  size="small"
+                  sx={{ ml: 3 }}
+                >
+                  Back to Home
+                </Button>
               </Box>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Typography variant="body2" color="text.secondary">
@@ -299,37 +321,6 @@ const PDF_summary = ({ setIsAuthenticated, user, summary, setSummary }) => {
       <Container maxWidth="xl" sx={{ py: 3 }}>
         <Card elevation={3} sx={{ maxWidth: '100%', mx: 'auto' }}>
           <CardContent sx={{ p: 4 }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-              <Typography 
-                variant="h4" 
-                component="h2" 
-                fontWeight="bold"
-                color="text.primary"
-              >
-                PDF/Text Summarizer
-              </Typography>
-              <Button
-                onClick={async () => {
-                  try {
-                    // Clear session content on the server
-                    await axios.post('/api/clear-session-content', {}, { withCredentials: true });
-                    // Clear summary in App.js state
-                    setSummary('');
-                    // Navigate to home
-                    navigate('/');
-                  } catch (err) {
-                    console.error('Failed to clear session and navigate:', err);
-                    // Still attempt to navigate even if clearing fails
-                    navigate('/');
-                  }
-                }}
-                variant="outlined"
-                startIcon={<HomeIcon />}
-                size="small"
-              >
-                Back to Home
-              </Button>
-            </Box>
 
             <Box sx={{ display: 'flex', gap: 4, flexDirection: { xs: 'column', md: 'row' } }}>
               {/* Left Column - Upload and Text Input */}

@@ -8,7 +8,7 @@ from .database import (
     check_file_exists, generate_content_hash, generate_file_hash,
     authenticate_user, 
     upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title,
-    touch_question_set
+    touch_question_set, update_question_starred_status
 )
 from flask_session import Session
 import os
@@ -19,6 +19,7 @@ import glob
 import gc
 from io import BytesIO
 import uuid
+import random
 
 # Streaming flag
 STREAMING_ENABLED = True
@@ -692,6 +693,125 @@ def clear_session_content():
         return jsonify({'success': True, 'message': 'Session content cleared.'})
     except Exception as e:
         print(f"Error clearing session content: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/toggle-star-question', methods=['POST'])
+def toggle_star_question():
+    print("toggle_star_question()")
+    try:
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        data = request.json
+        question_id = data.get('questionId')
+
+        if not question_id:
+            return jsonify({'error': 'Question ID is required'}), 400
+            
+        quiz_questions_sets = session.get('quiz_questions', [])
+        updated_question = None
+
+        # Iterate through all question sets and questions to find and update the question
+        for q_set in quiz_questions_sets:
+            for question in q_set:
+                # Make sure question ID is a string for consistent comparison if UUIDs are used.
+                if str(question.get('id')) == str(question_id):
+                    # Toggle the starred status locally in the session
+                    new_starred_status = not question.get('starred', False)
+                    question['starred'] = new_starred_status
+                    updated_question = question
+
+                    # Call database function to persist the change
+                    # Ensure question has a 'hash' to update in DB
+                    question_hash = question.get('hash')
+                    if question_hash:
+                        db_update_result = update_question_starred_status(question_hash, new_starred_status)
+                        if not db_update_result['success']:
+                            print(f"Warning: Failed to update star status in DB for {question_hash}: {db_update_result.get('error')}")
+                    else:
+                        print(f"Warning: Question {question_id} has no hash. Star status not persisted to DB.")
+
+                    break
+            if updated_question:
+                break
+        
+        if updated_question:
+            session['quiz_questions'] = quiz_questions_sets
+            session.modified = True
+            print(f"Toggled star for question ID {question_id}. New status: {updated_question.get('starred')}")
+            return jsonify({'success': True, 'question': updated_question})
+        else:
+            print(f"Question with ID {question_id} not found.")
+            return jsonify({'error': 'Question not found'}), 404
+
+    except Exception as e:
+        print(f"Error toggling star status: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/shuffle-quiz', methods=['POST'])
+def shuffle_quiz():
+    print("shuffle_quiz()")
+    try:
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        quiz_questions_sets = session.get('quiz_questions', [])
+        
+        if not quiz_questions_sets:
+            return jsonify({'success': True, 'questions': []})
+            
+        # Get the latest set of questions
+        latest_questions = quiz_questions_sets[-1]
+        
+        # Apply Fisher-Yates shuffle algorithm
+        shuffled_questions = list(latest_questions)
+        random.shuffle(shuffled_questions)
+        
+        # Update the latest set in session with shuffled questions
+        quiz_questions_sets[-1] = shuffled_questions
+        session['quiz_questions'] = quiz_questions_sets
+        session.modified = True
+        
+        print(f"Shuffled {len(shuffled_questions)} questions in session.")
+        return jsonify({'success': True, 'questions': shuffled_questions})
+    except Exception as e:
+        print(f"Error shuffling quiz questions: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/start-starred-quiz', methods=['POST'])
+def start_starred_quiz():
+    print("start_starred_quiz()")
+    try:
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        quiz_questions_sets = session.get('quiz_questions', [])
+        
+        if not quiz_questions_sets:
+            return jsonify({'success': True, 'questions': []})
+
+        # Get the latest set of questions from the session
+        latest_questions = quiz_questions_sets[-1]
+        
+        # Filter for only starred questions
+        starred_questions = [q for q in latest_questions if q.get('starred', False)]
+
+        if not starred_questions:
+            return jsonify({'success': False, 'error': 'No starred questions found to start a quiz.'}), 400
+            
+        # Replace the current (latest) quiz set in the session with only the starred questions
+        # This effectively creates a new quiz from existing starred questions
+        quiz_questions_sets[-1] = starred_questions
+        session['quiz_questions'] = quiz_questions_sets
+        session.modified = True
+        
+        print(f"Started quiz with {len(starred_questions)} starred questions.")
+        return jsonify({'success': True, 'questions': starred_questions})
+    except Exception as e:
+        print(f"Error starting starred quiz: {str(e)}")
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # Serve the React frontend

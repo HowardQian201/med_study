@@ -2,12 +2,15 @@
 URGENT:
 
 
-Allow editting questions set (remove questions, randomize order)
-Allow users to select number of questions to generate
+change /pdf_summary to /study_session
 
 
 IDEAS:
+Allow users to select number of questions to generate
+Combine quiz sets
 learn (normal flashcards) and test (usmle) sections
+
+Delete questions from set
 implement some progress memorization from previous sessions
 Stream quiz questions
 switch to replit or vercel for deployment
