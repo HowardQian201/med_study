@@ -676,7 +676,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     {!showAllPreviousQuestions && (
                       <Box>
                         <Typography variant="h3" fontWeight="600" gutterBottom>
-                          Question Review
+                          Question Set Review
                         </Typography>
                         <Stack spacing={3}>
                           {stats.questionsWithStatus.map((question, index) => (
@@ -754,31 +754,36 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                         }
                                       }}
                                     >
-                                      <Typography
-                                        variant="body2"
-                                        color={submittedAnswers[question.id]
-                                          ? (index === question.correctAnswer ? 'success.dark' : 'text.primary')
-                                          : (selectedAnswers[question.id] === index ? 'primary.dark' : 'text.primary')
-                                        }
-                                  >
-                                        <Box component="span" fontWeight="600" mr={1}>
-                                          {String.fromCharCode(65 + index)}.
-                                        </Box>
-                                        {cleanOptionText(option)}
+                                      <Stack direction="column" spacing={1}>
                                         {submittedAnswers[question.id] && index === question.correctAnswer && (
-                                          <Chip label="Correct answer" color="success" size="small" sx={{ ml: 1 }} />
+                                          <Chip label="Correct answer" color="success" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
                                     )}
                                         {submittedAnswers[question.id] && selectedAnswers[question.id] === index && selectedAnswers[question.id] !== question.correctAnswer && (
-                                          <Chip label="Your answer" color="error" size="small" sx={{ ml: 1 }} />
+                                          <Chip label="Your answer" color="error" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
                                     )}
-                                      </Typography>
+                                        <Typography
+                                          variant="body2"
+                                          color={submittedAnswers[question.id]
+                                            ? (index === question.correctAnswer ? 'success.dark' : 'text.primary')
+                                          : (selectedAnswers[question.id] === index ? 'primary.dark' : 'text.primary')
+                                        }
+                                          sx={{ textAlign: 'left' }}
+                                        >
+                                          <Box display="flex" alignItems="flex-start" gap={1}>
+                                            <Box component="span" fontWeight="600">
+                                              {String.fromCharCode(65 + index)}.
+                                            </Box>
+                                            {cleanOptionText(option)}
+                                          </Box>
+                                        </Typography>
+                                      </Stack>
                                     </Paper>
                                 ))}
                                   </Box>
                                   
                                   {submittedAnswers[question.id] && (
                                     <Paper elevation={0} sx={{ p: 2, mt: 2, bgcolor: 'action.hover' }}>
-                                      <Typography variant="body2" color="text.primary">
+                                      <Typography variant="body2" color="text.primary" sx={{ textAlign: 'left' }}>
                                         <Box component="span" fontWeight="600">Explanation:</Box> {question.reason}
                                       </Typography>
                                     </Paper>
@@ -899,24 +904,28 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                                         : 'divider'
                                                   }}
                                         >
-                                                  <Typography variant="body2">
-                                                    <Box component="span" fontWeight="600" mr={1}>
-                                                      {String.fromCharCode(65 + optIndex)}.
-                                                    </Box>
-                                                    {cleanOptionText(option)}
+                                                  <Stack direction="column" spacing={1}>
                                                     {isCorrectAnswer && (
-                                                      <Chip label="Correct answer" color="success" size="small" sx={{ ml: 1 }} />
+                                                      <Chip label="Correct answer" color="success" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
                                                     )}
                                                     {wasAnswered && isUserAnswer && !isCorrectAnswer && (
-                                                      <Chip label="Your answer" color="error" size="small" sx={{ ml: 1 }} />
+                                                      <Chip label="Your answer" color="error" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
                                           )}
-                                                  </Typography>
+                                                    <Box display="flex" alignItems="flex-start" gap={1}>
+                                                      <Box component="span" fontWeight="600">
+                                                        {String.fromCharCode(65 + optIndex)}.
+                                                      </Box>
+                                                      <Typography variant="body2" sx={{ textAlign: 'left' }}>
+                                                        {cleanOptionText(option)}
+                                                      </Typography>
+                                                    </Box>
+                                                  </Stack>
                                                 </Paper>
                                               );
                                             })}
                                             </Box>
                                             <Paper elevation={0} sx={{ p: 2, mt: 2, bgcolor: 'action.hover' }}>
-                                              <Typography variant="body2" color="text.primary">
+                                              <Typography variant="body2" color="text.primary" sx={{ textAlign: 'left' }}>
                                                 <Box component="span" fontWeight="600">Explanation:</Box> {question.reason}
                                               </Typography>
                                             </Paper>
@@ -1011,20 +1020,29 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         <Paper 
                           key={question.id} 
                           elevation={1} 
-                          sx={{ p: 2, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                          sx={{
+                            p: 2,
+                            bgcolor: 'action.hover',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 1
+                          }}
                         >
-                          <Typography variant="body1" sx={{ flexGrow: 1 }}>
-                            <Box component="span" fontWeight="bold" mr={1}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1, gap: 2 }}>
+                            <Typography variant="body1" fontWeight="bold" sx={{ flexShrink: 0 }}>
                               {index + 1}.
-                            </Box>
-                            {question.text}
-                          </Typography>
+                            </Typography>
+                            <Typography variant="body1" sx={{ textAlign: 'left' }}>
+                              {question.text}
+                            </Typography>
+                          </Box>
                           <Button 
                             onClick={() => handleToggleStar(question.id)}
                             sx={{
                               minWidth: 'auto', 
                               p: 0, 
-                              '&:hover': { bgcolor: 'transparent' }
+                              '&:hover': { bgcolor: 'transparent' },
                             }}
                           >
                             {question.starred ? <Star color="warning" /> : <StarBorder color="warning" />}
@@ -1181,7 +1199,9 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                       : (isSelected
                                               ? 'primary.main'
                                               : 'divider'),
-                                        bgcolor: 'transparent',
+                                        bgcolor: isSubmitted
+                                            ? (isCorrect || isCorrectAnswer ? 'success.main' : isIncorrect ? 'error.main' : 'transparent')
+                                            : (isSelected ? 'primary.main' : 'transparent'),
                                         cursor: isSubmitted ? 'default' : 'pointer',
                                         transition: 'all 0.2s ease',
                                         '&:hover': isSubmitted ? {} : {
@@ -1195,8 +1215,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                           sx={{
                                             width: 24,
                                             height: 24,
-                                            minWidth: 24,  // Ensure fixed width
-                                            minHeight: 24,  // Ensure fixed height
+                                            minWidth: 24,
+                                            minHeight: 24,
                                             borderRadius: '50%',
                                             border: '2px solid',
                                             borderColor: isSubmitted 
@@ -1204,9 +1224,9 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                                     ? 'success.main'
                                             : isIncorrect
                                                         ? 'error.main'
-                                              : isCorrectAnswer
-                                                            ? 'success.main'
-                                                            : 'divider')
+                                                  : isCorrectAnswer
+                                                                ? 'success.main'
+                                                                : 'divider')
                                         : (isSelected
                                                     ? 'primary.main'
                                                     : 'divider'),
@@ -1216,7 +1236,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            flexShrink: 0,  // Prevent circle from shrinking
+                                            flexShrink: 0,
                                             mr: 2
                                           }}
                                         >
@@ -1232,11 +1252,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                             ? (isCorrect || isCorrectAnswer ? 'success.dark' : isIncorrect ? 'error.dark' : 'text.primary')
                                             : (isSelected ? 'primary.dark' : 'text.primary')
                                           }
+                                          sx={{ textAlign: 'left' }}
                                         >
-                                          <Box component="span" fontWeight="600" mr={1}>
-                                            {String.fromCharCode(65 + index)}.
+                                          <Box display="flex" alignItems="flex-start" gap={1}>
+                                            <Box component="span" fontWeight="600">
+                                              {String.fromCharCode(65 + index)}.
+                                            </Box>
+                                            {cleanOptionText(option)}
                                           </Box>
-                                          {cleanOptionText(option)}
                                         </Typography>
                                       </Box>
                                     </Paper>
@@ -1323,10 +1346,10 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               }}
                               icon={visibleExplanation.isCorrect ? <CheckCircle /> : <Cancel />}
                             >
-                              <Typography variant="h6" gutterBottom>
+                              <Typography variant="h6" gutterBottom sx={{ textAlign: 'left' }}>
                                 {visibleExplanation.isCorrect ? 'Correct!' : 'Incorrect!'}
                               </Typography>
-                              <Typography variant="body1" color="text.primary">
+                              <Typography variant="body1" color="text.primary" sx={{ textAlign: 'left' }}>
                                 {visibleExplanation.reason}
                               </Typography>
                             </Alert>
