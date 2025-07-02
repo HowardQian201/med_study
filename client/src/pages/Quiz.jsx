@@ -472,6 +472,36 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     }
   };
 
+  const handleBulkStarQuestions = async (action) => {
+    try {
+      setError('');
+      const response = await axios.post('/api/star-all-questions', { action }, { withCredentials: true });
+      if (response.data.success && response.data.questions) {
+        setQuestions(response.data.questions);
+        
+        // Also update the allPreviousQuestions state if current questions are part of it
+        setAllPreviousQuestions(prevAllQuestionsSets =>
+          prevAllQuestionsSets.map(questionSet =>
+            questionSet.map(q => {
+              const updatedQuestion = response.data.questions.find(uq => uq.id === q.id);
+              return updatedQuestion ? { ...q, starred: updatedQuestion.starred } : q;
+            })
+          )
+        );
+      } else {
+        const actionText = action === 'star' ? 'star' : 'unstar';
+        setError(`Failed to ${actionText} all questions`);
+      }
+    } catch (err) {
+      const actionText = action === 'star' ? 'starring' : 'unstarring';
+      console.error(`Error ${actionText} all questions:`, err);
+      setError(err.response?.data?.error || `Failed to ${actionText.replace('ing', '')} all questions`);
+    }
+  };
+
+  const handleStarAllQuestions = () => handleBulkStarQuestions('star');
+  const handleUnstarAllQuestions = () => handleBulkStarQuestions('unstar');
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* App Bar */}
@@ -889,17 +919,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                   </Box>
                 ) : isPreviewing ? (
                   <Box>
-                    <Box display="flex" justifyContent="center" gap={2} mb={4}>
-                      <Button
-                        onClick={shuffleQuestions}
-                        variant="contained"
-                        color="primary"
-                        size="large"
-                        startIcon={<ShuffleIcon />}
-                        disabled={questions.length < 2 || isGeneratingMoreQuestions}
-                      >
-                        Shuffle
-                      </Button>
+                    {/* First Row of Buttons */}
+                    <Box display="flex" justifyContent="center" gap={2} mb={2}>
                       <Button
                         onClick={generateAdditionalQuestions}
                         variant="contained"
@@ -923,12 +944,46 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                       <Button
                         onClick={handleStartStarredQuiz}
                         variant="contained"
-                        color="primary"
+                        color="warning"
                         size="large"
                         startIcon={<Star />}
                         disabled={starredQuestionsCount === 0 || isGeneratingMoreQuestions}
                       >
                         Start Starred Quiz ({starredQuestionsCount})
+                      </Button>
+                    </Box>
+
+                    {/* Second Row of Buttons */}
+                    <Box display="flex" justifyContent="center" gap={2} mb={4}>
+                      <Button
+                        onClick={shuffleQuestions}
+                        variant="outlined"
+                        color="primary"
+                        size="large"
+                        startIcon={<ShuffleIcon />}
+                        disabled={questions.length < 2 || isGeneratingMoreQuestions}
+                      >
+                        Shuffle
+                      </Button>
+                      <Button
+                        onClick={handleStarAllQuestions}
+                        variant="outlined"
+                        color="warning"
+                        size="large"
+                        startIcon={<Star />}
+                        disabled={isGeneratingMoreQuestions}
+                      >
+                        All
+                      </Button>
+                      <Button
+                        onClick={handleUnstarAllQuestions}
+                        variant="outlined"
+                        color="warning"
+                        size="large"
+                        startIcon={<StarBorder />}
+                        disabled={isGeneratingMoreQuestions}
+                      >
+                        All
                       </Button>
                     </Box>
 

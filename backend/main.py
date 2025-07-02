@@ -814,6 +814,61 @@ def start_starred_quiz():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/star-all-questions', methods=['POST'])
+def star_all_questions():
+    print("star_all_questions()")
+    try:
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        data = request.json or {}
+        action = data.get('action', 'star')  # 'star' or 'unstar'
+        
+        if action not in ['star', 'unstar']:
+            return jsonify({'error': 'Invalid action. Must be "star" or "unstar"'}), 400
+        
+        quiz_questions_sets = session.get('quiz_questions', [])
+        
+        if not quiz_questions_sets:
+            return jsonify({'success': True, 'questions': []})
+
+        # Get the latest set of questions from the session
+        latest_questions = quiz_questions_sets[-1]
+        
+        # Update all questions based on action
+        starred_status = action == 'star'
+        updated_questions = []
+        question_hashes = []
+        
+        for question in latest_questions:
+            question['starred'] = starred_status
+            updated_questions.append(question)
+            
+            # Collect question hashes for database update
+            question_hash = question.get('hash')
+            if question_hash:
+                question_hashes.append(question_hash)
+        
+        # Update database for all questions
+        if question_hashes:
+            from .database import star_all_questions_by_hashes
+            db_result = star_all_questions_by_hashes(question_hashes, starred_status)
+            if not db_result['success']:
+                print(f"Warning: Failed to update star status in DB: {db_result.get('error')}")
+        
+        # Update session
+        quiz_questions_sets[-1] = updated_questions
+        session['quiz_questions'] = quiz_questions_sets
+        session.modified = True
+        
+        action_verb = "Starred" if starred_status else "Unstarred"
+        print(f"{action_verb} all {len(updated_questions)} questions.")
+        return jsonify({'success': True, 'questions': updated_questions})
+    except Exception as e:
+        print(f"Error {action}ring all questions: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 # Serve the React frontend
 @app.route("/")
 def serve():
