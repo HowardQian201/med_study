@@ -342,8 +342,8 @@ class TestDatabaseFunctions(unittest.TestCase):
         # Mock for the 'quiz_questions' table response
         mock_questions_response = MagicMock()
         mock_questions_response.data = [
-            {'question': {'text': 'Question 1'}},
-            {'question': {'text': 'Question 2'}}
+            {'question': {'text': 'Question 1'}, 'starred': True, 'hash': 'q1'},
+            {'question': {'text': 'Question 2'}, 'starred': False, 'hash': 'q2'}
         ]
         
         # Configure the chain of calls for 'question_sets'
@@ -376,6 +376,7 @@ class TestDatabaseFunctions(unittest.TestCase):
         mock_get_client.return_value = mock_client
 
         result = get_full_study_set_data('test_hash', 1)
+        print(result)
 
         self.assertTrue(result['success'])
         self.assertEqual(result['data']['summary'], 'Test summary for quiz')
