@@ -6,9 +6,9 @@ from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, ge
 from .database import (
     upsert_pdf_results,
     check_file_exists, generate_content_hash, generate_file_hash,
-    authenticate_user, 
+    authenticate_user, star_all_questions_by_hashes,
     upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title,
-    touch_question_set, update_question_starred_status
+    touch_question_set, update_question_starred_status, delete_question_set_and_questions
 )
 from flask_session import Session
 import os
@@ -851,7 +851,6 @@ def star_all_questions():
         
         # Update database for all questions
         if question_hashes:
-            from .database import star_all_questions_by_hashes
             db_result = star_all_questions_by_hashes(question_hashes, starred_status)
             if not db_result['success']:
                 print(f"Warning: Failed to update star status in DB: {db_result.get('error')}")
@@ -866,6 +865,45 @@ def star_all_questions():
         return jsonify({'success': True, 'questions': updated_questions})
     except Exception as e:
         print(f"Error {action}ring all questions: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/delete-question-set', methods=['POST'])
+def delete_question_set():
+    print("delete_question_set()")
+    try:
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        user_id = session['user_id']
+        data = request.json
+        content_hash = data.get('content_hash')
+        
+        if not content_hash:
+            return jsonify({'error': 'content_hash is required'}), 400
+        
+        # Delete the question set and associated questions from database
+        delete_result = delete_question_set_and_questions(content_hash, user_id)
+        
+        if not delete_result['success']:
+            return jsonify({'error': delete_result.get('error', 'Failed to delete question set')}), 500
+        
+        # Clear session data if the deleted set is currently loaded
+        current_content_hash = session.get('content_hash')
+        if current_content_hash == content_hash:
+            session.pop('summary', None)
+            session.pop('quiz_questions', None)
+            session.pop('content_hash', None)
+            session.pop('content_name_list', None)
+            session.pop('short_summary', None)
+            session.pop('total_extracted_text', None)
+            session.modified = True
+            print(f"Cleared session data for deleted set: {content_hash}")
+        
+        return jsonify({'success': True, 'message': 'Question set deleted successfully'})
+        
+    except Exception as e:
+        print(f"Error deleting question set: {str(e)}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
