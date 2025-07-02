@@ -139,11 +139,33 @@ def generate_quiz_questions(summary_text):
             }
         }
     }
-    
+
+    previous_questions = []
+    incorrect_question_ids = []
+
+    is_questions = previous_questions is not None and incorrect_question_ids is not None
+
+    incorrect_questions = []
+    correct_questions = []
+    if is_questions:
+        incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
+        correct_questions = [q['text'] for q in previous_questions if q['id'] not in incorrect_question_ids]
+
+    correct_questions = ["A 40-year-old female presents to the emergency department following an intense kickboxing class. She reports severe generalized muscle pain, weakness, and dark brown urine that began hours after the class. Laboratory tests reveal a significantly elevated creatine kinase level. Which of the following pathophysiological mechanisms is primarily responsible for this patient's symptoms?"]
+    incorrect_questions = ["A 28-year-old male marathon runner is admitted after experiencing debilitating muscle cramps and dark red urine during a long-distance race. His laboratory workup reveals very high creatine kinase levels and hyperkalemia. Given his clinical status, which of the following should be performed as the most critical first step in management?"]
+
+    previous_questions_text = ""
+    if len(incorrect_questions) > 0:
+        previous_questions_text += f"The user previously answered the following questions INCORRECTLY and should be tested on these topics as well as others mentioned in the summary:\n{json.dumps(incorrect_questions)}\n"
+    if len(correct_questions) > 0:
+        previous_questions_text += f"The user previously answered the following questions CORRECTLY and should be tested on different topics mentioned in the summary:\n{json.dumps(correct_questions)}\n"
+
     prompt = f"""
     Based on the following medical text summary, create 5 VERY challenging USMLE clinical vignette style \
         multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
     
+    {previous_questions_text}
+
     For each question:
     1. A clear, specific and challenging clinical vignette stem.
     2. Be in the style of a USMLE clinical vignette (Example clinical vignette stem: "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
@@ -151,7 +173,6 @@ def generate_quiz_questions(summary_text):
     
     Summary:
     {summary_text}
-    
     """
 
     system_prompt = """

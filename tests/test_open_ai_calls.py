@@ -117,45 +117,40 @@ class TestOpenAICalls(unittest.TestCase):
     @patch('backend.open_ai_calls.openai_client')
     @patch('backend.open_ai_calls.check_memory')
     @patch('backend.open_ai_calls.log_memory_usage')
-    def test_generate_quiz_questions_json_cleanup(self, mock_log, mock_check, mock_client):
-        """Test quiz question generation with JSON cleanup"""
+    def test_generate_quiz_questions_json_error(self, mock_log, mock_check, mock_client):
+        """Test quiz question generation with JSON error"""
         from backend.open_ai_calls import generate_quiz_questions
         
         mock_response = MagicMock()
-        mock_questions = [{'id': 1, 'text': 'Q1', 'options': ['A', 'B', 'C', 'D'], 'correctAnswer': 1, 'reason': 'R1'}]
-        json_content = json.dumps(mock_questions)
-        mock_response.choices[0].message.content = f"```json\n{json_content}\n```"
+        # Return invalid JSON that will cause a JSON decode error
+        mock_response.choices[0].message.content = "invalid json content"
         mock_client.chat.completions.create.return_value = mock_response
         
         with patch('backend.open_ai_calls.upsert_quiz_questions_batch', return_value={"success": True, "count": 1}):
-            result, hashes = generate_quiz_questions("Test summary", 1, "content_hash")
-        
-        self.assertEqual(len(result), 1)
+            with self.assertRaises(Exception) as context:
+                generate_quiz_questions("Test summary", 1, "content_hash")
+            self.assertIn("Failed to get valid JSON response from AI", str(context.exception))
     
     @patch('backend.open_ai_calls.openai_client')
     @patch('backend.database.upsert_quiz_questions_batch')
-    def test_generate_quiz_questions_validation_error_retry(self, mock_upsert, mock_client):
-        """Test quiz question generation with validation error retry"""
+    def test_generate_quiz_questions_validation_error(self, mock_upsert, mock_client):
+        """Test quiz question generation with validation error"""
         from backend.open_ai_calls import generate_quiz_questions
         
-        # First response is invalid, second is valid
+        # Response is invalid - missing required fields
         invalid_response = MagicMock()
         invalid_response.choices[0].message.content = '[{"id": 1}]' # Missing fields
         
-        valid_response = MagicMock()
-        valid_response.choices[0].message.content = json.dumps([{
-            "id": 1, "text": "Q1", "options": ["A", "B", "C", "D"],
-            "correctAnswer": 0, "reason": "R"
-        }])
-        
-        mock_client.chat.completions.create.side_effect = [invalid_response, valid_response]
+        mock_client.chat.completions.create.return_value = invalid_response
         mock_upsert.return_value = {"success": True, "count": 1}
         
         with patch('backend.open_ai_calls.check_memory'), patch('backend.open_ai_calls.log_memory_usage'):
-            # It should retry and eventually succeed
-            generate_quiz_questions("Test summary", 1, "content_hash")
-            # The current implementation should retry on validation error
-            self.assertEqual(mock_client.chat.completions.create.call_count, 2)
+            # It should raise an Exception wrapping the validation error
+            with self.assertRaises(Exception) as context:
+                generate_quiz_questions("Test summary", 1, "content_hash")
+            self.assertIn("Failed to get valid JSON response from AI", str(context.exception))
+            # Should only call the API once since there's no retry logic
+            self.assertEqual(mock_client.chat.completions.create.call_count, 1)
         
 
     @patch('backend.open_ai_calls.openai_client')
