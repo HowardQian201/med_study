@@ -1,14 +1,13 @@
 
 URGENT:
 
-Make one generate quiz questions function
-optimize gpt prompts
 
 Allow editting questions set (remove questions, randomize order)
 Allow users to select number of questions to generate
 
 
 IDEAS:
+learn (normal flashcards) and test (usmle) sections
 implement some progress memorization from previous sessions
 Stream quiz questions
 switch to replit or vercel for deployment
