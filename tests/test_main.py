@@ -393,6 +393,272 @@ class TestMainRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json['success'])
     
+    def test_get_all_quiz_questions_unauthorized(self):
+        """Test get all quiz questions without authentication"""
+        response = self.client.get('/api/get-all-quiz-questions')
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_all_quiz_questions_success(self):
+        """Test successful retrieval of all quiz questions"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [
+                [{'id': '1', 'text': 'Q1', 'starred': False}],
+                [{'id': '2', 'text': 'Q2', 'starred': True}]
+            ]
+        
+        response = self.client.get('/api/get-all-quiz-questions')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['questions']), 2)
+
+    def test_get_all_quiz_questions_empty(self):
+        """Test retrieval of all quiz questions when none exist"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = []
+        
+        response = self.client.get('/api/get-all-quiz-questions')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['questions']), 0)
+
+    def test_toggle_star_question_unauthorized(self):
+        """Test toggle star question without authentication"""
+        response = self.client.post('/api/toggle-star-question',
+                                   data=json.dumps({'questionId': 'test_id'}),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 401)
+
+    def test_toggle_star_question_missing_question_id(self):
+        """Test toggle star question without questionId"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+        
+        response = self.client.post('/api/toggle-star-question',
+                                   data=json.dumps({}),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertEqual(data['error'], 'Question ID is required')
+
+    @patch('backend.main.update_question_starred_status')
+    def test_toggle_star_question_success(self, mock_update_db):
+        """Test successful star toggle"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [[
+                {
+                    'id': 'test_id',
+                    'text': 'Test question',
+                    'starred': False,
+                    'hash': 'test_hash'
+                }
+            ]]
+        
+        mock_update_db.return_value = {'success': True}
+        
+        response = self.client.post('/api/toggle-star-question',
+                                   data=json.dumps({'questionId': 'test_id'}),
+                                   content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertTrue(data['question']['starred'])
+        mock_update_db.assert_called_once_with('test_hash', True)
+
+    @patch('backend.main.update_question_starred_status')
+    def test_toggle_star_question_no_hash(self, mock_update_db):
+        """Test star toggle for question without hash"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [[
+                {
+                    'id': 'test_id',
+                    'text': 'Test question',
+                    'starred': False
+                    # No hash field
+                }
+            ]]
+        
+        response = self.client.post('/api/toggle-star-question',
+                                   data=json.dumps({'questionId': 'test_id'}),
+                                   content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertTrue(data['question']['starred'])
+        # Should not call database update since no hash
+        mock_update_db.assert_not_called()
+
+    def test_toggle_star_question_not_found(self):
+        """Test star toggle for non-existent question"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [[
+                {'id': 'other_id', 'text': 'Other question'}
+            ]]
+        
+        response = self.client.post('/api/toggle-star-question',
+                                   data=json.dumps({'questionId': 'test_id'}),
+                                   content_type='application/json')
+        
+        self.assertEqual(response.status_code, 404)
+        data = json.loads(response.data)
+        self.assertEqual(data['error'], 'Question not found')
+
+    @patch('backend.main.update_question_starred_status')
+    def test_toggle_star_question_db_error(self, mock_update_db):
+        """Test star toggle with database error"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [[
+                {
+                    'id': 'test_id',
+                    'text': 'Test question',
+                    'starred': False,
+                    'hash': 'test_hash'
+                }
+            ]]
+        
+        mock_update_db.return_value = {'success': False, 'error': 'DB connection failed'}
+        
+        response = self.client.post('/api/toggle-star-question',
+                                   data=json.dumps({'questionId': 'test_id'}),
+                                   content_type='application/json')
+        
+        # Should still succeed since local state is updated
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertTrue(data['question']['starred'])
+
+    def test_shuffle_quiz_unauthorized(self):
+        """Test shuffle quiz without authentication"""
+        response = self.client.post('/api/shuffle-quiz')
+        self.assertEqual(response.status_code, 401)
+
+    @patch('backend.main.random.shuffle')
+    def test_shuffle_quiz_success(self, mock_shuffle):
+        """Test successful quiz shuffle"""
+        questions = [
+            {'id': '1', 'text': 'Q1'},
+            {'id': '2', 'text': 'Q2'},
+            {'id': '3', 'text': 'Q3'}
+        ]
+        
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [questions.copy()]
+        
+        # Mock shuffle to reverse the list for predictable testing
+        def mock_shuffle_func(lst):
+            lst.reverse()
+        mock_shuffle.side_effect = mock_shuffle_func
+        
+        response = self.client.post('/api/shuffle-quiz')
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['questions']), 3)
+        # Verify shuffle was called
+        mock_shuffle.assert_called_once()
+
+    def test_shuffle_quiz_empty(self):
+        """Test shuffle quiz with no questions"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = []
+        
+        response = self.client.post('/api/shuffle-quiz')
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['questions']), 0)
+
+    def test_start_starred_quiz_unauthorized(self):
+        """Test start starred quiz without authentication"""
+        response = self.client.post('/api/start-starred-quiz')
+        self.assertEqual(response.status_code, 401)
+
+    def test_start_starred_quiz_success(self):
+        """Test successful starred quiz start"""
+        questions = [
+            {'id': '1', 'text': 'Q1', 'starred': True},
+            {'id': '2', 'text': 'Q2', 'starred': False},
+            {'id': '3', 'text': 'Q3', 'starred': True}
+        ]
+        
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [questions.copy()]
+        
+        response = self.client.post('/api/start-starred-quiz')
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['questions']), 2)
+        # Verify only starred questions are returned
+        for question in data['questions']:
+            self.assertTrue(question.get('starred', False))
+
+    def test_start_starred_quiz_no_starred_questions(self):
+        """Test starred quiz start with no starred questions"""
+        questions = [
+            {'id': '1', 'text': 'Q1', 'starred': False},
+            {'id': '2', 'text': 'Q2', 'starred': False}
+        ]
+        
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [questions.copy()]
+        
+        response = self.client.post('/api/start-starred-quiz')
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'No starred questions found to start a quiz.')
+
+    def test_start_starred_quiz_empty_session(self):
+        """Test starred quiz start with empty session"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = []
+        
+        response = self.client.post('/api/start-starred-quiz')
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['questions']), 0)
+
+    def test_start_starred_quiz_default_starred_value(self):
+        """Test starred quiz start with questions missing starred field"""
+        questions = [
+            {'id': '1', 'text': 'Q1'},  # No starred field
+            {'id': '2', 'text': 'Q2', 'starred': True}
+        ]
+        
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['quiz_questions'] = [questions.copy()]
+        
+        response = self.client.post('/api/start-starred-quiz')
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['questions']), 1)
+        self.assertEqual(data['questions'][0]['id'], '2')
+
     def test_serve_index(self):
         """Test serving index page"""
         with patch('backend.main.send_from_directory') as mock_send:

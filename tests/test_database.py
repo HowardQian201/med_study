@@ -461,21 +461,178 @@ class TestDatabaseFunctions(unittest.TestCase):
     
     @patch('backend.database.get_supabase_client')
     def test_touch_question_set_success(self, mock_get_client):
-        """Test successful question set touch (update timestamp)"""
+        """Test successful question set touch"""
         from backend.database import touch_question_set
         
         mock_client = MagicMock()
         mock_table = MagicMock()
         mock_result = MagicMock()
-        mock_result.data = [{'hash': 'test_hash'}]
+        mock_result.data = [{'id': 1, 'hash': 'test_hash'}]
         
         mock_client.table.return_value = mock_table
+        # Mock the complete chain: update().eq().eq().execute()
         mock_table.update.return_value.eq.return_value.eq.return_value.execute.return_value = mock_result
         mock_get_client.return_value = mock_client
         
         result = touch_question_set('test_hash', 1)
         
         self.assertTrue(result['success'])
+        self.assertIn('data', result)  # Function returns 'data', not 'count'
+
+    @patch('backend.database.get_supabase_client')
+    def test_update_question_starred_status_success_star(self, mock_get_client):
+        """Test successful update of question starred status to True"""
+        from backend.database import update_question_starred_status
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        mock_query1 = MagicMock()
+        mock_query2 = MagicMock()
+        mock_result = MagicMock()
+        mock_result.data = [{'hash': 'test_hash', 'starred': True}]
+        
+        mock_client.table.return_value = mock_table
+        mock_table.update.return_value = mock_query1
+        mock_query1.eq.return_value = mock_query2
+        mock_query2.execute.return_value = mock_result
+        mock_get_client.return_value = mock_client
+        
+        result = update_question_starred_status('test_hash', True)
+        
+        self.assertTrue(result['success'])
+        self.assertTrue(result['data']['starred'])
+        mock_table.update.assert_called_once_with({'starred': True})
+        mock_query1.eq.assert_called_once_with('hash', 'test_hash')
+
+    @patch('backend.database.get_supabase_client')
+    def test_update_question_starred_status_success_unstar(self, mock_get_client):
+        """Test successful update of question starred status to False"""
+        from backend.database import update_question_starred_status
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        mock_query1 = MagicMock()
+        mock_query2 = MagicMock()
+        mock_result = MagicMock()
+        mock_result.data = [{'hash': 'test_hash', 'starred': False}]
+        
+        mock_client.table.return_value = mock_table
+        mock_table.update.return_value = mock_query1
+        mock_query1.eq.return_value = mock_query2
+        mock_query2.execute.return_value = mock_result
+        mock_get_client.return_value = mock_client
+        
+        result = update_question_starred_status('test_hash', False)
+        
+        self.assertTrue(result['success'])
+        self.assertFalse(result['data']['starred'])
+        mock_table.update.assert_called_once_with({'starred': False})
+
+    @patch('backend.database.get_supabase_client')
+    def test_update_question_starred_status_not_found(self, mock_get_client):
+        """Test update of question starred status for non-existent question"""
+        from backend.database import update_question_starred_status
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        mock_query1 = MagicMock()
+        mock_query2 = MagicMock()
+        mock_result = MagicMock()
+        mock_result.data = []  # No data returned means question not found
+        
+        mock_client.table.return_value = mock_table
+        mock_table.update.return_value = mock_query1
+        mock_query1.eq.return_value = mock_query2
+        mock_query2.execute.return_value = mock_result
+        mock_get_client.return_value = mock_client
+        
+        result = update_question_starred_status('nonexistent_hash', True)
+        
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error'], 'Question not found or status already set.')
+
+    @patch('backend.database.get_supabase_client')
+    def test_update_question_starred_status_database_error(self, mock_get_client):
+        """Test update of question starred status with database error"""
+        from backend.database import update_question_starred_status
+        
+        mock_get_client.side_effect = Exception("Database connection failed")
+        
+        result = update_question_starred_status('test_hash', True)
+        
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error'], 'Database connection failed')
+
+    @patch('backend.database.get_supabase_client')
+    def test_update_question_starred_status_empty_hash(self, mock_get_client):
+        """Test update of question starred status with empty hash"""
+        from backend.database import update_question_starred_status
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        mock_query1 = MagicMock()
+        mock_query2 = MagicMock()
+        mock_result = MagicMock()
+        mock_result.data = []
+        
+        mock_client.table.return_value = mock_table
+        mock_table.update.return_value = mock_query1
+        mock_query1.eq.return_value = mock_query2
+        mock_query2.execute.return_value = mock_result
+        mock_get_client.return_value = mock_client
+        
+        result = update_question_starred_status('', True)
+        
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error'], 'Question not found or status already set.')
+
+    @patch('backend.database.get_supabase_client')
+    def test_update_question_starred_status_none_hash(self, mock_get_client):
+        """Test update of question starred status with None hash"""
+        from backend.database import update_question_starred_status
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        mock_query1 = MagicMock()
+        mock_query2 = MagicMock()
+        mock_result = MagicMock()
+        mock_result.data = []
+        
+        mock_client.table.return_value = mock_table
+        mock_table.update.return_value = mock_query1
+        mock_query1.eq.return_value = mock_query2
+        mock_query2.execute.return_value = mock_result
+        mock_get_client.return_value = mock_client
+        
+        result = update_question_starred_status(None, True)
+        
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error'], 'Question not found or status already set.')
+
+    @patch('backend.database.get_supabase_client')
+    def test_update_question_starred_status_with_starred_field_in_data(self, mock_get_client):
+        """Test update of question starred status with starred field verification"""
+        from backend.database import update_question_starred_status
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        mock_query1 = MagicMock()
+        mock_query2 = MagicMock()
+        mock_result = MagicMock()
+        mock_result.data = [{'hash': 'test_hash', 'starred': True, 'question': {'text': 'Test Q'}}]
+        
+        mock_client.table.return_value = mock_table
+        mock_table.update.return_value = mock_query1
+        mock_query1.eq.return_value = mock_query2
+        mock_query2.execute.return_value = mock_result
+        mock_get_client.return_value = mock_client
+        
+        result = update_question_starred_status('test_hash', True)
+        
+        self.assertTrue(result['success'])
+        self.assertIn('data', result)
+        self.assertEqual(result['data']['hash'], 'test_hash')
+        self.assertTrue(result['data']['starred'])
 
 if __name__ == '__main__':
     unittest.main() 

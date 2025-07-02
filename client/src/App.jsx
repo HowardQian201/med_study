@@ -4,7 +4,7 @@ import { Box, CircularProgress, Typography } from '@mui/material'
 import { CustomThemeProvider } from './theme/ThemeContext'
 import './App.css'
 import Login from './pages/Login'
-import PDF_summary from './pages/PDF_summary'
+import Study_session from './pages/Study_session'
 import Quiz from './pages/Quiz'
 import Home from './pages/Home'
 import axios from 'axios'
@@ -98,10 +98,10 @@ function App() {
           }
         />
         <Route 
-          path="/pdf_summary" 
+          path="/study_session" 
           element={
             isAuthenticated ? (
-              <PDF_summary 
+              <Study_session 
                 setIsAuthenticated={setIsAuthenticated} 
                 user={user}
                 summary={summary}

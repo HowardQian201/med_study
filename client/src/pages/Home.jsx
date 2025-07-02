@@ -86,12 +86,12 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
     try {
       // Clear session content on the server
       await axios.post('/api/clear-session-content', {}, { withCredentials: true });
-      // Navigate to pdf_summary
-      navigate('/pdf_summary');
+      // Navigate to study_session
+      navigate('/study_session');
     } catch (err) {
       console.error('Failed to clear session content:', err);
       // Still attempt to navigate even if clearing fails
-      navigate('/pdf_summary');
+      navigate('/study_session');
     }
   };
   
