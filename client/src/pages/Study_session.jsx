@@ -292,9 +292,9 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                   variant="outlined"
                   startIcon={<HomeIcon />}
                   size="small"
-                  sx={{ ml: 3 }}
+                  sx={{ ml: 1 }}
                 >
-                  Back to Home
+                  Home
                 </Button>
               </Box>
               <Stack direction="row" spacing={2} alignItems="center">

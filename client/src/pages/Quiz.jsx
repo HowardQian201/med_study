@@ -502,6 +502,11 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const handleStarAllQuestions = () => handleBulkStarQuestions('star');
   const handleUnstarAllQuestions = () => handleBulkStarQuestions('unstar');
 
+  const handleBackToPreview = () => {
+    setIsPreviewing(true);
+    setShowResults(false);
+  };
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* App Bar */}
@@ -519,10 +524,21 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                   variant="outlined"
                   startIcon={<HomeIcon />}
                   size="small"
-                  sx={{ ml: 3 }}
+                  sx={{ ml: 1 }}
                 >
-                  Back to Home
+                  Home
                 </Button>
+                {(showResults || !isPreviewing) && (
+                  <Button
+                    onClick={handleBackToPreview}
+                    variant="outlined"
+                    startIcon={<ArrowBack />}
+                    size="small"
+                    sx={{ ml: 0.25 }}
+                  >
+                    Preview
+                  </Button>
+                )}
               </Box>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Typography variant="body2" color="text.secondary">
@@ -949,7 +965,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         startIcon={<Star />}
                         disabled={starredQuestionsCount === 0 || isGeneratingMoreQuestions}
                       >
-                        Start Starred Quiz ({starredQuestionsCount})
+                        Start Quiz ({starredQuestionsCount})
                       </Button>
                     </Box>
 
@@ -1243,14 +1259,23 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                           </Button>
                           
                           {!submittedAnswers[questions[currentQuestion].id] ? (
-                            <Button
-                              onClick={() => handleSubmitAnswer(questions[currentQuestion].id)}
-                              disabled={selectedAnswers[questions[currentQuestion].id] === undefined}
-                              variant="contained"
-                              color="primary"
-                            >
-                              Submit Answer
-                            </Button>
+                            <Stack direction="row" spacing={2}>
+                              <Button
+                                onClick={moveToNextQuestion}
+                                variant="outlined"
+                                startIcon={<ArrowForward />}
+                              >
+                                Skip
+                              </Button>
+                              <Button
+                                onClick={() => handleSubmitAnswer(questions[currentQuestion].id)}
+                                disabled={selectedAnswers[questions[currentQuestion].id] === undefined}
+                                variant="contained"
+                                color="primary"
+                              >
+                                Submit Answer
+                              </Button>
+                            </Stack>
                           ) : (
                             currentQuestion >= questions.length - 1 ? (
                               <Button
