@@ -35,7 +35,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Link } from '@mui/material';
 
-const PDF_summary = ({ setIsAuthenticated, user, summary, setSummary }) => {
+const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const navigate = useNavigate();
   const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
@@ -639,4 +639,4 @@ const PDF_summary = ({ setIsAuthenticated, user, summary, setSummary }) => {
   );
 };
 
-export default PDF_summary; 
+export default Study_session; 
