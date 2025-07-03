@@ -767,5 +767,242 @@ class TestDatabaseFunctions(unittest.TestCase):
         self.assertEqual(result['updated_count'], 0)
         self.assertEqual(result['requested_count'], 1)
 
+    @patch('backend.database.get_supabase_client')
+    def test_star_all_questions_by_hashes_no_data_response(self, mock_get_client):
+        """Test star_all_questions_by_hashes when database returns no data"""
+        from backend.database import star_all_questions_by_hashes
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        mock_query1 = MagicMock()
+        mock_query2 = MagicMock()
+        mock_result = MagicMock()
+        mock_result.data = None
+        
+        mock_client.table.return_value = mock_table
+        mock_table.update.return_value = mock_query1
+        mock_query1.in_.return_value = mock_query2
+        mock_query2.execute.return_value = mock_result
+        mock_get_client.return_value = mock_client
+        
+        result = star_all_questions_by_hashes(['hash1', 'hash2'], True)
+        
+        self.assertTrue(result['success'])
+        self.assertEqual(result['updated_count'], 0)
+        self.assertEqual(result['requested_count'], 2)
+
+    @patch('backend.database.get_supabase_client')
+    def test_delete_question_set_and_questions_success(self, mock_get_client):
+        """Test successful deletion of question set and associated questions"""
+        from backend.database import delete_question_set_and_questions
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        
+        # Mock the question set retrieval
+        mock_select_query = MagicMock()
+        mock_eq_query1 = MagicMock()
+        mock_eq_query2 = MagicMock()
+        mock_maybe_single_query = MagicMock()
+        mock_set_result = MagicMock()
+        mock_set_result.data = {
+            'metadata': {
+                'question_hashes': ['q_hash1', 'q_hash2', 'q_hash3']
+            }
+        }
+        
+        # Mock the questions deletion
+        mock_questions_delete_query = MagicMock()
+        mock_questions_in_query = MagicMock()
+        mock_questions_result = MagicMock()
+        mock_questions_result.data = [{'hash': 'q_hash1'}, {'hash': 'q_hash2'}, {'hash': 'q_hash3'}]
+        
+        # Mock the question set deletion
+        mock_set_delete_query = MagicMock()
+        mock_set_eq_query1 = MagicMock()
+        mock_set_eq_query2 = MagicMock()
+        mock_set_delete_result = MagicMock()
+        mock_set_delete_result.data = [{'hash': 'test_hash'}]
+        
+        def table_side_effect(table_name):
+            if table_name == 'question_sets':
+                mock_table.select.return_value = mock_select_query
+                mock_select_query.eq.return_value = mock_eq_query1
+                mock_eq_query1.eq.return_value = mock_eq_query2
+                mock_eq_query2.maybe_single.return_value = mock_maybe_single_query
+                mock_maybe_single_query.execute.return_value = mock_set_result
+                
+                mock_table.delete.return_value = mock_set_delete_query
+                mock_set_delete_query.eq.return_value = mock_set_eq_query1
+                mock_set_eq_query1.eq.return_value = mock_set_eq_query2
+                mock_set_eq_query2.execute.return_value = mock_set_delete_result
+                
+            elif table_name == 'quiz_questions':
+                mock_table.delete.return_value = mock_questions_delete_query
+                mock_questions_delete_query.in_.return_value = mock_questions_in_query
+                mock_questions_in_query.execute.return_value = mock_questions_result
+                
+            return mock_table
+        
+        mock_client.table.side_effect = table_side_effect
+        mock_get_client.return_value = mock_client
+        
+        result = delete_question_set_and_questions('test_hash', 123)
+        
+        self.assertTrue(result['success'])
+        self.assertEqual(result['deleted_questions'], 3)
+        self.assertEqual(result['deleted_sets'], 1)
+
+    @patch('backend.database.get_supabase_client')
+    def test_delete_question_set_and_questions_not_found(self, mock_get_client):
+        """Test deletion when question set is not found"""
+        from backend.database import delete_question_set_and_questions
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        mock_select_query = MagicMock()
+        mock_eq_query1 = MagicMock()
+        mock_eq_query2 = MagicMock()
+        mock_maybe_single_query = MagicMock()
+        mock_set_result = MagicMock()
+        mock_set_result.data = None  # No question set found
+        
+        mock_client.table.return_value = mock_table
+        mock_table.select.return_value = mock_select_query
+        mock_select_query.eq.return_value = mock_eq_query1
+        mock_eq_query1.eq.return_value = mock_eq_query2
+        mock_eq_query2.maybe_single.return_value = mock_maybe_single_query
+        mock_maybe_single_query.execute.return_value = mock_set_result
+        mock_get_client.return_value = mock_client
+        
+        result = delete_question_set_and_questions('nonexistent_hash', 123)
+        
+        self.assertFalse(result['success'])
+        self.assertIn("Question set not found", result['error'])
+
+    @patch('backend.database.get_supabase_client')
+    def test_delete_question_set_and_questions_no_questions(self, mock_get_client):
+        """Test deletion of question set with no associated questions"""
+        from backend.database import delete_question_set_and_questions
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        
+        # Mock the question set retrieval with empty question_hashes
+        mock_select_query = MagicMock()
+        mock_eq_query1 = MagicMock()
+        mock_eq_query2 = MagicMock()
+        mock_maybe_single_query = MagicMock()
+        mock_set_result = MagicMock()
+        mock_set_result.data = {
+            'metadata': {
+                'question_hashes': []  # No questions
+            }
+        }
+        
+        # Mock the question set deletion
+        mock_set_delete_query = MagicMock()
+        mock_set_eq_query1 = MagicMock()
+        mock_set_eq_query2 = MagicMock()
+        mock_set_delete_result = MagicMock()
+        mock_set_delete_result.data = [{'hash': 'test_hash'}]
+        
+        def table_side_effect(table_name):
+            if table_name == 'question_sets':
+                mock_table.select.return_value = mock_select_query
+                mock_select_query.eq.return_value = mock_eq_query1
+                mock_eq_query1.eq.return_value = mock_eq_query2
+                mock_eq_query2.maybe_single.return_value = mock_maybe_single_query
+                mock_maybe_single_query.execute.return_value = mock_set_result
+                
+                mock_table.delete.return_value = mock_set_delete_query
+                mock_set_delete_query.eq.return_value = mock_set_eq_query1
+                mock_set_eq_query1.eq.return_value = mock_set_eq_query2
+                mock_set_eq_query2.execute.return_value = mock_set_delete_result
+                
+            return mock_table
+        
+        mock_client.table.side_effect = table_side_effect
+        mock_get_client.return_value = mock_client
+        
+        result = delete_question_set_and_questions('test_hash', 123)
+        
+        self.assertTrue(result['success'])
+        self.assertEqual(result['deleted_questions'], 0)
+        self.assertEqual(result['deleted_sets'], 1)
+
+    @patch('backend.database.get_supabase_client')
+    def test_delete_question_set_and_questions_set_deletion_failed(self, mock_get_client):
+        """Test when question set deletion fails"""
+        from backend.database import delete_question_set_and_questions
+        
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+        
+        # Mock the question set retrieval
+        mock_select_query = MagicMock()
+        mock_eq_query1 = MagicMock()
+        mock_eq_query2 = MagicMock()
+        mock_maybe_single_query = MagicMock()
+        mock_set_result = MagicMock()
+        mock_set_result.data = {
+            'metadata': {
+                'question_hashes': ['q_hash1']
+            }
+        }
+        
+        # Mock the questions deletion (successful)
+        mock_questions_delete_query = MagicMock()
+        mock_questions_in_query = MagicMock()
+        mock_questions_result = MagicMock()
+        mock_questions_result.data = [{'hash': 'q_hash1'}]
+        
+        # Mock the question set deletion (failed)
+        mock_set_delete_query = MagicMock()
+        mock_set_eq_query1 = MagicMock()
+        mock_set_eq_query2 = MagicMock()
+        mock_set_delete_result = MagicMock()
+        mock_set_delete_result.data = None  # Deletion failed
+        
+        def table_side_effect(table_name):
+            if table_name == 'question_sets':
+                mock_table.select.return_value = mock_select_query
+                mock_select_query.eq.return_value = mock_eq_query1
+                mock_eq_query1.eq.return_value = mock_eq_query2
+                mock_eq_query2.maybe_single.return_value = mock_maybe_single_query
+                mock_maybe_single_query.execute.return_value = mock_set_result
+                
+                mock_table.delete.return_value = mock_set_delete_query
+                mock_set_delete_query.eq.return_value = mock_set_eq_query1
+                mock_set_eq_query1.eq.return_value = mock_set_eq_query2
+                mock_set_eq_query2.execute.return_value = mock_set_delete_result
+                
+            elif table_name == 'quiz_questions':
+                mock_table.delete.return_value = mock_questions_delete_query
+                mock_questions_delete_query.in_.return_value = mock_questions_in_query
+                mock_questions_in_query.execute.return_value = mock_questions_result
+                
+            return mock_table
+        
+        mock_client.table.side_effect = table_side_effect
+        mock_get_client.return_value = mock_client
+        
+        result = delete_question_set_and_questions('test_hash', 123)
+        
+        self.assertFalse(result['success'])
+        self.assertIn("Failed to delete question set", result['error'])
+
+    @patch('backend.database.get_supabase_client')
+    def test_delete_question_set_and_questions_database_error(self, mock_get_client):
+        """Test deletion with database error"""
+        from backend.database import delete_question_set_and_questions
+        
+        mock_get_client.side_effect = Exception("Database connection failed")
+        
+        result = delete_question_set_and_questions('test_hash', 123)
+        
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error'], "Database connection failed")
+
 if __name__ == '__main__':
     unittest.main() 

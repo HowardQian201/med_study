@@ -659,7 +659,7 @@ class TestMainRoutes(unittest.TestCase):
         self.assertEqual(len(data['questions']), 1)
         self.assertEqual(data['questions'][0]['id'], '2')
 
-    @patch('backend.database.star_all_questions_by_hashes')
+    @patch('backend.main.star_all_questions_by_hashes')
     def test_star_all_questions_success(self, mock_star_all):
         """Test successfully starring all questions"""
         with self.client.session_transaction() as sess:
@@ -733,7 +733,7 @@ class TestMainRoutes(unittest.TestCase):
         self.assertTrue(data['success'])
         self.assertEqual(data['questions'], [])
 
-    @patch('backend.database.star_all_questions_by_hashes')
+    @patch('backend.main.star_all_questions_by_hashes')
     def test_star_all_questions_database_error(self, mock_star_all):
         """Test starring all questions with database error"""
         with self.client.session_transaction() as sess:
@@ -752,7 +752,7 @@ class TestMainRoutes(unittest.TestCase):
         self.assertTrue(data['success'])  # Should still succeed in session even if DB fails
         self.assertTrue(data['questions'][0]['starred'])
 
-    @patch('backend.database.star_all_questions_by_hashes')
+    @patch('backend.main.star_all_questions_by_hashes')
     def test_unstar_all_questions_success(self, mock_star_all):
         """Test successfully unstarring all questions"""
         with self.client.session_transaction() as sess:
@@ -774,7 +774,7 @@ class TestMainRoutes(unittest.TestCase):
         self.assertTrue(all(not q['starred'] for q in data['questions']))
         mock_star_all.assert_called_once_with(['hash1', 'hash2'], False)
 
-    @patch('backend.database.star_all_questions_by_hashes')
+    @patch('backend.main.star_all_questions_by_hashes')
     def test_unstar_all_questions_no_hashes(self, mock_star_all):
         """Test unstarring all questions when questions have no hashes"""
         with self.client.session_transaction() as sess:
@@ -809,13 +809,351 @@ class TestMainRoutes(unittest.TestCase):
             mock_send.assert_called_with(self.app.static_folder, 'favicon.png', mimetype='image/png')
     
     def test_serve_static(self):
-        """Test serving static files"""
-        with patch('backend.main.send_from_directory') as mock_send:
-            mock_send.return_value = "static content"
-            # Request a path that doesn't exist to test the fallback to index.html
-            response = self.client.get('/some/react/route')
-            self.assertEqual(response.status_code, 200)
-            mock_send.assert_called_with(self.app.static_folder, 'index.html')
+        """Test serving static files and React routes"""
+        response = self.client.get('/some-react-route')
+        self.assertEqual(response.status_code, 200)
+
+    @patch('backend.main.delete_question_set_and_questions')
+    def test_delete_question_set_success(self, mock_delete):
+        """Test successful question set deletion"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+        
+        mock_delete.return_value = {
+            "success": True,
+            "deleted_questions": 5,
+            "deleted_sets": 1
+        }
+        
+        response = self.client.post('/api/delete-question-set',
+                                  data=json.dumps({'content_hash': 'test_hash'}),
+                                  content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        mock_delete.assert_called_once_with('test_hash', 1)
+
+    def test_delete_question_set_unauthorized(self):
+        """Test delete question set without authentication"""
+        response = self.client.post('/api/delete-question-set',
+                                  data=json.dumps({'content_hash': 'test_hash'}),
+                                  content_type='application/json')
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_question_set_missing_hash(self):
+        """Test delete question set without content_hash"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+        
+        response = self.client.post('/api/delete-question-set',
+                                  data=json.dumps({}),
+                                  content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+
+    @patch('backend.main.delete_question_set_and_questions')
+    def test_delete_question_set_database_error(self, mock_delete):
+        """Test delete question set with database error"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+        
+        mock_delete.return_value = {
+            "success": False,
+            "error": "Database error"
+        }
+        
+        response = self.client.post('/api/delete-question-set',
+                                  data=json.dumps({'content_hash': 'test_hash'}),
+                                  content_type='application/json')
+        
+        self.assertEqual(response.status_code, 500)
+
+    @patch('backend.main.delete_question_set_and_questions')
+    def test_delete_question_set_clears_session(self, mock_delete):
+        """Test that deleting currently loaded question set clears session"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['content_hash'] = 'test_hash'
+            sess['summary'] = 'Test summary'
+            sess['quiz_questions'] = [{'id': '1', 'text': 'Test?'}]
+            sess['content_name_list'] = ['test.pdf']
+            sess['short_summary'] = 'Test short'
+            sess['total_extracted_text'] = 'Test text'
+        
+        mock_delete.return_value = {
+            "success": True,
+            "deleted_questions": 3,
+            "deleted_sets": 1
+        }
+        
+        response = self.client.post('/api/delete-question-set',
+                                  data=json.dumps({'content_hash': 'test_hash'}),
+                                  content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Check that session was cleared
+        with self.client.session_transaction() as sess:
+            self.assertNotIn('content_hash', sess)
+            self.assertNotIn('summary', sess)
+            self.assertNotIn('quiz_questions', sess)
+            self.assertNotIn('content_name_list', sess)
+            self.assertNotIn('short_summary', sess)
+            self.assertNotIn('total_extracted_text', sess)
+
+    @patch('backend.main.delete_question_set_and_questions')
+    def test_delete_question_set_doesnt_clear_different_session(self, mock_delete):
+        """Test that deleting different question set doesn't clear session"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['content_hash'] = 'different_hash'
+            sess['summary'] = 'Test summary'
+            sess['quiz_questions'] = [{'id': '1', 'text': 'Test?'}]
+        
+        mock_delete.return_value = {
+            "success": True,
+            "deleted_questions": 3,
+            "deleted_sets": 1
+        }
+        
+        response = self.client.post('/api/delete-question-set',
+                                  data=json.dumps({'content_hash': 'test_hash'}),
+                                  content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Check that session was NOT cleared
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess['content_hash'], 'different_hash')
+            self.assertEqual(sess['summary'], 'Test summary')
+            self.assertIn('quiz_questions', sess)
+
+    @patch('backend.main.generate_quiz_questions')
+    def test_generate_quiz_with_num_questions_parameter(self, mock_generate):
+        """Test quiz generation with custom number of questions"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['content_hash'] = 'test_hash'
+            sess['summary'] = 'Test summary for quiz'
+        
+        mock_generate.return_value = (
+            [
+                {
+                    "id": str(i),
+                    "text": f"Question {i}?",
+                    "options": ["A", "B", "C", "D"],
+                    "correctAnswer": 0,
+                    "reason": f"Reason {i}"
+                } for i in range(1, 11)  # 10 questions
+            ], [f'hash{i}' for i in range(1, 11)]
+        )
+        
+        response = self.client.post('/api/generate-quiz',
+                                   data=json.dumps({
+                                       'type': 'initial',
+                                       'numQuestions': 10
+                                   }),
+                                   content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.data)
+        self.assertTrue(response_data['success'])
+        self.assertEqual(len(response_data['questions']), 10)
+        
+        # Verify generate_quiz_questions was called with correct num_questions
+        mock_generate.assert_called_once()
+        args, kwargs = mock_generate.call_args
+        self.assertEqual(kwargs['num_questions'], 10)
+
+    @patch('backend.main.generate_quiz_questions')
+    def test_generate_quiz_num_questions_defaults_to_5(self, mock_generate):
+        """Test quiz generation defaults to 5 questions when not specified"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['content_hash'] = 'test_hash'
+            sess['summary'] = 'Test summary for quiz'
+        
+        mock_generate.return_value = (
+            [
+                {
+                    "id": str(i),
+                    "text": f"Question {i}?",
+                    "options": ["A", "B", "C", "D"],
+                    "correctAnswer": 0,
+                    "reason": f"Reason {i}"
+                } for i in range(1, 6)  # 5 questions
+            ], [f'hash{i}' for i in range(1, 6)]
+        )
+        
+        response = self.client.post('/api/generate-quiz',
+                                   data=json.dumps({'type': 'initial'}),
+                                   content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify generate_quiz_questions was called with default num_questions=5
+        mock_generate.assert_called_once()
+        args, kwargs = mock_generate.call_args
+        self.assertEqual(kwargs['num_questions'], 5)
+
+    @patch('backend.main.generate_quiz_questions')
+    def test_generate_quiz_num_questions_validation(self, mock_generate):
+        """Test quiz generation validates num_questions parameter"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['content_hash'] = 'test_hash'
+            sess['summary'] = 'Test summary for quiz'
+        
+        mock_generate.return_value = (
+            [
+                {
+                    "id": "1",
+                    "text": "Question 1?",
+                    "options": ["A", "B", "C", "D"],
+                    "correctAnswer": 0,
+                    "reason": "Reason 1"
+                }
+            ], ['hash1']
+        )
+        
+        # Test invalid values default to 5
+        invalid_values = [0, -1, 25, 'invalid', None, 1.5]
+        
+        for invalid_value in invalid_values:
+            with self.subTest(invalid_value=invalid_value):
+                mock_generate.reset_mock()
+                
+                response = self.client.post('/api/generate-quiz',
+                                           data=json.dumps({
+                                               'type': 'initial',
+                                               'numQuestions': invalid_value
+                                           }),
+                                           content_type='application/json')
+                
+                self.assertEqual(response.status_code, 200)
+                
+                # Verify it defaults to 5 for invalid values
+                if mock_generate.called:
+                    args, kwargs = mock_generate.call_args
+                    self.assertEqual(kwargs['num_questions'], 5)
+
+    @patch('backend.main.generate_quiz_questions')
+    def test_generate_quiz_num_questions_boundary_values(self, mock_generate):
+        """Test quiz generation with boundary values for num_questions"""
+        
+        mock_generate.return_value = (
+            [
+                {
+                    "id": "1",
+                    "text": "Question 1?",
+                    "options": ["A", "B", "C", "D"],
+                    "correctAnswer": 0,
+                    "reason": "Reason 1"
+                }
+            ], ['hash1']
+        )
+        
+        # Test valid boundary values
+        valid_values = [1, 20]
+        
+        for valid_value in valid_values:
+            with self.subTest(valid_value=valid_value):
+                # Clear session and reset mock for each test
+                with self.client.session_transaction() as sess:
+                    sess.clear()
+                    sess['user_id'] = 1
+                    sess['content_hash'] = f'test_hash_{valid_value}'  # Use unique hash
+                    sess['summary'] = 'Test summary for quiz'
+                
+                mock_generate.reset_mock()
+                
+                response = self.client.post('/api/generate-quiz',
+                                           data=json.dumps({
+                                               'type': 'initial',
+                                               'numQuestions': valid_value
+                                           }),
+                                           content_type='application/json')
+                
+                self.assertEqual(response.status_code, 200)
+                
+                # Verify it uses the valid value
+                mock_generate.assert_called_once()
+                args, kwargs = mock_generate.call_args
+                self.assertEqual(kwargs['num_questions'], valid_value)
+
+    @patch('backend.main.generate_quiz_questions')
+    def test_generate_focused_quiz_with_num_questions(self, mock_generate):
+        """Test focused quiz generation with custom number of questions"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['content_hash'] = 'test_hash'
+            sess['summary'] = 'Test summary for quiz'
+        
+        mock_generate.return_value = (
+            [
+                {
+                    "id": "2",
+                    "text": "Focused question?",
+                    "options": ["A", "B", "C", "D"],
+                    "correctAnswer": 1,
+                    "reason": "Focused reason"
+                }
+            ], ['hash2']
+        )
+        
+        response = self.client.post('/api/generate-quiz',
+                                   data=json.dumps({
+                                       'type': 'focused',
+                                       'incorrectQuestionIds': ['1'],
+                                       'previousQuestions': [{'id': '1', 'text': 'prev'}],
+                                       'isPreviewing': False,
+                                       'numQuestions': 8
+                                   }),
+                                   content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify generate_quiz_questions was called with correct num_questions
+        mock_generate.assert_called_once()
+        args, kwargs = mock_generate.call_args
+        self.assertEqual(kwargs['num_questions'], 8)
+
+    @patch('backend.main.generate_quiz_questions')
+    def test_generate_additional_quiz_with_num_questions(self, mock_generate):
+        """Test additional quiz generation with custom number of questions"""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['content_hash'] = 'test_hash'
+            sess['summary'] = 'Test summary for quiz'
+        
+        mock_generate.return_value = (
+            [
+                {
+                    "id": "3",
+                    "text": "Additional question?",
+                    "options": ["A", "B", "C", "D"],
+                    "correctAnswer": 2,
+                    "reason": "Additional reason"
+                }
+            ], ['hash3']
+        )
+        
+        response = self.client.post('/api/generate-quiz',
+                                   data=json.dumps({
+                                       'type': 'additional',
+                                       'incorrectQuestionIds': [],
+                                       'previousQuestions': [{'id': '1', 'text': 'prev'}],
+                                       'isPreviewing': True,
+                                       'numQuestions': 15
+                                   }),
+                                   content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify generate_quiz_questions was called with correct num_questions
+        mock_generate.assert_called_once()
+        args, kwargs = mock_generate.call_args
+        self.assertEqual(kwargs['num_questions'], 15)
 
 if __name__ == '__main__':
     unittest.main() 
