@@ -109,7 +109,7 @@ def gpt_summarize_transcript(text, stream=False):
     text = completion.choices[0].message.content.strip()
     return text
 
-def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_question_ids=None, previous_questions=None, num_questions=5):
+def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_question_ids=None, previous_questions=None, num_questions=5, is_quiz_mode=False):
     """Generate quiz questions from a summary text using OpenAI's API
     
     Args:

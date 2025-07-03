@@ -99,22 +99,24 @@ def generate_file_hash(file_content: bytes, algorithm: str = "sha256") -> str:
     hash_obj.update(file_content)
     return hash_obj.hexdigest()
 
-def generate_content_hash(content_set: set, user_id: int, algorithm: str = "sha256") -> str:
+def generate_content_hash(content_set: set, user_id: int, is_quiz_mode: bool = False, algorithm: str = "sha256") -> str:
     """
-    Generate a unique hash for a set of content (files, text, etc.) that includes the user_id.
+    Generate a unique hash for a set of content (files, text, etc.) that includes the user_id and quiz mode.
     
     Args:
         content_set (set): Set of content items (bytes or strings)
         user_id (int): User ID to include in the hash
+        is_quiz_mode (bool): Whether this is quiz mode (affects hash generation)
         algorithm (str): Hashing algorithm to use (default: "sha256")
     
     Returns:
-        str: Hexadecimal hash string that uniquely identifies the combined content for this user
+        str: Hexadecimal hash string that uniquely identifies the combined content for this user and mode
     """
     hash_obj = hashlib.new(algorithm)
     
-    # Include user_id in the hash to make it unique per user
+    # Include user_id and quiz mode in the hash to make it unique per user and mode
     hash_obj.update(str(user_id).encode('utf-8'))
+    hash_obj.update(str(is_quiz_mode).encode('utf-8'))
     
     # Sort the content to ensure consistent hashing regardless of set order
     sorted_content = sorted(content_set, key=lambda x: x if isinstance(x, bytes) else str(x).encode('utf-8'))
@@ -228,7 +230,8 @@ def upsert_question_set(
     content_names: List[str], 
     total_extracted_text: Optional[str] = '', 
     short_summary: Optional[str] = '', 
-    summary: Optional[str] = ''
+    summary: Optional[str] = '',
+    is_quiz: Optional[bool] = False
 ) -> Dict[str, Any]:
     """
     Upsert a question set to the question_sets table.
@@ -244,6 +247,7 @@ def upsert_question_set(
         total_extracted_text (Optional[str]): The full text content that was summarized.
         short_summary (Optional[str]): A short, AI-generated title for the content.
         summary (Optional[str]): The full summary text.
+        is_quiz (Optional[bool]): Whether this is a quiz set (True) or study set (False).
     
     Returns:
         Dict containing the result
@@ -269,7 +273,8 @@ def upsert_question_set(
                     'question_hashes': updated_hashes,
                     'content_names': existing_metadata.get('content_names', content_names)
                 },
-                'created_at': datetime.now(timezone.utc).isoformat()
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'is_quiz': is_quiz
             }
 
             result = supabase.table('question_sets').update(update_data).eq('hash', content_hash).eq('user_id', user_id).execute()
@@ -290,7 +295,8 @@ def upsert_question_set(
                 'text_content': total_extracted_text,
                 'short_summary': short_summary,
                 'content_summary': summary,
-                'created_at': datetime.now(timezone.utc).isoformat()
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'is_quiz': is_quiz
             }
 
             result = supabase.table('question_sets').insert(insert_data).execute()
