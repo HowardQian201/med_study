@@ -177,7 +177,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
         print(f"is_quiz_mode: {is_quiz_mode}")
         if is_quiz_mode:
             prompt = f"""
-            Based on the following medical text summary, create 5 VERY challenging USMLE clinical vignette style \
+            Based on the following medical text summary, create {num_questions} VERY challenging USMLE clinical vignette style \
                 multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
             
             {previous_questions_text}
@@ -198,7 +198,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             """
         else:
             prompt = f"""
-            Based on the following medical text summary, create 5 VERY challenging
+            Based on the following medical text summary, create {num_questions} VERY challenging
                 multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
             
             {previous_questions_text}

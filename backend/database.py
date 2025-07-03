@@ -381,7 +381,8 @@ def get_full_study_set_data(content_hash: str, user_id: int) -> Dict[str, Any]:
                 "content_hash": study_set.get('hash'),
                 "content_name_list": study_set.get('metadata', {}).get('content_names', []),
                 # The session expects a list containing one set of questions.
-                "quiz_questions": [all_questions] if all_questions else []
+                "quiz_questions": [all_questions] if all_questions else [],
+                "is_quiz": study_set.get('is_quiz', False)
             }
         }
         
