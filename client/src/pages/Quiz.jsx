@@ -97,9 +97,11 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         } else {
         // If no existing questions, generate new ones
         const numQuestions = parseInt(sessionStorage.getItem('numQuestions')) || 5;
+        const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
         const response = await axios.post('/api/generate-quiz', {
           type: 'initial',
-          numQuestions: numQuestions
+          numQuestions: numQuestions,
+          isQuizMode: isQuizMode
         }, {
           withCredentials: true
         });
@@ -230,12 +232,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       setIsGeneratingMoreQuestions(true);
       setError('');
 
+      const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
       const response = await axios.post('/api/generate-quiz', {
         type: 'additional',
         incorrectQuestionIds: [],
         previousQuestions: questions,
         isPreviewing: true,
-        numQuestions: numAdditionalQuestions
+        numQuestions: numAdditionalQuestions,
+        isQuizMode: isQuizMode
       }, {
         withCredentials: true
       });
@@ -266,12 +270,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         .filter(q => selectedAnswers[q.id] !== undefined && selectedAnswers[q.id] !== q.correctAnswer)
         .map(q => q.id);
       
+      const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
       const response = await axios.post('/api/generate-quiz', {
         type: 'focused',
         incorrectQuestionIds,
         previousQuestions: questions,
         isPreviewing: false,
-        numQuestions: numFocusedQuestions
+        numQuestions: numFocusedQuestions,
+        isQuizMode: isQuizMode
       }, {
         withCredentials: true
       });

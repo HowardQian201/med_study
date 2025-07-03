@@ -17,7 +17,9 @@ import {
   Grid,
   TextField,
   IconButton,
-  ButtonBase
+  ButtonBase,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import {
   Logout,
@@ -48,6 +50,9 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
   // State for delete mode
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [deletingSetHash, setDeletingSetHash] = useState(null);
+  
+  // State for quiz filter
+  const [showQuizSets, setShowQuizSets] = useState(false);
 
   useEffect(() => {
     const fetchSets = async () => {
@@ -92,10 +97,14 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
     try {
       // Clear session content on the server
       await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+      // Store the current quiz mode in sessionStorage
+      sessionStorage.setItem('isQuizMode', showQuizSets.toString());
       // Navigate to study_session
       navigate('/study_session');
     } catch (err) {
       console.error('Failed to clear session content:', err);
+      // Store the current quiz mode in sessionStorage even if clearing fails
+      sessionStorage.setItem('isQuizMode', showQuizSets.toString());
       // Still attempt to navigate even if clearing fails
       navigate('/study_session');
     }
@@ -111,6 +120,8 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
 
         if (response.data.success) {
             setSummary(response.data.summary || '');
+            // Store the current quiz mode in sessionStorage
+            sessionStorage.setItem('isQuizMode', showQuizSets.toString());
             navigate('/quiz');
         } else {
             setError('Failed to load the selected study set.');
@@ -255,16 +266,38 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                 Transform your medical PDFs and notes into interactive study materials with AI-generated summaries and USMLE clinical vignette style questions.
                             </Typography>
                         </Box>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            size="large"
-                            startIcon={<Book />}
-                            onClick={handleStartNewSession}
-                            sx={{ flexShrink: 0 }}
-                        >
-                            Start New Study Session
-                        </Button>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                size="large"
+                                startIcon={<Book />}
+                                onClick={handleStartNewSession}
+                            >
+                                Start New {showQuizSets ? 'Quiz' : 'Study'} Session
+                            </Button>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                                <Switch
+                                    checked={showQuizSets}
+                                    onChange={(e) => setShowQuizSets(e.target.checked)}
+                                    size="small"
+                                    color="primary"
+                                />
+                                <Typography 
+                                    variant="body2" 
+                                    color="text.secondary"
+                                    sx={{ 
+                                        whiteSpace: 'normal',
+                                        wordWrap: 'break-word',
+                                        maxWidth: '120px',
+                                        textAlign: 'center',
+                                        fontSize: '0.875rem'
+                                    }}
+                                >
+                                    {showQuizSets ? 'Quiz Mode (USMLE)' : 'Study Mode (Flashcards)'}
+                                </Typography>
+                            </Box>
+                        </Box>
                     </Box>
                 </CardContent>
             </Card>
@@ -275,20 +308,33 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                     <Box display="flex" alignItems="center">
                         <History sx={{ mr: 1, color: 'text.secondary' }}/>
                         <Typography variant="h5" component="h3" fontWeight="600">
-                            Previous Study Sets
+                            Previous {showQuizSets ? 'Quiz' : 'Study'} Sets
                         </Typography>
+                        {sets.length > 0 && (
+                            <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                                ({(() => {
+                                    const filteredSets = sets.filter(set => {
+                                        const isQuiz = set.is_quiz === true;
+                                        return showQuizSets ? isQuiz : !isQuiz;
+                                    });
+                                    return filteredSets.length;
+                                })()})
+                            </Typography>
+                        )}
                     </Box>
-                    {sets.length > 0 && (
-                        <Button
-                            variant={isDeleteMode ? "contained" : "outlined"}
-                            color={isDeleteMode ? "error" : "primary"}
-                            size="small"
-                            startIcon={isDeleteMode ? <CloseIcon /> : <DeleteIcon />}
-                            onClick={handleDeleteModeToggle}
-                        >
-                            {isDeleteMode ? 'Cancel' : 'Edit Sets'}
-                        </Button>
-                    )}
+                    <Box display="flex" alignItems="center" gap={2}>
+                        {sets.length > 0 && (
+                            <Button
+                                variant={isDeleteMode ? "contained" : "outlined"}
+                                color={isDeleteMode ? "error" : "primary"}
+                                size="small"
+                                startIcon={isDeleteMode ? <CloseIcon /> : <DeleteIcon />}
+                                onClick={handleDeleteModeToggle}
+                            >
+                                {isDeleteMode ? 'Cancel' : 'Edit Sets'}
+                            </Button>
+                        )}
+                    </Box>
                 </Box>
 
                 {isLoading ? (
@@ -297,9 +343,22 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                     <Alert severity="error">{error}</Alert>
                 ) : sets.length === 0 ? (
                     <Alert severity="info">You don't have any previous study sets. Start a new session to begin!</Alert>
-                ) : (
-                    <Grid container spacing={3}>
-                        {sets.map((set) => (
+                ) : (() => {
+                    // Filter sets based on the quiz toggle
+                    const filteredSets = sets.filter(set => {
+                        const isQuiz = set.is_quiz === true;
+                        return showQuizSets ? isQuiz : !isQuiz;
+                    });
+                    
+                    return filteredSets.length === 0 ? (
+                        <Alert severity="info">
+                            {showQuizSets 
+                                ? "No quiz sets found. Toggle to view study sets." 
+                                : "No study sets found. Toggle to view quiz sets."}
+                        </Alert>
+                    ) : (
+                        <Grid container spacing={3}>
+                            {filteredSets.map((set) => (
                             <Grid item xs={12} sm={6} md={4} lg={3} sx={{ 
                                 width: {
                                     xs: '100%',
@@ -477,10 +536,11 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                         </Box>
                                     </CardContent>
                                 </Card>
-                            </Grid>
-                        ))}
-                    </Grid>
-                )}
+                                </Grid>
+                            ))}
+                        </Grid>
+                    );
+                })()}
             </Paper>
         </Stack>
       </Container>

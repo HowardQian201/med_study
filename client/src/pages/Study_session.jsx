@@ -46,6 +46,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const [isContentLocked, setIsContentLocked] = useState(false);
   const fileInputRef = useRef(null);
   const [numQuestions, setNumQuestions] = useState(5);
+  const [isQuizMode, setIsQuizMode] = useState(false);
 
   // Display existing results if available
   useEffect(() => {
@@ -53,6 +54,14 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
       console.log("Loading existing summary from session");
     }
   }, [summary]);
+
+  // Load quiz mode from sessionStorage
+  useEffect(() => {
+    const storedQuizMode = sessionStorage.getItem('isQuizMode');
+    if (storedQuizMode) {
+      setIsQuizMode(storedQuizMode === 'true');
+    }
+  }, []);
 
   // Lock inputs when a summary is present, unlock when it's cleared
   useEffect(() => {
@@ -100,6 +109,8 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
     if (userText.trim()) {
       formData.append('userText', userText.trim());
     }
+    // Include quiz mode in the form data
+    formData.append('isQuizMode', isQuizMode.toString());
 
     try {
       const response = await fetch('/api/upload-multiple', {
@@ -233,8 +244,9 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   };
   
   const goToQuiz = () => {
-    // Store the number of questions in sessionStorage so the Quiz page can access it
+    // Store the number of questions and quiz mode in sessionStorage so the Quiz page can access it
     sessionStorage.setItem('numQuestions', numQuestions.toString());
+    sessionStorage.setItem('isQuizMode', isQuizMode.toString());
     navigate('/quiz');
   };
 

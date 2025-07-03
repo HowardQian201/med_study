@@ -170,6 +170,9 @@ def upload_multiple():
         # Get additional user text if provided
         user_text = request.form.get('userText', '').strip()
         
+        # Get quiz mode from form data
+        is_quiz_mode = request.form.get('isQuizMode', 'false').lower() == 'true'
+        
         # Check if files were uploaded
         files = request.files.getlist('files') if 'files' in request.files else []
         
@@ -286,7 +289,7 @@ def upload_multiple():
                 filenames = "User Text"
         
         user_id = session.get('user_id')
-        content_hash = generate_content_hash(files_usertext_content, user_id)
+        content_hash = generate_content_hash(files_usertext_content, user_id, is_quiz_mode)
         # Create a list of filenames
         content_name_list = list(results.keys())
         # Add "user text" to the list if user text was submitted
@@ -373,6 +376,7 @@ def generate_quiz():
         previous_questions = data.get('previousQuestions', [])
         is_previewing = data.get('isPreviewing', False)
         num_questions = data.get('numQuestions', 5)  # Default to 5 if not specified
+        is_quiz_mode = data.get('isQuizMode', False)  # Default to False (study mode)
         
         # Validate number of questions is within reasonable bounds
         if not isinstance(num_questions, int) or num_questions < 1 or num_questions > 20:
@@ -394,17 +398,18 @@ def generate_quiz():
             summary, user_id, content_hash, 
             incorrect_question_ids=incorrect_question_ids, 
             previous_questions=previous_questions,
-            num_questions=num_questions
+            num_questions=num_questions,
+            is_quiz_mode=is_quiz_mode
         )
         
         # Only generate short title and upsert question set for initial generation
         if question_type == 'initial':
             short_summary = generate_short_title(total_extracted_text)
             # Upsert the question set to the database
-            upsert_question_set(content_hash, user_id, question_hashes, content_name_list, total_extracted_text, short_summary, summary)
+            upsert_question_set(content_hash, user_id, question_hashes, content_name_list, total_extracted_text, short_summary, summary, is_quiz_mode)
         else:
             # For focused/additional questions, just upsert the new questions
-            upsert_question_set(content_hash, user_id, question_hashes, content_name_list)
+            upsert_question_set(content_hash, user_id, question_hashes, content_name_list, is_quiz=is_quiz_mode)
         
         # Store questions in session
         if is_previewing:
