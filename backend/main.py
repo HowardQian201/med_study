@@ -372,6 +372,11 @@ def generate_quiz():
         incorrect_question_ids = data.get('incorrectQuestionIds', [])
         previous_questions = data.get('previousQuestions', [])
         is_previewing = data.get('isPreviewing', False)
+        num_questions = data.get('numQuestions', 5)  # Default to 5 if not specified
+        
+        # Validate number of questions is within reasonable bounds
+        if not isinstance(num_questions, int) or num_questions < 1 or num_questions > 20:
+            num_questions = 5  # Default to 5 if invalid
         
         # For initial generation, check if we already have questions to prevent duplicates
         if question_type == 'initial':
@@ -388,7 +393,8 @@ def generate_quiz():
         questions, question_hashes = generate_quiz_questions(
             summary, user_id, content_hash, 
             incorrect_question_ids=incorrect_question_ids, 
-            previous_questions=previous_questions
+            previous_questions=previous_questions,
+            num_questions=num_questions
         )
         
         # Only generate short title and upsert question set for initial generation

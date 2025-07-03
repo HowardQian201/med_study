@@ -9,7 +9,6 @@ import traceback
 import hashlib
 from .logic import log_memory_usage, check_memory, analyze_memory_usage
 from .database import upsert_quiz_questions_batch
-from typing import List, Tuple, Dict, Any
 
 load_dotenv()
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -110,7 +109,7 @@ def gpt_summarize_transcript(text, stream=False):
     text = completion.choices[0].message.content.strip()
     return text
 
-def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_question_ids=None, previous_questions=None):
+def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_question_ids=None, previous_questions=None, num_questions=5):
     """Generate quiz questions from a summary text using OpenAI's API
     
     Args:
@@ -119,6 +118,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
         content_hash: Content hash for question set
         incorrect_question_ids: Optional list of IDs of questions answered incorrectly
         previous_questions: Optional list of previous questions for focused generation
+        num_questions: Number of questions to generate (default: 5)
     
     Returns:
         tuple: (questions, question_hashes)
@@ -135,13 +135,13 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             "properties": {
                 "questions": {
                     "type": "array",
-                    "minItems": 5,
-                    "maxItems": 5,
+                    "minItems": num_questions,
+                    "maxItems": num_questions,
                     "items": {
                         "type": "object",
                         "required": ["id", "text", "options", "correctAnswer", "reason"],
                         "properties": {
-                            "id":           {"type": "integer", "minimum": 1, "maximum": 5},
+                            "id":           {"type": "integer", "minimum": 1, "maximum": num_questions},
                             "text":         {"type": "string"},
                             "options": {
                                 "type": "array",
@@ -175,7 +175,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
         print("previous_questions_text")
         print(previous_questions_text)
         prompt = f"""
-        Based on the following medical text summary, create 5 VERY challenging USMLE clinical vignette style \
+        Based on the following medical text summary, create {num_questions} VERY challenging USMLE clinical vignette style \
             multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
         
         {previous_questions_text}
@@ -212,7 +212,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             },
             temperature=0.9,
             presence_penalty=0.6,
-            max_completion_tokens=1200,
+            max_completion_tokens=3000,  # Increased for more questions
             top_p=0.9,
             frequency_penalty=0.25,
         )
