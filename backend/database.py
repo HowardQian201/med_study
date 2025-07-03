@@ -591,3 +591,36 @@ def delete_question_set_and_questions(content_hash: str, user_id: int) -> Dict[s
     except Exception as e:
         print(f"Error deleting question set {content_hash}: {e}")
         return {"success": False, "error": str(e)}
+
+def check_question_set_exists(content_hash: str, user_id: int) -> Dict[str, Any]:
+    """
+    Check if a question set exists for a given user and content hash.
+    
+    Args:
+        content_hash (str): The hash of the content to check for
+        user_id (int): The ID of the user
+    
+    Returns:
+        Dict containing the result and question set data if found
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.table('question_sets').select("*").eq('hash', content_hash).eq('user_id', user_id).maybe_single().execute()
+        
+        return {
+            "success": True,
+            "exists": result.data is not None,
+            "data": result.data,
+            "question_count": len(result.data.get('metadata', {}).get('question_hashes', [])) if result.data else 0
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "exists": False,
+            "data": None,
+            "question_count": 0
+        }
