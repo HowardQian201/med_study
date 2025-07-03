@@ -55,6 +55,11 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
   const [showQuizSets, setShowQuizSets] = useState(false);
 
   useEffect(() => {
+    const storedQuizMode = sessionStorage.getItem('isQuizMode');
+    if (storedQuizMode) {
+      setShowQuizSets(storedQuizMode === 'true');
+    }
+    
     const fetchSets = async () => {
       try {
         const response = await axios.get('/api/get-question-sets', {

@@ -7,6 +7,7 @@ import sys
 import os
 import json
 from io import BytesIO
+from unittest.mock import ANY
 
 # Add the parent directory to the Python path so we can import from backend
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -155,7 +156,7 @@ class TestMainRoutes(unittest.TestCase):
         mock_check_file.return_value = {"exists": False, "data": None}
         mock_file_hash.return_value = "test_hash"
         mock_extract.return_value = "Extracted text content"
-        mock_content_hash.return_value = "content_hash"
+        mock_content_hash.side_effect = ["content_hash_quiz", "content_hash_learning"]
 
         # Mock the streaming response from GPT
         def mock_stream_generator(text, stream=False):
@@ -172,7 +173,8 @@ class TestMainRoutes(unittest.TestCase):
         
         # Create a mock PDF file
         data = {
-            'files': (BytesIO(b'fake pdf content'), 'test.pdf')
+            'files': (BytesIO(b'fake pdf content'), 'test.pdf'),
+            'isQuizMode': 'true'
         }
         
         response = self.client.post('/api/upload-multiple',
@@ -181,6 +183,8 @@ class TestMainRoutes(unittest.TestCase):
         
         self.assertEqual(response.status_code, 200)
         self.assertIn("Generated summary", response.get_data(as_text=True))
+        mock_content_hash.assert_any_call(ANY, 1, True)
+        mock_content_hash.assert_any_call(ANY, 1, False)
     
     def test_upload_multiple_no_files_or_text(self):
         """Test upload with no files or text provided"""
@@ -219,13 +223,19 @@ class TestMainRoutes(unittest.TestCase):
         )
         
         response = self.client.post('/api/generate-quiz',
-                                   data=json.dumps({'type': 'initial'}),
+                                   data=json.dumps({'type': 'initial', 'isQuizMode': 'true'}),
                                    content_type='application/json')
         self.assertEqual(response.status_code, 200)
         # Check that the expected text exists in the response data
         response_data = json.loads(response.data)
         self.assertTrue(response_data['success'])
         self.assertIn("Test question?", str(response_data['questions']))
+        mock_generate.assert_any_call(
+            'Test summary for quiz', 1, 'test_hash', incorrect_question_ids=[], previous_questions=[], num_questions=5, is_quiz_mode=True
+        )
+        mock_generate.assert_any_call(
+            'Test summary for quiz', 1, None, incorrect_question_ids=None, previous_questions=None, num_questions=5, is_quiz_mode=False
+        )
     
     def test_generate_quiz_no_content(self):
         """Test quiz generation without content"""
@@ -262,14 +272,18 @@ class TestMainRoutes(unittest.TestCase):
                                        'type': 'focused',
                                        'incorrectQuestionIds': ['1'],
                                        'previousQuestions': [{'id': '1', 'text': 'prev'}],
-                                       'isPreviewing': False
+                                       'isPreviewing': False,
+                                       'isQuizMode': True
                                    }),
                                    content_type='application/json')
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.data)
         self.assertTrue(response_data['success'])
         self.assertIn("Focused question?", str(response_data['questions']))
-    
+        mock_generate.assert_any_call(
+            'Test summary for quiz', 1, 'test_hash', incorrect_question_ids=['1'], previous_questions=ANY, num_questions=5, is_quiz_mode=True
+        )
+
     @patch('backend.main.generate_quiz_questions')
     def test_generate_additional_quiz_success(self, mock_generate):
         """Test successful additional quiz generation"""
@@ -295,14 +309,18 @@ class TestMainRoutes(unittest.TestCase):
                                        'type': 'additional',
                                        'incorrectQuestionIds': [],
                                        'previousQuestions': [{'id': '1', 'text': 'prev'}],
-                                       'isPreviewing': True
+                                       'isPreviewing': True,
+                                       'isQuizMode': True
                                    }),
                                    content_type='application/json')
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.data)
         self.assertTrue(response_data['success'])
         self.assertIn("Additional question?", str(response_data['questions']))
-    
+        mock_generate.assert_any_call(
+            'Test summary for quiz', 1, 'test_hash', incorrect_question_ids=[], previous_questions=ANY, num_questions=5, is_quiz_mode=True
+        )
+
     def test_get_quiz_unauthorized(self):
         """Test get quiz without authentication"""
         response = self.client.get('/api/get-quiz')
@@ -366,11 +384,19 @@ class TestMainRoutes(unittest.TestCase):
         
         mock_get_sets.return_value = {
             "success": True,
-            "data": [{"hash": "test", "short_summary": "Test"}]
+            "data": [
+                {"hash": "test1", "short_summary": "Test Quiz Set", "is_quiz": True},
+                {"hash": "test2", "short_summary": "Test Learning Set", "is_quiz": False}
+            ]
         }
         
         response = self.client.get('/api/get-question-sets')
         self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.data)
+        self.assertTrue(response_data['success'])
+        self.assertEqual(len(response_data['sets']), 2)
+        self.assertEqual(response_data['sets'][0]['is_quiz'], True)
+        self.assertEqual(response_data['sets'][1]['is_quiz'], False)
     
     @patch('backend.main.get_full_study_set_data')
     def test_load_study_set_success(self, mock_load):
@@ -951,7 +977,8 @@ class TestMainRoutes(unittest.TestCase):
         response = self.client.post('/api/generate-quiz',
                                    data=json.dumps({
                                        'type': 'initial',
-                                       'numQuestions': 10
+                                       'numQuestions': 10,
+                                       'isQuizMode': False
                                    }),
                                    content_type='application/json')
         
@@ -961,9 +988,9 @@ class TestMainRoutes(unittest.TestCase):
         self.assertEqual(len(response_data['questions']), 10)
         
         # Verify generate_quiz_questions was called with correct num_questions
-        mock_generate.assert_called_once()
-        args, kwargs = mock_generate.call_args
-        self.assertEqual(kwargs['num_questions'], 10)
+        mock_generate.assert_any_call(
+            'Test summary for quiz', 1, 'test_hash', incorrect_question_ids=[], previous_questions=[], num_questions=10, is_quiz_mode=False
+        )
 
     @patch('backend.main.generate_quiz_questions')
     def test_generate_quiz_num_questions_defaults_to_5(self, mock_generate):
@@ -990,11 +1017,14 @@ class TestMainRoutes(unittest.TestCase):
                                    content_type='application/json')
         
         self.assertEqual(response.status_code, 200)
-        
+
         # Verify generate_quiz_questions was called with default num_questions=5
-        mock_generate.assert_called_once()
-        args, kwargs = mock_generate.call_args
-        self.assertEqual(kwargs['num_questions'], 5)
+        mock_generate.assert_any_call(
+            'Test summary for quiz', 1, 'test_hash', incorrect_question_ids=[], previous_questions=[], num_questions=5, is_quiz_mode=False
+        )
+        mock_generate.assert_any_call(
+            'Test summary for quiz', 1, None, incorrect_question_ids=None, previous_questions=None, num_questions=5, is_quiz_mode=True
+        )
 
     @patch('backend.main.generate_quiz_questions')
     def test_generate_quiz_num_questions_validation(self, mock_generate):
@@ -1077,9 +1107,12 @@ class TestMainRoutes(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 
                 # Verify it uses the valid value
-                mock_generate.assert_called_once()
-                args, kwargs = mock_generate.call_args
-                self.assertEqual(kwargs['num_questions'], valid_value)
+                mock_generate.assert_any_call(
+                    'Test summary for quiz', 1, f'test_hash_{valid_value}', incorrect_question_ids=[], previous_questions=[], num_questions=valid_value, is_quiz_mode=False
+                )
+                mock_generate.assert_any_call(
+                    'Test summary for quiz', 1, None, incorrect_question_ids=None, previous_questions=None, num_questions=valid_value, is_quiz_mode=True
+                )
 
     @patch('backend.main.generate_quiz_questions')
     def test_generate_focused_quiz_with_num_questions(self, mock_generate):
@@ -1107,6 +1140,7 @@ class TestMainRoutes(unittest.TestCase):
                                        'incorrectQuestionIds': ['1'],
                                        'previousQuestions': [{'id': '1', 'text': 'prev'}],
                                        'isPreviewing': False,
+                                       'isQuizMode': True,
                                        'numQuestions': 8
                                    }),
                                    content_type='application/json')
@@ -1144,6 +1178,7 @@ class TestMainRoutes(unittest.TestCase):
                                        'incorrectQuestionIds': [],
                                        'previousQuestions': [{'id': '1', 'text': 'prev'}],
                                        'isPreviewing': True,
+                                       'isQuizMode': True,
                                        'numQuestions': 15
                                    }),
                                    content_type='application/json')

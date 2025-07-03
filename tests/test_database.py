@@ -111,6 +111,18 @@ class TestDatabaseFunctions(unittest.TestCase):
         # Verify different user_id produces different hash
         hash_result3 = generate_content_hash(content_set, 456)
         self.assertNotEqual(hash_result, hash_result3)
+
+        # Test with is_quiz_mode = True
+        hash_result_quiz = generate_content_hash(content_set, user_id, is_quiz_mode=True)
+        self.assertEqual(len(hash_result_quiz), 64)
+        self.assertTrue(all(c in '0123456789abcdef' for c in hash_result_quiz))
+        self.assertNotEqual(hash_result, hash_result_quiz)
+
+        # Test with is_quiz_mode = False explicitly
+        hash_result_learning = generate_content_hash(content_set, user_id, is_quiz_mode=False)
+        self.assertEqual(len(hash_result_learning), 64)
+        self.assertTrue(all(c in '0123456789abcdef' for c in hash_result_learning))
+        self.assertEqual(hash_result, hash_result_learning)
     
     @patch('backend.database.get_supabase_client')
     def test_check_file_exists_found(self, mock_get_client):
@@ -286,7 +298,11 @@ class TestDatabaseFunctions(unittest.TestCase):
             'content_hash123',
             1,
             ['q1', 'q2'],
-            ['file1.pdf']
+            ['file1.pdf'],
+            'Test summary',
+            'Short Test Summary',
+            'Full Test Summary',
+            True # is_quiz
         )
         
         # Assert that the 'update' method was called, since this is the buggy path taken
@@ -304,7 +320,8 @@ class TestDatabaseFunctions(unittest.TestCase):
         mock_query3 = MagicMock()
         mock_result = MagicMock()
         mock_result.data = [
-            {'hash': 'hash1', 'short_summary': 'Summary 1', 'updated_at': '2023-01-01'}
+            {'hash': 'hash1', 'short_summary': 'Summary 1', 'created_at': '2023-01-01', 'is_quiz': True},
+            {'hash': 'hash2', 'short_summary': 'Summary 2', 'created_at': '2023-01-02', 'is_quiz': False}
         ]
         
         mock_client.table.return_value = mock_table
@@ -317,7 +334,7 @@ class TestDatabaseFunctions(unittest.TestCase):
         result = get_question_sets_for_user(1)
         
         self.assertTrue(result['success'])
-        self.assertEqual(len(result['data']), 1)
+        self.assertEqual(len(result['data']), 2)
     
     @patch('backend.database.get_supabase_client')
     def test_get_full_study_set_data_success(self, mock_get_client):
@@ -336,7 +353,8 @@ class TestDatabaseFunctions(unittest.TestCase):
             'metadata': {
                 'question_hashes': ['q1', 'q2'],
                 'content_names': ['file1.pdf']
-            }
+            },
+            'is_quiz': True
         }
         
         # Mock for the 'quiz_questions' table response
@@ -383,6 +401,7 @@ class TestDatabaseFunctions(unittest.TestCase):
         # The function wraps the questions in another list
         self.assertEqual(len(result['data']['quiz_questions'][0]), 2)
         self.assertEqual(result['data']['content_name_list'], ['file1.pdf'])
+        self.assertEqual(result['data']['is_quiz'], True)
 
     @patch('backend.database.get_supabase_client')
     def test_get_full_study_set_data_not_found(self, mock_get_client):

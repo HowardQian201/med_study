@@ -379,7 +379,7 @@ def generate_quiz():
         previous_questions = data.get('previousQuestions', [])
         is_previewing = data.get('isPreviewing', False)
         num_questions = data.get('numQuestions', 5)  # Default to 5 if not specified
-        is_quiz_mode = data.get('isQuizMode', False)  # Default to False (study mode)
+        is_quiz_mode = str(data.get('isQuizMode', 'false')).lower() == 'true' # Default to False (study mode)
         other_quiz_exists = False
 
         # Validate number of questions is within reasonable bounds
