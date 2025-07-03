@@ -462,5 +462,146 @@ class TestOpenAICalls(unittest.TestCase):
         self.assertEqual(call_args[0]['user_id'], 123)
         self.assertEqual(call_args[0]['question_set_hash'], "content_hash")  # Correct field name
 
+    @patch('backend.open_ai_calls.openai_client')
+    @patch('backend.open_ai_calls.upsert_quiz_questions_batch')
+    def test_generate_quiz_questions_with_custom_num_questions(self, mock_upsert, mock_client):
+        """Test quiz generation with custom number of questions"""
+        from backend.open_ai_calls import generate_quiz_questions
+        
+        mock_response = MagicMock()
+        mock_questions = {'questions': [
+            {'id': i, 'text': f'Q{i}', 'options': ['A', 'B', 'C', 'D'], 'correctAnswer': 1, 'reason': f'R{i}'}
+            for i in range(1, 11)  # 10 questions
+        ]}
+        mock_response.choices[0].message.content = json.dumps(mock_questions)
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_upsert.return_value = {"success": True, "count": 10}
+        
+        with patch('backend.open_ai_calls.check_memory'), patch('backend.open_ai_calls.log_memory_usage'):
+            result, hashes = generate_quiz_questions("summary", 1, "hash", num_questions=10)
+        
+        # Verify that the prompt includes the custom number
+        args, kwargs = mock_client.chat.completions.create.call_args
+        prompt_content = kwargs['messages'][1]['content']
+        self.assertIn("create 10 VERY challenging", prompt_content)
+        
+        self.assertEqual(len(result), 10)
+        self.assertEqual(len(hashes), 10)
+
+    @patch('backend.open_ai_calls.openai_client')
+    @patch('backend.open_ai_calls.upsert_quiz_questions_batch')
+    def test_generate_quiz_questions_with_default_num_questions(self, mock_upsert, mock_client):
+        """Test quiz generation uses default of 5 questions when not specified"""
+        from backend.open_ai_calls import generate_quiz_questions
+        
+        mock_response = MagicMock()
+        mock_questions = {'questions': [
+            {'id': i, 'text': f'Q{i}', 'options': ['A', 'B', 'C', 'D'], 'correctAnswer': 1, 'reason': f'R{i}'}
+            for i in range(1, 6)  # 5 questions
+        ]}
+        mock_response.choices[0].message.content = json.dumps(mock_questions)
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_upsert.return_value = {"success": True, "count": 5}
+        
+        with patch('backend.open_ai_calls.check_memory'), patch('backend.open_ai_calls.log_memory_usage'):
+            # Call without num_questions parameter
+            result, hashes = generate_quiz_questions("summary", 1, "hash")
+        
+        # Verify that the prompt includes the default number (5)
+        args, kwargs = mock_client.chat.completions.create.call_args
+        prompt_content = kwargs['messages'][1]['content']
+        self.assertIn("create 5 VERY challenging", prompt_content)
+        
+        self.assertEqual(len(result), 5)
+        self.assertEqual(len(hashes), 5)
+
+    @patch('backend.open_ai_calls.openai_client')
+    @patch('backend.open_ai_calls.upsert_quiz_questions_batch')
+    def test_generate_quiz_questions_num_questions_in_focused_prompt(self, mock_upsert, mock_client):
+        """Test that custom num_questions is used in focused prompt"""
+        from backend.open_ai_calls import generate_quiz_questions
+        
+        mock_response = MagicMock()
+        mock_questions = {'questions': [
+            {'id': i, 'text': f'Q{i}', 'options': ['A', 'B', 'C', 'D'], 'correctAnswer': 1, 'reason': f'R{i}'}
+            for i in range(1, 9)  # 8 questions
+        ]}
+        mock_response.choices[0].message.content = json.dumps(mock_questions)
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_upsert.return_value = {"success": True, "count": 8}
+        
+        incorrect_ids = ['q1', 'q2']
+        previous_questions = [
+            {'id': 'q1', 'text': 'Previous Q1', 'options': ['A', 'B', 'C', 'D']},
+            {'id': 'q2', 'text': 'Previous Q2', 'options': ['A', 'B', 'C', 'D']}
+        ]
+        
+        with patch('backend.open_ai_calls.check_memory'), patch('backend.open_ai_calls.log_memory_usage'):
+            result, hashes = generate_quiz_questions("summary", 1, "hash", 
+                                                   incorrect_question_ids=incorrect_ids, 
+                                                   previous_questions=previous_questions,
+                                                   num_questions=8)
+        
+        # Verify the focused prompt includes the custom number
+        args, kwargs = mock_client.chat.completions.create.call_args
+        prompt_content = kwargs['messages'][1]['content']
+        self.assertIn("INCORRECTLY", prompt_content)  # Confirm it's focused prompt
+        self.assertIn("create 8", prompt_content)  # Should include custom number
+        
+        self.assertEqual(len(result), 8)
+        self.assertEqual(len(hashes), 8)
+
+    @patch('backend.open_ai_calls.openai_client')
+    @patch('backend.open_ai_calls.upsert_quiz_questions_batch')
+    def test_generate_quiz_questions_boundary_num_questions(self, mock_upsert, mock_client):
+        """Test quiz generation with boundary values for num_questions"""
+        from backend.open_ai_calls import generate_quiz_questions
+        
+        # Test with minimum value (1)
+        mock_response = MagicMock()
+        mock_questions = {'questions': [
+            {'id': 1, 'text': 'Q1', 'options': ['A', 'B', 'C', 'D'], 'correctAnswer': 1, 'reason': 'R1'}
+        ]}
+        mock_response.choices[0].message.content = json.dumps(mock_questions)
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_upsert.return_value = {"success": True, "count": 1}
+        
+        with patch('backend.open_ai_calls.check_memory'), patch('backend.open_ai_calls.log_memory_usage'):
+            result, hashes = generate_quiz_questions("summary", 1, "hash", num_questions=1)
+        
+        # Verify that the prompt includes num_questions=1
+        args, kwargs = mock_client.chat.completions.create.call_args
+        prompt_content = kwargs['messages'][1]['content']
+        self.assertIn("create 1 VERY challenging", prompt_content)
+        
+        self.assertEqual(len(result), 1)
+        self.assertEqual(len(hashes), 1)
+
+    @patch('backend.open_ai_calls.openai_client')
+    @patch('backend.open_ai_calls.upsert_quiz_questions_batch')
+    def test_generate_quiz_questions_max_num_questions(self, mock_upsert, mock_client):
+        """Test quiz generation with maximum number of questions (20)"""
+        from backend.open_ai_calls import generate_quiz_questions
+        
+        mock_response = MagicMock()
+        mock_questions = {'questions': [
+            {'id': i, 'text': f'Q{i}', 'options': ['A', 'B', 'C', 'D'], 'correctAnswer': 1, 'reason': f'R{i}'}
+            for i in range(1, 21)  # 20 questions
+        ]}
+        mock_response.choices[0].message.content = json.dumps(mock_questions)
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_upsert.return_value = {"success": True, "count": 20}
+        
+        with patch('backend.open_ai_calls.check_memory'), patch('backend.open_ai_calls.log_memory_usage'):
+            result, hashes = generate_quiz_questions("summary", 1, "hash", num_questions=20)
+        
+        # Verify that the prompt includes num_questions=20
+        args, kwargs = mock_client.chat.completions.create.call_args
+        prompt_content = kwargs['messages'][1]['content']
+        self.assertIn("create 20 VERY challenging", prompt_content)
+        
+        self.assertEqual(len(result), 20)
+        self.assertEqual(len(hashes), 20)
+
 if __name__ == '__main__':
     unittest.main() 
