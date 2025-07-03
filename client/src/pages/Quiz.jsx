@@ -61,6 +61,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [numAdditionalQuestions, setNumAdditionalQuestions] = useState(5);
   const [numFocusedQuestions, setNumFocusedQuestions] = useState(5);
   const [isQuizMode, setIsQuizMode] = useState(false);
+  const [isCardFlipped, setIsCardFlipped] = useState(false);
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -189,6 +190,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     if (currentQuestion < questions.length - 1) {
       const nextQuestionIndex = currentQuestion + 1;
       const nextQuestion = questions[nextQuestionIndex];
+      setIsCardFlipped(false);
 
       if (submittedAnswers[nextQuestion.id]) {
         const wasCorrect = selectedAnswers[nextQuestion.id] === nextQuestion.correctAnswer;
@@ -209,6 +211,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     if (currentQuestion > 0) {
       const prevQuestionIndex = currentQuestion - 1;
       const prevQuestion = questions[prevQuestionIndex];
+      setIsCardFlipped(false);
 
       if (submittedAnswers[prevQuestion.id]) {
         const wasCorrect = selectedAnswers[prevQuestion.id] === prevQuestion.correctAnswer;
@@ -546,6 +549,17 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                 >
                   Home
                 </Button>
+                {(showResults || !isPreviewing) && (
+                  <Button
+                    onClick={handleBackToPreview}
+                    variant="outlined"
+                    startIcon={<ArrowBack />}
+                    size="small"
+                    sx={{ ml: 0.25 }}
+                  >
+                    Preview
+                  </Button>
+                )}
                 {(() => {
                   const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
                   return (
@@ -565,17 +579,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     </Typography>
                   );
                 })()}
-                {(showResults || !isPreviewing) && (
-                  <Button
-                    onClick={handleBackToPreview}
-                    variant="outlined"
-                    startIcon={<ArrowBack />}
-                    size="small"
-                    sx={{ ml: 0.25 }}
-                  >
-                    Preview
-                  </Button>
-                )}
               </Box>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Typography variant="body2" color="text.secondary">
@@ -631,45 +634,49 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
 
                       return (
                         <Box textAlign="center" mb={4}>
-                          <Typography variant="h5" fontWeight="600" gutterBottom>
-                            {showAllPreviousQuestions ? 'Cumulative Performance' : 'Quiz Performance'}
-                          </Typography>
-                          
-                          {!showStatsCircle && !showAllPreviousQuestions ? (
-                            <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
-                              You haven't answered all questions yet. Your current score is based on the questions you've completed.
-                            </Alert>
-                          ) : (
-                            showStatsCircle && (
-                              <Paper elevation={1} sx={{ display: 'inline-block', p: 4, mb: 3, borderRadius: 3 }}>
-                                <Box display="flex" alignItems="center" justifyContent="center">
-                                  <Box position="relative" display="inline-flex">
-                                    <CircularProgress variant="determinate" value={100} size={120} thickness={4} sx={{ color: 'grey.300' }} />
-                                    <CircularProgress
-                                      variant="determinate"
-                                      value={displayStats.percentage}
-                                      size={120}
-                                      thickness={4}
-                                      sx={{
-                                        color: displayStats.percentage >= 70 ? 'success.main' :
-                                              displayStats.percentage >= 40 ? 'warning.main' : 'error.main',
-                                        position: 'absolute',
-                                        left: 0,
-                                      }}
-                                    />
-                                    <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      <Typography variant="h4" component="div" fontWeight="bold">
-                                        {displayStats.percentage}%
-                                      </Typography>
+                          {isQuizMode && (
+                            <>
+                              <Typography variant="h5" fontWeight="600" gutterBottom>
+                                {showAllPreviousQuestions ? 'Cumulative Performance' : 'Quiz Performance'}
+                              </Typography>
+                              
+                              {!showStatsCircle && !showAllPreviousQuestions ? (
+                                <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+                                  You haven't answered all questions yet. Your current score is based on the questions you've completed.
+                                </Alert>
+                              ) : (
+                                showStatsCircle && (
+                                  <Paper elevation={1} sx={{ display: 'inline-block', p: 4, mb: 3, borderRadius: 3 }}>
+                                    <Box display="flex" alignItems="center" justifyContent="center">
+                                      <Box position="relative" display="inline-flex">
+                                        <CircularProgress variant="determinate" value={100} size={120} thickness={4} sx={{ color: 'grey.300' }} />
+                                        <CircularProgress
+                                          variant="determinate"
+                                          value={displayStats.percentage}
+                                          size={120}
+                                          thickness={4}
+                                          sx={{
+                                            color: displayStats.percentage >= 70 ? 'success.main' :
+                                                  displayStats.percentage >= 40 ? 'warning.main' : 'error.main',
+                                            position: 'absolute',
+                                            left: 0,
+                                          }}
+                                        />
+                                        <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                          <Typography variant="h4" component="div" fontWeight="bold">
+                                            {displayStats.percentage}%
+                                          </Typography>
+                                        </Box>
+                                      </Box>
                                     </Box>
-                                  </Box>
-                                </Box>
-                                <Typography variant="body1" color="text.secondary" mt={2}>
-                                  {displayStats.correct} correct out of {displayStats.total} questions
-                                  {showAllPreviousQuestions && allPreviousQuestions.length > 0 && ` across ${allPreviousQuestions.length} set${allPreviousQuestions.length !== 1 ? 's' : ''}`}
-                                </Typography>
-                              </Paper>
-                            )
+                                    <Typography variant="body1" color="text.secondary" mt={2}>
+                                      {displayStats.correct} correct out of {displayStats.total} questions
+                                      {showAllPreviousQuestions && allPreviousQuestions.length > 0 && ` across ${allPreviousQuestions.length} set${allPreviousQuestions.length !== 1 ? 's' : ''}`}
+                                    </Typography>
+                                  </Paper>
+                                )
+                              )}
+                            </>
                           )}
                           
                           {/* Action Buttons */}
@@ -761,7 +768,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     {!showAllPreviousQuestions && (
                       <Box>
                         <Typography variant="h3" fontWeight="600" gutterBottom>
-                          Question Set Review
+                          {isQuizMode ? 'Testing Set Review' : 'Learning Set Review'}
                         </Typography>
                         <Stack spacing={3}>
                           {stats.questionsWithStatus.map((question, index) => (
@@ -770,29 +777,33 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               elevation={1}
                               sx={{
                                 border: '1px solid',
-                                borderColor: question.isAnswered 
-                                  ? (question.isCorrect ? 'success.main' : 'error.main')
+                                borderColor: isQuizMode 
+                                  ? (question.isAnswered 
+                                      ? (question.isCorrect ? 'success.main' : 'error.main')
+                                      : 'divider')
                                   : 'divider'
                               }}
                             >
                               <CardContent>
                                 <Box display="flex" alignItems="flex-start" mb={2}>
-                                  <Chip
-                                    icon={question.isAnswered
-                                      ? (question.isCorrect ? <CheckCircle /> : <Cancel />)
-                                      : <HelpOutline />
+                                  {isQuizMode && (
+                                    <Chip
+                                      icon={question.isAnswered
+                                        ? (question.isCorrect ? <CheckCircle /> : <Cancel />)
+                                        : <HelpOutline />
+                                      }
+                                      label={question.isAnswered
+                                        ? (question.isCorrect ? 'Correct' : 'Incorrect')
+                                        : 'Unanswered'
+                                      }
+                                      color={question.isAnswered
+                                        ? (question.isCorrect ? 'success' : 'error')
+                                        : 'default'
                                     }
-                                    label={question.isAnswered
-                                      ? (question.isCorrect ? 'Correct' : 'Incorrect')
-                                      : 'Unanswered'
-                                    }
-                                    color={question.isAnswered
-                                      ? (question.isCorrect ? 'success' : 'error')
-                                      : 'default'
-                                  }
-                                    size="small"
-                                    sx={{ mr: 2 }}
-                                  />
+                                      size="small"
+                                      sx={{ mr: 2 }}
+                                    />
+                                  )}
                                   <Typography variant="body1" fontWeight="500" sx={{ flexGrow: 1 }}>
                                     Question {index + 1}: {question.text}
                                   </Typography>
@@ -809,70 +820,75 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                 </Box>
                               
                                 <Box ml={2}>
-                                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
-                                {question.options.map((option, index) => (
-                                    <Paper
-                                    key={index}
-                                      elevation={0}
-                                      onClick={() => handleAnswerSelect(question.id, index)}
-                                      sx={{
-                                        p: 2,
-                                        minHeight: '40px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        border: '2px solid',
-                                        borderColor: submittedAnswers[question.id] 
-                                        ? (index === question.correctAnswer
-                                              ? 'success.main' 
-                                              : (selectedAnswers[question.id] === index && selectedAnswers[question.id] !== question.correctAnswer)
-                                                ? 'error.main'
-                                                : 'divider')
-                                          : (selectedAnswers[question.id] === index ? 'primary.main' : 'divider'),
-                                        bgcolor: submittedAnswers[question.id] 
-                                          ? 'transparent'
-                                          : (selectedAnswers[question.id] === index ? 'primary.light' : 'transparent'),
-                                        cursor: submittedAnswers[question.id] ? 'default' : 'pointer',
-                                        transition: 'all 0.2s ease',
-                                        '&:hover': submittedAnswers[question.id] ? {} : {
-                                          borderColor: 'primary.main',
-                                          bgcolor: 'action.hover'
-                                        }
-                                      }}
-                                    >
-                                      <Stack direction="column" spacing={1}>
-                                        {submittedAnswers[question.id] && index === question.correctAnswer && (
-                                          <Chip label="Correct answer" color="success" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
-                                    )}
-                                        {submittedAnswers[question.id] && selectedAnswers[question.id] === index && selectedAnswers[question.id] !== question.correctAnswer && (
-                                          <Chip label="Your answer" color="error" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
-                                    )}
-                                        <Typography
-                                          variant="body2"
-                                          color={submittedAnswers[question.id]
-                                            ? (index === question.correctAnswer ? 'success.dark' : 'text.primary')
-                                          : (selectedAnswers[question.id] === index ? 'primary.dark' : 'text.primary')
-                                        }
-                                          sx={{ textAlign: 'left' }}
+                                  {isQuizMode ? (
+                                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                                      {question.options.map((option, index) => (
+                                        <Paper
+                                          key={index}
+                                          elevation={0}
+                                          sx={{
+                                            p: 2,
+                                            minHeight: '40px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            border: '2px solid',
+                                            borderColor: submittedAnswers[question.id] 
+                                              ? (index === question.correctAnswer
+                                                  ? 'success.main' 
+                                                  : (selectedAnswers[question.id] === index && selectedAnswers[question.id] !== question.correctAnswer)
+                                                    ? 'error.main'
+                                                    : 'divider')
+                                              : 'divider',
+                                            bgcolor: submittedAnswers[question.id] 
+                                              ? 'transparent'
+                                              : 'transparent'
+                                          }}
                                         >
-                                          <Box display="flex" alignItems="flex-start" gap={1}>
-                                            <Box component="span" fontWeight="600">
-                                              {String.fromCharCode(65 + index)}.
-                                            </Box>
-                                            {cleanOptionText(option)}
-                                          </Box>
-                                        </Typography>
-                                      </Stack>
-                                    </Paper>
-                                ))}
-                                  </Box>
-                                  
-                                  {submittedAnswers[question.id] && (
-                                    <Paper elevation={0} sx={{ p: 2, mt: 2, bgcolor: 'action.hover' }}>
-                                      <Typography variant="body2" color="text.primary" sx={{ textAlign: 'left' }}>
-                                        <Box component="span" fontWeight="600">Explanation:</Box> {question.reason}
+                                          <Stack direction="column" spacing={1}>
+                                            {submittedAnswers[question.id] && index === question.correctAnswer && (
+                                              <Chip label="Correct answer" color="success" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
+                                            )}
+                                            {submittedAnswers[question.id] && selectedAnswers[question.id] === index && selectedAnswers[question.id] !== question.correctAnswer && (
+                                              <Chip label="Your answer" color="error" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
+                                            )}
+                                            <Typography
+                                              variant="body2"
+                                              color={submittedAnswers[question.id]
+                                                ? (index === question.correctAnswer ? 'success.dark' : 'text.primary')
+                                                : 'text.primary'
+                                              }
+                                              sx={{ textAlign: 'left' }}
+                                            >
+                                              <Box display="flex" alignItems="flex-start" gap={1}>
+                                                <Box component="span" fontWeight="600">
+                                                  {String.fromCharCode(65 + index)}.
+                                                </Box>
+                                                {cleanOptionText(option)}
+                                              </Box>
+                                            </Typography>
+                                          </Stack>
+                                        </Paper>
+                                      ))}
+                                    </Box>
+                                  ) : (
+                                    <Box>
+                                      <Typography variant="h6" color="success.main" gutterBottom>
+                                        Correct Answer:
                                       </Typography>
-                                    </Paper>
-                                )}
+                                      <Typography variant="body1" sx={{ mb: 2 }}>
+                                        {cleanOptionText(question.options[question.correctAnswer])}
+                                      </Typography>
+                                    </Box>
+                                  )}
+                                  
+                                  <Box sx={{ mt: 3 }}>
+                                    <Typography variant="h6" color="primary.main" gutterBottom>
+                                      Explanation:
+                                    </Typography>
+                                    <Typography variant="body1" color="text.primary">
+                                      {question.reason}
+                                    </Typography>
+                                  </Box>
                                 </Box>
                               </CardContent>
                             </Card>
@@ -889,7 +905,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                             All Previous Questions
                           </Typography>
                           <Typography variant="h6" color="text.secondary">
-                            Showing {allPreviousQuestions.length} quiz set{allPreviousQuestions.length !== 1 ? 's' : ''} from previous sessions
+                            Showing {allPreviousQuestions.length} {isQuizMode ? 'test set' : 'learning set'}{allPreviousQuestions.length !== 1 ? 's' : ''} from previous sessions
                           </Typography>
                         </Box>
                         
@@ -910,7 +926,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               <Card key={setIndex} elevation={2}>
                                 <CardContent>
                                   <Typography variant="h2" fontWeight="600" gutterBottom>
-                                    Quiz Set #{setIndex + 1}
+                                    {isQuizMode ? 'Test Set' : 'Learning Set'} #{setIndex + 1}
                                   </Typography>
                                   <Stack spacing={3}>
                                     {questionSet.map((question, qIndex) => {
@@ -925,30 +941,34 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                             p: 3, 
                                             bgcolor: 'background.paper',
                                             border: '2px solid',
-                                            borderColor: question.isAnswered 
-                                              ? (wasAnsweredCorrectly ? 'success.main' : 'error.main')
+                                            borderColor: isQuizMode
+                                              ? (question.isAnswered 
+                                                  ? (wasAnsweredCorrectly ? 'success.main' : 'error.main')
+                                                  : 'divider')
                                               : 'divider'
                                           }}
                                         >
                                           <Box display="flex" alignItems="flex-start" mb={2}>
-                                            <Chip
-                                              icon={question.isAnswered
-                                                ? (wasAnsweredCorrectly ? <CheckCircle /> : <Cancel />)
-                                                : <HelpOutline />
+                                            {isQuizMode && (
+                                              <Chip
+                                                icon={question.isAnswered
+                                                  ? (wasAnsweredCorrectly ? <CheckCircle /> : <Cancel />)
+                                                  : <HelpOutline />
+                                                }
+                                                label={question.isAnswered
+                                                  ? (wasAnsweredCorrectly ? 'Correct' : 'Incorrect')
+                                                  : 'Unanswered'
+                                                }
+                                                color={question.isAnswered
+                                                  ? (wasAnsweredCorrectly ? 'success' : 'error')
+                                                  : 'default'
                                               }
-                                              label={question.isAnswered
-                                                ? (wasAnsweredCorrectly ? 'Correct' : 'Incorrect')
-                                                : 'Unanswered'
-                                              }
-                                              color={question.isAnswered
-                                                ? (wasAnsweredCorrectly ? 'success' : 'error')
-                                                : 'default'
-                                              }
-                                              size="small"
-                                              sx={{ mr: 2 }}
-                                            />
+                                                size="small"
+                                                sx={{ mr: 2 }}
+                                              />
+                                            )}
                                             <Typography variant="body1" fontWeight="500" sx={{ flexGrow: 1 }}>
-                                      Question {qIndex + 1}: {question.text}
+                                              Question {qIndex + 1}: {question.text}
                                             </Typography>
                                             <Button 
                                               onClick={() => handleToggleStar(question.id)}
@@ -962,58 +982,72 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                             </Button>
                                           </Box>
                                           <Box ml={2}>
-                                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
-                                            {question.options.map((option, optIndex) => {
-                                              const isCorrectAnswer = optIndex === question.correctAnswer;
-                                              const isUserAnswer = question.userAnswer === optIndex;
-                                              const wasAnswered = question.isAnswered;
-                                              
-                                              return (
-                                                <Paper
-                                          key={optIndex}
-                                                  elevation={0}
-                                                  sx={{
-                                                    p: 2,
-                                                    minHeight: '40px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    border: '2px solid',
-                                                    borderColor: wasAnswered
-                                                      ? (isCorrectAnswer
-                                                          ? 'success.main'
-                                                          : isUserAnswer
-                                                            ? 'error.main'
-                                                            : 'divider')
-                                                      : isCorrectAnswer
-                                                        ? 'success.main'
-                                                        : 'divider'
-                                                  }}
-                                        >
-                                                  <Stack direction="column" spacing={1}>
-                                                    {isCorrectAnswer && (
-                                                      <Chip label="Correct answer" color="success" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
-                                                    )}
-                                                    {wasAnswered && isUserAnswer && !isCorrectAnswer && (
-                                                      <Chip label="Your answer" color="error" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
-                                          )}
-                                                    <Box display="flex" alignItems="flex-start" gap={1}>
-                                                      <Box component="span" fontWeight="600">
-                                                        {String.fromCharCode(65 + optIndex)}.
-                                                      </Box>
-                                                      <Typography variant="body2" sx={{ textAlign: 'left' }}>
-                                                        {cleanOptionText(option)}
-                                                      </Typography>
-                                                    </Box>
-                                                  </Stack>
-                                                </Paper>
-                                              );
-                                            })}
-                                            </Box>
-                                            <Paper elevation={0} sx={{ p: 2, mt: 2, bgcolor: 'action.hover' }}>
-                                              <Typography variant="body2" color="text.primary" sx={{ textAlign: 'left' }}>
-                                                <Box component="span" fontWeight="600">Explanation:</Box> {question.reason}
+                                            {isQuizMode ? (
+                                              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                                                {question.options.map((option, optIndex) => {
+                                                  const isCorrectAnswer = optIndex === question.correctAnswer;
+                                                  const isUserAnswer = question.userAnswer === optIndex;
+                                                  const wasAnswered = question.isAnswered;
+                                                  
+                                                  return (
+                                                    <Paper
+                                                      key={optIndex}
+                                                      elevation={0}
+                                                      sx={{
+                                                        p: 2,
+                                                        minHeight: '40px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        border: '2px solid',
+                                                        borderColor: wasAnswered
+                                                          ? (isCorrectAnswer
+                                                              ? 'success.main'
+                                                              : isUserAnswer
+                                                                ? 'error.main'
+                                                                : 'divider')
+                                                          : isCorrectAnswer
+                                                            ? 'success.main'
+                                                            : 'divider'
+                                                      }}
+                                                    >
+                                                      <Stack direction="column" spacing={1}>
+                                                        {isCorrectAnswer && (
+                                                          <Chip label="Correct answer" color="success" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
+                                                        )}
+                                                        {wasAnswered && isUserAnswer && !isCorrectAnswer && (
+                                                          <Chip label="Your answer" color="error" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
+                                                        )}
+                                                        <Box display="flex" alignItems="flex-start" gap={1}>
+                                                          <Box component="span" fontWeight="600">
+                                                            {String.fromCharCode(65 + optIndex)}.
+                                                          </Box>
+                                                          <Typography variant="body2" sx={{ textAlign: 'left' }}>
+                                                            {cleanOptionText(option)}
+                                                          </Typography>
+                                                        </Box>
+                                                      </Stack>
+                                                    </Paper>
+                                                  );
+                                                })}
+                                              </Box>
+                                            ) : (
+                                              <Box>
+                                                <Typography variant="h6" color="success.main" gutterBottom>
+                                                  Correct Answer:
+                                                </Typography>
+                                                <Typography variant="body1" sx={{ mb: 2 }}>
+                                                  {cleanOptionText(question.options[question.correctAnswer])}
+                                                </Typography>
+                                              </Box>
+                                            )}
+                                            <Box sx={{ mt: 3 }}>
+                                              <Typography variant="h6" color="primary.main" gutterBottom>
+                                                Explanation:
                                               </Typography>
-                                            </Paper>
+                                              <Typography variant="body1" color="text.primary">
+                                                {question.reason}
+                                              </Typography>
+                                            </Box>
                                           </Box>
                                         </Paper>
                                       );
@@ -1023,7 +1057,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               </Card>
                             ))}
                           </Stack>
-                                          )}
+                        )}
                       </Box>
                     )}
                   </Box>
@@ -1296,110 +1330,155 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               {questions[currentQuestion].starred ? <Star color="warning" /> : <StarBorder color="warning" />}
                             </Button>
                             <Typography variant="h5" fontWeight="500" gutterBottom>
-                            {questions[currentQuestion].text}
+                              {questions[currentQuestion].text}
                             </Typography>
                             
-                            <FormControl component="fieldset" sx={{ width: '100%', mt: 3 }}>
-                              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
-                            {questions[currentQuestion].options.map((option, index) => {
-                              const questionId = questions[currentQuestion].id;
-                              const isSelected = selectedAnswers[questionId] === index;
-                              const isSubmitted = submittedAnswers[questionId];
-                              const correctAnswer = questions[currentQuestion].correctAnswer;
-                              const isCorrect = isSelected && index === correctAnswer;
-                              const isIncorrect = isSelected && index !== correctAnswer;
-                              const isCorrectAnswer = index === correctAnswer;
+                            {isQuizMode ? (
+                              <FormControl component="fieldset" sx={{ width: '100%', mt: 3 }}>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                                  {questions[currentQuestion].options.map((option, index) => {
+                                    const questionId = questions[currentQuestion].id;
+                                    const isSelected = selectedAnswers[questionId] === index;
+                                    const isSubmitted = submittedAnswers[questionId];
+                                    const correctAnswer = questions[currentQuestion].correctAnswer;
+                                    const isCorrect = isSelected && index === correctAnswer;
+                                    const isIncorrect = isSelected && index !== correctAnswer;
+                                    const isCorrectAnswer = index === correctAnswer;
 
-                              return (
-                                    <Paper
-                                  key={index}
-                                      elevation={0}
-                                  onClick={() => handleAnswerSelect(questionId, index)}
-                                      sx={{
-                                        p: 2,
-                                        minHeight: '40px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        border: '2px solid',
-                                        borderColor: isSubmitted 
-                                      ? (isCorrect
-                                              ? 'success.main'
-                                          : isIncorrect
-                                                ? 'error.main'
-                                            : isCorrectAnswer
-                                                  ? 'success.main'
-                                                  : 'divider')
-                                      : (isSelected
-                                              ? 'primary.main'
-                                              : 'divider'),
-                                        bgcolor: isSubmitted
-                                            ? (isCorrect || isCorrectAnswer ? 'success.main' : isIncorrect ? 'error.main' : 'transparent')
-                                            : (isSelected ? 'primary.main' : 'transparent'),
-                                        cursor: isSubmitted ? 'default' : 'pointer',
-                                        transition: 'all 0.2s ease',
-                                        '&:hover': isSubmitted ? {} : {
-                                          borderColor: 'primary.main',
-                                          bgcolor: 'action.hover'
-                                        }
-                                      }}
-                                >
-                                      <Box display="flex" alignItems="center">
-                                        <Box
-                                          sx={{
-                                            width: 24,
-                                            height: 24,
-                                            minWidth: 24,
-                                            minHeight: 24,
-                                            borderRadius: '50%',
-                                            border: '2px solid',
-                                            borderColor: isSubmitted 
-                                        ? (isCorrect
-                                                    ? 'success.main'
-                                            : isIncorrect
-                                                        ? 'error.main'
+                                    return (
+                                      <Paper
+                                        key={index}
+                                        elevation={0}
+                                        onClick={() => handleAnswerSelect(questionId, index)}
+                                        sx={{
+                                          p: 2,
+                                          minHeight: '40px',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          border: '2px solid',
+                                          borderColor: isSubmitted 
+                                            ? (isCorrect
+                                                ? 'success.main'
+                                                : isIncorrect
+                                                  ? 'error.main'
                                                   : isCorrectAnswer
-                                                                ? 'success.main'
-                                                                : 'divider')
-                                        : (isSelected
-                                                    ? 'primary.main'
-                                                    : 'divider'),
-                                            bgcolor: isSubmitted
-                                                ? (isCorrect || isCorrectAnswer ? 'success.main' : isIncorrect ? 'error.main' : 'transparent')
-                                                : (isSelected ? 'primary.main' : 'transparent'),
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flexShrink: 0,
-                                            mr: 2
-                                          }}
-                                        >
-                                          {(isSelected && !isSubmitted) || isCorrect || (isCorrectAnswer && isSubmitted) ? (
-                                            <Check sx={{ fontSize: 16, color: 'white' }} />
-                                          ) : isIncorrect ? (
-                                            <Close sx={{ fontSize: 16, color: 'white' }} />
-                                          ) : null}
-                                        </Box>
-                                        <Typography
-                                          variant="body1"
-                                          color={isSubmitted
-                                            ? (isCorrect || isCorrectAnswer ? 'success.dark' : isIncorrect ? 'error.dark' : 'text.primary')
-                                            : (isSelected ? 'primary.dark' : 'text.primary')
+                                                    ? 'success.main'
+                                                    : 'divider')
+                                            : (isSelected
+                                                ? 'primary.main'
+                                                : 'divider'),
+                                          bgcolor: isSubmitted
+                                              ? (isCorrect || isCorrectAnswer ? 'success.main' : isIncorrect ? 'error.main' : 'transparent')
+                                              : (isSelected ? 'primary.main' : 'transparent'),
+                                          cursor: isSubmitted ? 'default' : 'pointer',
+                                          transition: 'all 0.2s ease',
+                                          '&:hover': isSubmitted ? {} : {
+                                            borderColor: 'primary.main',
+                                            bgcolor: 'action.hover'
                                           }
-                                          sx={{ textAlign: 'left' }}
-                                        >
-                                          <Box display="flex" alignItems="flex-start" gap={1}>
-                                            <Box component="span" fontWeight="600">
-                                              {String.fromCharCode(65 + index)}.
-                                            </Box>
-                                            {cleanOptionText(option)}
+                                        }}
+                                      >
+                                        <Box display="flex" alignItems="center">
+                                          <Box
+                                            sx={{
+                                              width: 24,
+                                              height: 24,
+                                              minWidth: 24,
+                                              minHeight: 24,
+                                              borderRadius: '50%',
+                                              border: '2px solid',
+                                              borderColor: isSubmitted 
+                                            ? (isCorrect
+                                                ? 'success.main'
+                                                : isIncorrect
+                                                  ? 'error.main'
+                                                  : isCorrectAnswer
+                                                    ? 'success.main'
+                                                    : 'divider')
+                                            : (isSelected
+                                                ? 'primary.main'
+                                                : 'divider'),
+                                              bgcolor: isSubmitted
+                                                  ? (isCorrect || isCorrectAnswer ? 'success.main' : isIncorrect ? 'error.main' : 'transparent')
+                                                  : (isSelected ? 'primary.main' : 'transparent'),
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              flexShrink: 0,
+                                              mr: 2
+                                            }}
+                                          >
+                                            {(isSelected && !isSubmitted) || isCorrect || (isCorrectAnswer && isSubmitted) ? (
+                                              <Check sx={{ fontSize: 16, color: 'white' }} />
+                                            ) : isIncorrect ? (
+                                              <Close sx={{ fontSize: 16, color: 'white' }} />
+                                            ) : null}
                                           </Box>
-                                        </Typography>
-                                      </Box>
-                                    </Paper>
-                              );
-                            })}
+                                          <Typography
+                                            variant="body1"
+                                            color={isSubmitted
+                                              ? (isCorrect || isCorrectAnswer ? 'success.dark' : isIncorrect ? 'error.dark' : 'text.primary')
+                                              : (isSelected ? 'primary.dark' : 'text.primary')
+                                            }
+                                            sx={{ textAlign: 'left' }}
+                                          >
+                                            <Box display="flex" alignItems="flex-start" gap={1}>
+                                              <Box component="span" fontWeight="600">
+                                                {String.fromCharCode(65 + index)}.
+                                              </Box>
+                                              {cleanOptionText(option)}
+                                            </Box>
+                                          </Typography>
+                                        </Box>
+                                      </Paper>
+                                    );
+                                  })}
+                                </Box>
+                              </FormControl>
+                            ) : (
+                              <Box 
+                                onClick={() => setIsCardFlipped(!isCardFlipped)}
+                                sx={{ 
+                                  mt: 4, 
+                                  textAlign: 'center',
+                                  cursor: 'pointer',
+                                  minHeight: '200px',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  justifyContent: 'center',
+                                  alignItems: 'center',
+                                  border: '2px dashed',
+                                  borderColor: 'divider',
+                                  borderRadius: 2,
+                                  transition: 'all 0.2s ease',
+                                  '&:hover': {
+                                    bgcolor: 'action.hover',
+                                    borderColor: 'primary.main'
+                                  }
+                                }}
+                              >
+                                {!isCardFlipped ? (
+                                  <Typography variant="body1" color="text.secondary">
+                                    Click to reveal the answer
+                                  </Typography>
+                                ) : (
+                                  <Box sx={{ p: 3 }}>
+                                    <Typography variant="h4" color="success.main" gutterBottom>
+                                      Correct Answer:
+                                    </Typography>
+                                    <Typography variant="h4" sx={{ mb: 3 }}>
+                                      {cleanOptionText(questions[currentQuestion].options[questions[currentQuestion].correctAnswer])}
+                                    </Typography>
+                                    <Typography variant="h6" color="primary.main" gutterBottom>
+                                      Explanation:
+                                    </Typography>
+                                    <Typography variant="body1">
+                                      {questions[currentQuestion].reason}
+                                    </Typography>
+                                  </Box>
+                                )}
                               </Box>
-                            </FormControl>
+                            )}
                           </CardContent>
                         </Card>
 
@@ -1421,16 +1500,18 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                 variant="outlined"
                                 startIcon={<ArrowForward />}
                               >
-                                Skip
+                                {isQuizMode ? 'Skip' : 'Next'}
                               </Button>
-                              <Button
-                                onClick={() => handleSubmitAnswer(questions[currentQuestion].id)}
-                                disabled={selectedAnswers[questions[currentQuestion].id] === undefined}
-                                variant="contained"
-                                color="primary"
-                              >
-                                Submit Answer
-                              </Button>
+                              {isQuizMode && (
+                                <Button
+                                  onClick={() => handleSubmitAnswer(questions[currentQuestion].id)}
+                                  disabled={selectedAnswers[questions[currentQuestion].id] === undefined}
+                                  variant="contained"
+                                  color="primary"
+                                >
+                                  Submit Answer
+                                </Button>
+                              )}
                             </Stack>
                           ) : (
                             currentQuestion >= questions.length - 1 ? (
@@ -1486,12 +1567,12 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                 {visibleExplanation.reason}
                               </Typography>
                             </Alert>
-            )}
+                          )}
                         </Collapse>
                       </Box>
-                )}
+                    )}
                   </Box>
-            )}
+                )}
               </Box>
             )}
           </CardContent>
