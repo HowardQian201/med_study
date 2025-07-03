@@ -281,7 +281,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
       const response = await axios.post('/api/generate-quiz', {
         type: 'focused',
-        incorrectQuestionIds,
+        incorrectQuestionIds: incorrectQuestionIds,
         previousQuestions: questions,
         isPreviewing: false,
         numQuestions: numFocusedQuestions,
