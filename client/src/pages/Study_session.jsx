@@ -45,6 +45,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [isContentLocked, setIsContentLocked] = useState(false);
   const fileInputRef = useRef(null);
+  const [numQuestions, setNumQuestions] = useState(5);
 
   // Display existing results if available
   useEffect(() => {
@@ -232,6 +233,8 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   };
   
   const goToQuiz = () => {
+    // Store the number of questions in sessionStorage so the Quiz page can access it
+    sessionStorage.setItem('numQuestions', numQuestions.toString());
     navigate('/quiz');
   };
 
@@ -595,7 +598,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                   )}
 
                   {/* Summary Action Buttons - Below Summary */}
-                  <Box display="flex" justifyContent="center" gap={1}>
+                  <Box display="flex" justifyContent="center" gap={1} alignItems="center">
                     <Button
                       onClick={regenerateSummary}
                       disabled={!summary || isUploading}
@@ -613,9 +616,57 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       color="primary"
                       size="small"
                       startIcon={<Quiz />}
-                      sx={{ minWidth: 'fit-content' }}
+                      sx={{ 
+                        minWidth: 'fit-content',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        px: 2
+                      }}
                     >
-                        Quiz Me
+                      Quiz Me
+                      <TextField
+                        type="number"
+                        value={numQuestions}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setNumQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)));
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        disabled={!summary || isUploading}
+                        inputProps={{ 
+                          min: 1, 
+                          max: 20,
+                          style: { textAlign: 'center', width: '40px', fontSize: '14px' }
+                        }}
+                        size="small"
+                        sx={{
+                          width: '45px',
+                          '& .MuiOutlinedInput-root': {
+                            height: '24px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                            border: '1px solid rgba(255, 255, 255, 0.3)',
+                            borderRadius: '4px',
+                            '&:hover': {
+                              backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                            },
+                            '&.Mui-focused': {
+                              backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                              border: '1px solid rgba(255, 255, 255, 0.5)',
+                            }
+                          },
+                          '& .MuiInputBase-input': {
+                            color: 'white',
+                            padding: '2px 4px',
+                            '&::placeholder': {
+                              color: 'rgba(255, 255, 255, 0.7)',
+                            }
+                          },
+                          '& .MuiOutlinedInput-notchedOutline': {
+                            border: 'none'
+                          }
+                        }}
+                      />
                     </Button>
                     <Button
                         onClick={clearResults}

@@ -19,7 +19,8 @@ import {
   FormControl,
   Chip,
   CircularProgress,
-  Collapse
+  Collapse,
+  TextField
 } from '@mui/material';
 import {
   ArrowBack,
@@ -57,6 +58,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [allPreviousQuestions, setAllPreviousQuestions] = useState([]);
   const [isLoadingPreviousQuestions, setIsLoadingPreviousQuestions] = useState(false);
   const [visibleExplanation, setVisibleExplanation] = useState(null);
+  const [numAdditionalQuestions, setNumAdditionalQuestions] = useState(5);
+  const [numFocusedQuestions, setNumFocusedQuestions] = useState(5);
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -93,8 +96,10 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
           setQuestions(existingResponse.data.questions);
         } else {
         // If no existing questions, generate new ones
+        const numQuestions = parseInt(sessionStorage.getItem('numQuestions')) || 5;
         const response = await axios.post('/api/generate-quiz', {
-          type: 'initial'
+          type: 'initial',
+          numQuestions: numQuestions
         }, {
           withCredentials: true
         });
@@ -229,7 +234,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         type: 'additional',
         incorrectQuestionIds: [],
         previousQuestions: questions,
-        isPreviewing: true
+        isPreviewing: true,
+        numQuestions: numAdditionalQuestions
       }, {
         withCredentials: true
       });
@@ -264,7 +270,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         type: 'focused',
         incorrectQuestionIds,
         previousQuestions: questions,
-        isPreviewing: false
+        isPreviewing: false,
+        numQuestions: numFocusedQuestions
       }, {
         withCredentials: true
       });
@@ -651,8 +658,56 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               variant="contained"
                               color="primary"
                               startIcon={isGeneratingMoreQuestions ? <CircularProgress size={16} color="inherit" /> : <Add />}
+                              sx={{ 
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                px: 2
+                              }}
                             >
                               {isGeneratingMoreQuestions ? 'Generating...' : 'Generate New Questions'}
+                              <TextField
+                                type="number"
+                                value={numFocusedQuestions}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  setNumFocusedQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)));
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                disabled={isGeneratingMoreQuestions}
+                                inputProps={{ 
+                                  min: 1, 
+                                  max: 20,
+                                  style: { textAlign: 'center', width: '40px', fontSize: '14px' }
+                                }}
+                                size="small"
+                                sx={{ 
+                                  width: '45px',
+                                  '& .MuiOutlinedInput-root': {
+                                    height: '24px',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                                    borderRadius: '4px',
+                                    '&:hover': {
+                                      backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                    },
+                                    '&.Mui-focused': {
+                                      backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                                      border: '1px solid rgba(255, 255, 255, 0.5)',
+                                    }
+                                  },
+                                  '& .MuiInputBase-input': {
+                                    color: 'white',
+                                    padding: '2px 4px',
+                                    '&::placeholder': {
+                                      color: 'rgba(255, 255, 255, 0.7)',
+                                    }
+                                  },
+                                  '& .MuiOutlinedInput-notchedOutline': {
+                                    border: 'none'
+                                  }
+                                }}
+                              />
                             </Button>
                             <Button
                               onClick={togglePreviousQuestions}
@@ -953,8 +1008,56 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         size="large"
                         startIcon={isGeneratingMoreQuestions ? <CircularProgress size={24} color="inherit" /> : <Add />}
                         disabled={isGeneratingMoreQuestions}
+                        sx={{ 
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          px: 2
+                        }}
                       >
                         {isGeneratingMoreQuestions ? 'Generating...' : 'Generate More'}
+                        <TextField
+                          type="number"
+                          value={numAdditionalQuestions}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            setNumAdditionalQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)));
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          disabled={isGeneratingMoreQuestions}
+                          inputProps={{ 
+                            min: 1, 
+                            max: 20,
+                            style: { textAlign: 'center', width: '40px', fontSize: '14px' }
+                          }}
+                          size="small"
+                          sx={{ 
+                            width: '45px',
+                            '& .MuiOutlinedInput-root': {
+                              height: '24px',
+                              backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                              border: '1px solid rgba(255, 255, 255, 0.3)',
+                              borderRadius: '4px',
+                              '&:hover': {
+                                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                              },
+                              '&.Mui-focused': {
+                                backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                                border: '1px solid rgba(255, 255, 255, 0.5)',
+                              }
+                            },
+                            '& .MuiInputBase-input': {
+                              color: 'white',
+                              padding: '2px 4px',
+                              '&::placeholder': {
+                                color: 'rgba(255, 255, 255, 0.7)',
+                              }
+                            },
+                            '& .MuiOutlinedInput-notchedOutline': {
+                              border: 'none'
+                            }
+                          }}
+                        />
                       </Button>
                       <Button
                         onClick={handleStartQuiz}
