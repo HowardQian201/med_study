@@ -4,7 +4,7 @@ import traceback
 from .logic import extract_text_from_pdf_memory, set_process_priority, log_memory_usage, check_memory, get_container_memory_limit
 from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_short_title
 from .database import (
-    upsert_pdf_results,
+    upsert_pdf_results, check_question_set_exists,
     check_file_exists, generate_content_hash, generate_file_hash,
     authenticate_user, star_all_questions_by_hashes,
     upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title,
@@ -290,6 +290,7 @@ def upload_multiple():
         
         user_id = session.get('user_id')
         content_hash = generate_content_hash(files_usertext_content, user_id, is_quiz_mode)
+        other_content_hash = generate_content_hash(files_usertext_content, user_id, not is_quiz_mode)
         # Create a list of filenames
         content_name_list = list(results.keys())
         # Add "user text" to the list if user text was submitted
@@ -297,6 +298,7 @@ def upload_multiple():
             content_name_list.append("user text")
 
         session['content_hash'] = content_hash
+        session['other_content_hash'] = other_content_hash
         session['content_name_list'] = content_name_list
         session.modified = True
 
@@ -360,6 +362,7 @@ def generate_quiz():
             
         user_id = session['user_id']
         content_hash = session.get('content_hash')
+        other_content_hash = session.get('other_content_hash')
         content_name_list = session.get('content_name_list', [])
         total_extracted_text = session.get('total_extracted_text', '')
         
@@ -377,13 +380,15 @@ def generate_quiz():
         is_previewing = data.get('isPreviewing', False)
         num_questions = data.get('numQuestions', 5)  # Default to 5 if not specified
         is_quiz_mode = data.get('isQuizMode', False)  # Default to False (study mode)
-        
+        other_quiz_exists = False
+
         # Validate number of questions is within reasonable bounds
         if not isinstance(num_questions, int) or num_questions < 1 or num_questions > 20:
             num_questions = 5  # Default to 5 if invalid
         
         # For initial generation, check if we already have questions to prevent duplicates
         if question_type == 'initial':
+            other_quiz_exists = check_question_set_exists(other_content_hash, user_id)['exists']
             existing_questions = session.get('quiz_questions', [])
             if existing_questions:
                 latest_questions = existing_questions[-1]
@@ -407,6 +412,13 @@ def generate_quiz():
             short_summary = generate_short_title(total_extracted_text)
             # Upsert the question set to the database
             upsert_question_set(content_hash, user_id, question_hashes, content_name_list, total_extracted_text, short_summary, summary, is_quiz_mode)
+            if not other_quiz_exists:
+                other_questions, other_question_hashes = generate_quiz_questions(
+                    summary, user_id, other_content_hash,
+                    num_questions=num_questions,
+                    is_quiz_mode=not is_quiz_mode
+                )
+                upsert_question_set(other_content_hash, user_id, other_question_hashes, content_name_list, total_extracted_text, short_summary, summary, not is_quiz_mode)
         else:
             # For focused/additional questions, just upsert the new questions
             upsert_question_set(content_hash, user_id, question_hashes, content_name_list, is_quiz=is_quiz_mode)
@@ -696,6 +708,7 @@ def clear_session_content():
         session.pop('summary', None)
         session.pop('quiz_questions', None)
         session.pop('content_hash', None)
+        session.pop('other_content_hash', None)
         session.pop('content_name_list', None)
         session.pop('short_summary', None)
         session.pop('total_extracted_text', None)
@@ -905,6 +918,7 @@ def delete_question_set():
             session.pop('summary', None)
             session.pop('quiz_questions', None)
             session.pop('content_hash', None)
+            session.pop('other_content_hash', None)
             session.pop('content_name_list', None)
             session.pop('short_summary', None)
             session.pop('total_extracted_text', None)

@@ -223,6 +223,20 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
               <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
                 MedStudy.AI
               </Typography>
+              <Typography 
+                variant="body2" 
+                color="primary"
+                sx={{ 
+                  fontWeight: 600,
+                  bgcolor: 'primary.light',
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 1,
+                  color: 'text.primary'
+                }}
+              >
+                {showQuizSets ? 'Testing Mode' : 'Learning Mode'}
+              </Typography>
             </Box>
             <Stack direction="row" spacing={2} alignItems="center">
               <Typography variant="body2" color="text.secondary">
@@ -274,7 +288,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                 startIcon={<Book />}
                                 onClick={handleStartNewSession}
                             >
-                                Start New {showQuizSets ? 'Quiz' : 'Study'} Session
+                                Start New {showQuizSets ? 'Testing' : 'Learning'} Session
                             </Button>
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
                                 <Switch
@@ -294,7 +308,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                         fontSize: '0.875rem'
                                     }}
                                 >
-                                    {showQuizSets ? 'Quiz Mode (USMLE)' : 'Study Mode (Flashcards)'}
+                                    {showQuizSets ? 'Testing Mode (USMLE)' : 'Learning Mode (Flashcards)'}
                                 </Typography>
                             </Box>
                         </Box>
@@ -308,7 +322,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                     <Box display="flex" alignItems="center">
                         <History sx={{ mr: 1, color: 'text.secondary' }}/>
                         <Typography variant="h5" component="h3" fontWeight="600">
-                            Previous {showQuizSets ? 'Quiz' : 'Study'} Sets
+                            Previous {showQuizSets ? 'Testing' : 'Learning'} Sets
                         </Typography>
                         {sets.length > 0 && (
                             <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>

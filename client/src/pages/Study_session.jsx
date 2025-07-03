@@ -311,6 +311,20 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                 >
                   Home
                 </Button>
+                <Typography 
+                  variant="body2" 
+                  color="primary"
+                  sx={{ 
+                    fontWeight: 600,
+                    bgcolor: 'primary.light',
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 1,
+                    color: 'text.primary'
+                  }}
+                >
+                  {isQuizMode ? 'Testing Mode' : 'Learning Mode'}
+                </Typography>
               </Box>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Typography variant="body2" color="text.secondary">

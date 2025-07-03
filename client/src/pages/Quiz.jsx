@@ -60,6 +60,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [visibleExplanation, setVisibleExplanation] = useState(null);
   const [numAdditionalQuestions, setNumAdditionalQuestions] = useState(5);
   const [numFocusedQuestions, setNumFocusedQuestions] = useState(5);
+  const [isQuizMode, setIsQuizMode] = useState(false);
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -72,6 +73,10 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
 
   // Fetch questions from the API when the component mounts or the summary changes.
   useEffect(() => {
+    const storedQuizMode = sessionStorage.getItem('isQuizMode');
+    if (storedQuizMode) {
+      setIsQuizMode(storedQuizMode === 'true');
+    }
     if (!propSummary) {
       setIsLoading(false);
       return;
@@ -541,6 +546,25 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                 >
                   Home
                 </Button>
+                {(() => {
+                  const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
+                  return (
+                    <Typography 
+                      variant="body2" 
+                      color="primary"
+                      sx={{ 
+                        fontWeight: 600,
+                        bgcolor: 'primary.light',
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: 1,
+                        color: 'text.primary'
+                      }}
+                    >
+                      {isQuizMode ? 'Testing Mode' : 'Learning Mode'}
+                    </Typography>
+                  );
+                })()}
                 {(showResults || !isPreviewing) && (
                   <Button
                     onClick={handleBackToPreview}
@@ -583,7 +607,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
               <Paper elevation={2} sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, width: 800 }}>
                 <CircularProgress size={48} sx={{ mb: 2 }} />
                 <Typography variant="h6" color="text.secondary">
-                  Generating quiz questions...
+                  {isQuizMode ? 'Generating test questions (and flashcards) ...' : 'Generating flashcards (and test questions) ...'}
                 </Typography>
               </Paper>
             ) : error ? (
