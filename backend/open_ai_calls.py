@@ -180,13 +180,13 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             Based on the following medical text summary, create {num_questions} VERY challenging USMLE clinical vignette style \
                 multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
             
-            {previous_questions_text}
-
             For each question:
             1. A clear, specific and challenging clinical vignette stem.
             2. Be in the style of a USMLE clinical vignette (Example clinical vignette stem: "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
             3. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
             
+            {previous_questions_text}
+
             Summary:
             {summary_text}
             """
@@ -200,14 +200,14 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             prompt = f"""
             Based on the following medical text summary, create {num_questions} VERY challenging
                 multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
-            
-            {previous_questions_text}
 
             For each question:
             1. A clear, specific, and concise question stem for active recall flashcards. Do not include the answer in the question stem or suggest there are multiple answers.
             2. Simple multiple choice questions based on the summary.
             3. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
             
+            {previous_questions_text}
+
             Summary:
             {summary_text}
             """
