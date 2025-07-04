@@ -5,8 +5,10 @@ URGENT:
 Allow users to start a set at a certain question place
 
 stats tracking
+    - supabase realtime
 register new account
     - Payment page on register new account
+    - supabase auth
 
 
 IDEAS:
