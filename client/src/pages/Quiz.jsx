@@ -417,10 +417,11 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     
     const answeredQuestions = questionsWithStatus.filter(q => q.isAnswered);
     const correctAnswers = questionsWithStatus.filter(q => q.isCorrect && q.isAnswered);
+    const totalQuestions = questions.length;
     
     return {
       correct: correctAnswers.length,
-      total: answeredQuestions.length,
+      total: totalQuestions,
       percentage: answeredQuestions.length > 0 
         ? Math.round((correctAnswers.length / answeredQuestions.length) * 100) 
         : 0,
@@ -435,10 +436,57 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const stats = calculateStats();
   const starredQuestionsCount = questions.filter(q => q.starred).length;
 
+  // Function to save user answers to the backend
+  const saveUserAnswers = async () => {
+    try {
+      await axios.post('/api/save-quiz-answers', {
+        userAnswers: selectedAnswers,
+        submittedAnswers: submittedAnswers
+      }, {
+        withCredentials: true
+      });
+
+      // If we have previous questions loaded, update them with new answers
+      if (allPreviousQuestions.length > 0) {
+        // Get the current quiz questions
+        const currentQuestions = questions.map(q => ({
+          ...q,
+          userAnswer: selectedAnswers[q.id],
+          isAnswered: submittedAnswers[q.id] === true,
+          isCorrect: selectedAnswers[q.id] === q.correctAnswer
+        }));
+
+        // Update the most recent set in allPreviousQuestions
+        setAllPreviousQuestions(prevSets => {
+          const updatedSets = [...prevSets];
+          // Find the index of the current set (matching by question IDs)
+          const currentSetIndex = updatedSets.findIndex(set => 
+            set.some(q => currentQuestions.some(cq => cq.id === q.id))
+          );
+          
+          if (currentSetIndex !== -1) {
+            // Update the existing set
+            updatedSets[currentSetIndex] = currentQuestions;
+          }
+          return updatedSets;
+        });
+      }
+    } catch (err) {
+      console.error('Error saving quiz answers:', err);
+      // Don't show error to user as this is background functionality
+    }
+  };
+
   // Combine the functions to complete the quiz and show results
   const completeQuiz = async () => {
     // Save answers before showing results
     await saveUserAnswers();
+    
+    // If we're showing all previous questions, refresh them to get the latest data
+    if (showAllPreviousQuestions) {
+      await fetchAllPreviousQuestions();
+    }
+    
     setShowResults(true);
     setShowAllPreviousQuestions(false);
   };
@@ -480,21 +528,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       }
     } else {
       setShowAllPreviousQuestions(false);
-    }
-  };
-
-  // Function to save user answers to the backend
-  const saveUserAnswers = async () => {
-    try {
-      await axios.post('/api/save-quiz-answers', {
-        userAnswers: selectedAnswers,
-        submittedAnswers: submittedAnswers
-      }, {
-        withCredentials: true
-      });
-    } catch (err) {
-      console.error('Error saving quiz answers:', err);
-      // Don't show error to user as this is background functionality
     }
   };
 
@@ -698,41 +731,39 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                 {showAllPreviousQuestions ? 'Cumulative Performance' : 'Quiz Performance'}
                               </Typography>
                               
-                              {!showStatsCircle && !showAllPreviousQuestions ? (
+                              {!showStatsCircle && !showAllPreviousQuestions && !isQuizMode ? (
                                 <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
                                   You haven't answered all questions yet. Your current score is based on the questions you've completed.
                                 </Alert>
                               ) : (
-                                showStatsCircle && (
-                                  <Paper elevation={1} sx={{ display: 'inline-block', p: 4, mb: 3, borderRadius: 3 }}>
-                                    <Box display="flex" alignItems="center" justifyContent="center">
-                                      <Box position="relative" display="inline-flex">
-                                        <CircularProgress variant="determinate" value={100} size={120} thickness={4} sx={{ color: 'grey.300' }} />
-                                        <CircularProgress
-                                          variant="determinate"
-                                          value={displayStats.percentage}
-                                          size={120}
-                                          thickness={4}
-                                          sx={{
-                                            color: displayStats.percentage >= 70 ? 'success.main' :
-                                                  displayStats.percentage >= 40 ? 'warning.main' : 'error.main',
-                                            position: 'absolute',
-                                            left: 0,
-                                          }}
-                                        />
-                                        <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                          <Typography variant="h4" component="div" fontWeight="bold">
-                                            {displayStats.percentage}%
-                                          </Typography>
-                                        </Box>
+                                <Paper elevation={1} sx={{ display: 'inline-block', p: 4, mb: 3, borderRadius: 3 }}>
+                                  <Box display="flex" alignItems="center" justifyContent="center">
+                                    <Box position="relative" display="inline-flex">
+                                      <CircularProgress variant="determinate" value={100} size={120} thickness={4} sx={{ color: 'grey.300' }} />
+                                      <CircularProgress
+                                        variant="determinate"
+                                        value={displayStats.percentage}
+                                        size={120}
+                                        thickness={4}
+                                        sx={{
+                                          color: displayStats.percentage >= 70 ? 'success.main' :
+                                                displayStats.percentage >= 40 ? 'warning.main' : 'error.main',
+                                          position: 'absolute',
+                                          left: 0,
+                                        }}
+                                      />
+                                      <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Typography variant="h4" component="div" fontWeight="bold">
+                                          {displayStats.percentage}%
+                                        </Typography>
                                       </Box>
                                     </Box>
-                                    <Typography variant="body1" color="text.secondary" mt={2}>
-                                      {displayStats.correct} correct out of {displayStats.total} questions
-                                      {showAllPreviousQuestions && allPreviousQuestions.length > 0 && ` across ${allPreviousQuestions.length} set${allPreviousQuestions.length !== 1 ? 's' : ''}`}
-                                    </Typography>
-                                  </Paper>
-                                )
+                                  </Box>
+                                  <Typography variant="body1" color="text.secondary" mt={2}>
+                                    {displayStats.correct} correct out of {displayStats.total} questions
+                                    {showAllPreviousQuestions && allPreviousQuestions.length > 0 && ` across ${allPreviousQuestions.length} set${allPreviousQuestions.length !== 1 ? 's' : ''}`}
+                                  </Typography>
+                                </Paper>
                               )}
                             </>
                           )}
@@ -880,53 +911,103 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                 <Box ml={2}>
                                   {isQuizMode ? (
                                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
-                                      {question.options.map((option, index) => (
-                                        <Paper
-                                          key={index}
-                                          elevation={0}
-                                          sx={{
-                                            p: 2,
-                                            minHeight: '40px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            border: '2px solid',
-                                            borderColor: submittedAnswers[question.id] 
-                                              ? (index === question.correctAnswer
-                                                  ? 'success.main' 
-                                                  : (selectedAnswers[question.id] === index && selectedAnswers[question.id] !== question.correctAnswer)
-                                                    ? 'error.main'
-                                                    : 'divider')
-                                              : 'divider',
-                                            bgcolor: submittedAnswers[question.id] 
-                                              ? 'transparent'
-                                              : 'transparent'
-                                          }}
-                                        >
-                                          <Stack direction="column" spacing={1}>
-                                            {submittedAnswers[question.id] && index === question.correctAnswer && (
-                                              <Chip label="Correct answer" color="success" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
-                                            )}
-                                            {submittedAnswers[question.id] && selectedAnswers[question.id] === index && selectedAnswers[question.id] !== question.correctAnswer && (
-                                              <Chip label="Your answer" color="error" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
-                                            )}
-                                            <Typography
-                                              variant="body2"
-                                              color={submittedAnswers[question.id]
-                                                ? (index === question.correctAnswer ? 'success.dark' : 'text.primary')
-                                                : 'text.primary'
+                                      {question.options.map((option, index) => {
+                                        const questionId = question.id;
+                                        const isSelected = selectedAnswers[questionId] === index;
+                                        const isSubmitted = submittedAnswers[questionId];
+                                        const correctAnswer = question.correctAnswer;
+                                        const isCorrect = isSelected && index === correctAnswer;
+                                        const isIncorrect = isSelected && index !== correctAnswer;
+                                        const isCorrectAnswer = index === correctAnswer;
+
+                                        return (
+                                          <Paper
+                                            key={index}
+                                            elevation={0}
+                                            onClick={() => handleAnswerSelect(questionId, index)}
+                                            sx={{
+                                              p: 2,
+                                              minHeight: '40px',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              border: '2px solid',
+                                              borderColor: isSubmitted 
+                                                ? (isCorrect
+                                                    ? 'success.main'
+                                                    : isIncorrect
+                                                      ? 'error.main'
+                                                      : isCorrectAnswer
+                                                        ? 'success.main'
+                                                        : 'divider')
+                                                : (isSelected
+                                                    ? 'primary.main'
+                                                    : 'divider'),
+                                              bgcolor: isSubmitted
+                                                ? (isCorrect || isCorrectAnswer ? alpha('#4caf50', 0.1) : isIncorrect ? alpha('#f44336', 0.1) : 'transparent')
+                                                : 'transparent',
+                                              cursor: isSubmitted ? 'default' : 'pointer',
+                                              transition: 'all 0.2s ease',
+                                              '&:hover': isSubmitted ? {} : {
+                                                borderColor: 'primary.main',
+                                                bgcolor: alpha('#1976d2', 0.05)
                                               }
-                                              sx={{ textAlign: 'left' }}
-                                            >
-                                              <Box display="flex" alignItems="flex-start" gap={1}>
-                                                <Box component="span" fontWeight="600">
-                                                  {String.fromCharCode(65 + index)}.
-                                                </Box>
-                                                {cleanOptionText(option)}
+                                            }}
+                                          >
+                                            <Box display="flex" alignItems="center">
+                                              <Box
+                                                sx={{
+                                                  width: 24,
+                                                  height: 24,
+                                                  minWidth: 24,
+                                                  minHeight: 24,
+                                                  borderRadius: '50%',
+                                                  border: '2px solid',
+                                                  borderColor: isSubmitted 
+                                                    ? (isCorrect
+                                                        ? 'success.main'
+                                                        : isIncorrect
+                                                          ? 'error.main'
+                                                        : isCorrectAnswer
+                                                          ? 'success.main'
+                                                        : 'divider')
+                                                : (isSelected
+                                                    ? 'primary.main'
+                                                    : 'divider'),
+                                                  bgcolor: isSubmitted
+                                                      ? (isCorrect || isCorrectAnswer ? 'success.main' : isIncorrect ? 'error.main' : 'transparent')
+                                                      : 'transparent',
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  justifyContent: 'center',
+                                                  flexShrink: 0,
+                                                  mr: 2
+                                                }}
+                                              >
+                                                {(isSelected && !isSubmitted) || isCorrect || (isCorrectAnswer && isSubmitted) ? (
+                                                  <Check sx={{ fontSize: 16, color: isSubmitted ? 'white' : 'primary.main' }} />
+                                                ) : isIncorrect ? (
+                                                  <Close sx={{ fontSize: 16, color: 'white' }} />
+                                                ) : null}
                                               </Box>
-                                            </Typography>
-                                          </Stack>
-                                        </Paper>
-                                      ))}
+                                              <Typography
+                                                variant="body1"
+                                                color={isSubmitted
+                                                  ? (isCorrect || isCorrectAnswer ? 'success.dark' : isIncorrect ? 'error.dark' : 'text.primary')
+                                                  : (isSelected ? 'primary.dark' : 'text.primary')
+                                                }
+                                                sx={{ textAlign: 'left' }}
+                                              >
+                                                <Box display="flex" alignItems="flex-start" gap={1}>
+                                                  <Box component="span" fontWeight="600">
+                                                    {String.fromCharCode(65 + index)}.
+                                                  </Box>
+                                                  {cleanOptionText(option)}
+                                                </Box>
+                                              </Typography>
+                                            </Box>
+                                          </Paper>
+                                        );
+                                      })}
                                     </Box>
                                   ) : (
                                     <Box>
@@ -988,7 +1069,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                   </Typography>
                                   <Stack spacing={3}>
                                     {questionSet.map((question, qIndex) => {
-                                      // Calculate if the question was answered correctly
                                       const wasAnsweredCorrectly = question.isAnswered && question.userAnswer === question.correctAnswer;
                                       
                                       return (
@@ -1020,7 +1100,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                                 color={question.isAnswered
                                                   ? (wasAnsweredCorrectly ? 'success' : 'error')
                                                   : 'default'
-                                              }
+                                                }
                                                 size="small"
                                                 sx={{ mr: 2 }}
                                               />
@@ -1060,12 +1140,17 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                                         borderColor: wasAnswered
                                                           ? (isCorrectAnswer
                                                               ? 'success.main'
-                                                              : isUserAnswer
+                                                              : isUserAnswer && !isCorrectAnswer
                                                                 ? 'error.main'
                                                                 : 'divider')
-                                                          : isCorrectAnswer
-                                                            ? 'success.main'
-                                                            : 'divider'
+                                                          : 'divider',
+                                                        bgcolor: wasAnswered
+                                                          ? (isCorrectAnswer 
+                                                              ? alpha('#4caf50', 0.1)
+                                                              : isUserAnswer && !isCorrectAnswer
+                                                                ? alpha('#f44336', 0.1)
+                                                                : 'transparent')
+                                                          : 'transparent'
                                                       }}
                                                     >
                                                       <Stack direction="column" spacing={1}>
@@ -1098,6 +1183,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                                 </Typography>
                                               </Box>
                                             )}
+                                            
                                             <Box sx={{ mt: 3 }}>
                                               <Typography variant="h6" color="primary.main" gutterBottom>
                                                 Explanation:
@@ -1441,13 +1527,13 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                                 ? 'primary.main'
                                                 : 'divider'),
                                           bgcolor: isSubmitted
-                                              ? (isCorrect || isCorrectAnswer ? 'success.main' : isIncorrect ? 'error.main' : 'transparent')
-                                              : (isSelected ? 'primary.main' : 'transparent'),
+                                            ? (isCorrect || isCorrectAnswer ? alpha('#4caf50', 0.1) : isIncorrect ? alpha('#f44336', 0.1) : 'transparent')
+                                            : 'transparent',
                                           cursor: isSubmitted ? 'default' : 'pointer',
                                           transition: 'all 0.2s ease',
                                           '&:hover': isSubmitted ? {} : {
                                             borderColor: 'primary.main',
-                                            bgcolor: 'action.hover'
+                                            bgcolor: alpha('#1976d2', 0.05)
                                           }
                                         }}
                                       >
@@ -1461,19 +1547,19 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                               borderRadius: '50%',
                                               border: '2px solid',
                                               borderColor: isSubmitted 
-                                            ? (isCorrect
-                                                ? 'success.main'
-                                                : isIncorrect
-                                                  ? 'error.main'
-                                                  : isCorrectAnswer
+                                                ? (isCorrect
                                                     ? 'success.main'
-                                                    : 'divider')
-                                            : (isSelected
-                                                ? 'primary.main'
-                                                : 'divider'),
+                                                    : isIncorrect
+                                                      ? 'error.main'
+                                                      : isCorrectAnswer
+                                                        ? 'success.main'
+                                                        : 'divider')
+                                                : (isSelected
+                                                    ? 'primary.main'
+                                                    : 'divider'),
                                               bgcolor: isSubmitted
                                                   ? (isCorrect || isCorrectAnswer ? 'success.main' : isIncorrect ? 'error.main' : 'transparent')
-                                                  : (isSelected ? 'primary.main' : 'transparent'),
+                                                  : 'transparent',
                                               display: 'flex',
                                               alignItems: 'center',
                                               justifyContent: 'center',
@@ -1482,7 +1568,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                             }}
                                           >
                                             {(isSelected && !isSubmitted) || isCorrect || (isCorrectAnswer && isSubmitted) ? (
-                                              <Check sx={{ fontSize: 16, color: 'white' }} />
+                                              <Check sx={{ fontSize: 16, color: isSubmitted ? 'white' : 'primary.main' }} />
                                             ) : isIncorrect ? (
                                               <Close sx={{ fontSize: 16, color: 'white' }} />
                                             ) : null}

@@ -280,9 +280,9 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                         justifyContent: 'center',
                         width: '100%'
                     }}>
-                        <Box sx={{ flex: '0 0 60%' }}>
-                            <Typography variant="h6" color="text.primary">
-                                Transform your medical PDFs and notes into interactive study materials with AI-generated summaries and USMLE clinical vignette style questions.
+                        <Box sx={{ flex: '0 0 47%' }}>
+                            <Typography variant="h5" color="text.primary">
+                                Transform your medical PDFs and notes into interactive study materials with AI-generated summaries, active recall flashcards, and USMLE clinical vignette style questions.
                             </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
