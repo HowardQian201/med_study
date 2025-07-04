@@ -11,7 +11,8 @@ import {
   Alert,
   Container,
   CircularProgress,
-  Stack
+  Stack,
+  Link
 } from '@mui/material';
 import ThemeToggle from '../components/ThemeToggle';
 
@@ -70,7 +71,7 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
   return (
     <Container 
       component="main" 
-      maxWidth="sm"
+      maxWidth="xl"
       sx={{
         minHeight: '100vh',
         display: 'flex',
@@ -85,7 +86,8 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
         elevation={3}
         sx={{
           width: '100%',
-          maxWidth: 400,
+          minWidth: 400,
+          maxWidth: 700,
           p: 2
         }}
       >
@@ -182,11 +184,12 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
                   }}
                 >
                   <Typography variant="h5" color="text.primary" fontWeight="600">
-                    Demo credentials:
+                    Sign up:
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    test@example.com / password123
-                    test2@example.com / password123
+                    <Link href="https://docs.google.com/forms/d/e/1FAIpQLSeTIoA9kL4aqhR7L_3NtR4F9sr_plsd3VqLU4kh--aLEe-Cvw/viewform?usp=dialog" target="_blank" rel="noopener" sx={{ color: 'primary.main', textDecoration: 'underline' }}>
+                      Sign up for a new account
+                    </Link>
                   </Typography>
                 </Box>
               </Stack>

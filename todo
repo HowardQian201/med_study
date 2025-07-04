@@ -1,14 +1,22 @@
 
 URGENT:
 
-
+Background workers to make a process queue for pdfs processing
+    - This prevents hitting RAM limits for app users
+    - Alternative to storing file in memory
 
 register new account
     - Payment page on register new account
     - supabase auth
 
 
+
 IDEAS:
+
+Database indexing on question_sets.user_id, pdfs.hash, and quiz_questions.hash so that db queries are fast when 
+Caching layer
+
+
 Combine quiz sets
 implement some progress memorization from previous sessions
 Stream quiz questions
