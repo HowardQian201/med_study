@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { format } from 'date-fns';
+import FeedbackButton from '../components/FeedbackButton';
 
 const Home = ({ user, setIsAuthenticated, setSummary }) => {
   const navigate = useNavigate();
@@ -563,6 +564,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
             </Paper>
         </Stack>
       </Container>
+      <FeedbackButton />
     </Box>
   );
 };

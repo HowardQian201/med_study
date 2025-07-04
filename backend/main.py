@@ -8,7 +8,7 @@ from .database import (
     check_file_exists, generate_content_hash, generate_file_hash,
     authenticate_user, star_all_questions_by_hashes,
     upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title,
-    touch_question_set, update_question_starred_status, delete_question_set_and_questions
+    touch_question_set, update_question_starred_status, delete_question_set_and_questions, insert_feedback
 )
 from flask_session import Session
 import os
@@ -929,6 +929,34 @@ def delete_question_set():
         
     except Exception as e:
         print(f"Error deleting question set: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/submit-feedback', methods=['POST'])
+def submit_feedback():
+    print("submit_feedback()")
+    try:
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        data = request.json
+        feedback_text = data.get('feedback')
+        user_id = session.get('user_id')
+        user_name = session.get('name')
+        user_email = session.get('email')
+
+        if not feedback_text or not feedback_text.strip():
+            return jsonify({'error': 'Feedback text cannot be empty'}), 400
+
+        result = insert_feedback(user_id, user_email, user_name, feedback_text)
+        
+        if result['success']:
+            return jsonify({'success': True, 'message': 'Feedback submitted successfully.'})
+        else:
+            return jsonify({'success': False, 'error': result.get('error', 'Failed to submit feedback.')}), 500
+
+    except Exception as e:
+        print(f"Error submitting feedback: {str(e)}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
