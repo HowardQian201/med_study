@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useHotkeys } from 'react-hotkeys-hook';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -65,6 +66,63 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
+
+  // Hotkey handlers
+  const handleKeyboardAnswer = (optionIndex) => {
+    const currentQuestionId = questions[currentQuestion]?.id;
+    if (currentQuestionId && !submittedAnswers[currentQuestionId] && isQuizMode) {
+      handleAnswerSelect(currentQuestionId, optionIndex);
+    }
+  };
+
+  // Hotkey bindings
+  useHotkeys('left', (e) => {
+    e.preventDefault();
+    if (!isPreviewing && !showResults) {
+      moveToPreviousQuestion();
+    }
+  }, [currentQuestion, isPreviewing, showResults]);
+
+  useHotkeys('right', (e) => {
+    e.preventDefault();
+    if (!isPreviewing && !showResults) {
+      moveToNextQuestion();
+    }
+  }, [currentQuestion, isPreviewing, showResults, questions.length]);
+
+  useHotkeys('space', (e) => {
+    e.preventDefault();
+    if (!isPreviewing && !showResults && !isQuizMode) {
+      setIsCardFlipped(!isCardFlipped);
+    }
+  }, [isPreviewing, showResults, isQuizMode, isCardFlipped]);
+
+  useHotkeys('enter', (e) => {
+    e.preventDefault();
+    if (!isPreviewing && !showResults && !isQuizMode) {
+      setIsCardFlipped(!isCardFlipped);
+    }
+  }, [isPreviewing, showResults, isQuizMode, isCardFlipped]);
+
+  useHotkeys('enter', (e) => {
+    e.preventDefault();
+    const currentQuestionId = questions[currentQuestion]?.id;
+    if (!isPreviewing && !showResults && isQuizMode) {
+      if (submittedAnswers[currentQuestionId]) {
+        // If answer was submitted, go to next question
+        moveToNextQuestion();
+      } else if (selectedAnswers[currentQuestionId] !== undefined) {
+        // If answer is selected but not submitted, submit it
+        handleSubmitAnswer(currentQuestionId);
+      }
+    }
+  }, [currentQuestion, isPreviewing, showResults, isQuizMode, selectedAnswers, submittedAnswers, questions]);
+
+  // Number key bindings for answer selection (1-4 for A-D)
+  useHotkeys('1', () => handleKeyboardAnswer(0), [currentQuestion, submittedAnswers, isQuizMode]);
+  useHotkeys('2', () => handleKeyboardAnswer(1), [currentQuestion, submittedAnswers, isQuizMode]);
+  useHotkeys('3', () => handleKeyboardAnswer(2), [currentQuestion, submittedAnswers, isQuizMode]);
+  useHotkeys('4', () => handleKeyboardAnswer(3), [currentQuestion, submittedAnswers, isQuizMode]);
 
   // Helper function to clean option text and remove existing A), B), C), D) prefixes
   const cleanOptionText = (option) => {
@@ -1332,6 +1390,21 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                             <Typography variant="h5" fontWeight="500" gutterBottom>
                               {questions[currentQuestion].text}
                             </Typography>
+                            
+                            {!isPreviewing && !showResults && (
+                              <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 3 }}>
+                                Keyboard shortcuts: {isQuizMode ? (
+                                  <>
+                                    Use <strong>1-4</strong> to select answers, <strong>Enter</strong> to submit,{' '}
+                                    <strong>←/→</strong> for navigation
+                                  </>
+                                ) : (
+                                  <>
+                                    Press <strong>Space</strong> to flip card, <strong>←/→</strong> for navigation
+                                  </>
+                                )}
+                              </Typography>
+                            )}
                             
                             {isQuizMode ? (
                               <FormControl component="fieldset" sx={{ width: '100%', mt: 3 }}>
