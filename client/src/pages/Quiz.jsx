@@ -919,6 +919,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                         const isCorrect = isSelected && index === correctAnswer;
                                         const isIncorrect = isSelected && index !== correctAnswer;
                                         const isCorrectAnswer = index === correctAnswer;
+                                        const wasAnswered = isSubmitted;
+                                        const isUserAnswer = isSelected;
 
                                         return (
                                           <Paper
@@ -953,58 +955,22 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                               }
                                             }}
                                           >
-                                            <Box display="flex" alignItems="center">
-                                              <Box
-                                                sx={{
-                                                  width: 24,
-                                                  height: 24,
-                                                  minWidth: 24,
-                                                  minHeight: 24,
-                                                  borderRadius: '50%',
-                                                  border: '2px solid',
-                                                  borderColor: isSubmitted 
-                                                    ? (isCorrect
-                                                        ? 'success.main'
-                                                        : isIncorrect
-                                                          ? 'error.main'
-                                                        : isCorrectAnswer
-                                                          ? 'success.main'
-                                                        : 'divider')
-                                                : (isSelected
-                                                    ? 'primary.main'
-                                                    : 'divider'),
-                                                  bgcolor: isSubmitted
-                                                      ? (isCorrect || isCorrectAnswer ? 'success.main' : isIncorrect ? 'error.main' : 'transparent')
-                                                      : 'transparent',
-                                                  display: 'flex',
-                                                  alignItems: 'center',
-                                                  justifyContent: 'center',
-                                                  flexShrink: 0,
-                                                  mr: 2
-                                                }}
-                                              >
-                                                {(isSelected && !isSubmitted) || isCorrect || (isCorrectAnswer && isSubmitted) ? (
-                                                  <Check sx={{ fontSize: 16, color: isSubmitted ? 'white' : 'primary.main' }} />
-                                                ) : isIncorrect ? (
-                                                  <Close sx={{ fontSize: 16, color: 'white' }} />
-                                                ) : null}
-                                              </Box>
-                                              <Typography
-                                                variant="body1"
-                                                color={isSubmitted
-                                                  ? (isCorrect || isCorrectAnswer ? 'success.dark' : isIncorrect ? 'error.dark' : 'text.primary')
-                                                  : (isSelected ? 'primary.dark' : 'text.primary')
-                                                }
-                                                sx={{ textAlign: 'left' }}
-                                              >
-                                                <Box display="flex" alignItems="flex-start" gap={1}>
-                                                  <Box component="span" fontWeight="600">
-                                                    {String.fromCharCode(65 + index)}.
-                                                  </Box>
-                                                  {cleanOptionText(option)}
+                                            <Stack direction="column" spacing={1}>
+                                              {isCorrectAnswer && (
+                                                <Chip label="Correct answer" color="success" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
+                                              )}
+                                              {wasAnswered && isUserAnswer && !isCorrectAnswer && (
+                                                <Chip label="Your answer" color="error" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
+                                              )}
+                                              <Box display="flex" alignItems="flex-start" gap={1}>
+                                                <Box component="span" fontWeight="600">
+                                                  {String.fromCharCode(65 + index)}.
                                                 </Box>
-                                              </Typography>
-                                            </Box>
+                                                <Typography variant="body2" sx={{ textAlign: 'left' }}>
+                                                  {cleanOptionText(option)}
+                                                </Typography>
+                                              </Box>
+                                            </Stack>
                                           </Paper>
                                         );
                                       })}
