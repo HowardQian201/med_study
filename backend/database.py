@@ -625,3 +625,37 @@ def check_question_set_exists(content_hash: str, user_id: int) -> Dict[str, Any]
             "data": None,
             "question_count": 0
         }
+
+def insert_feedback(user_id: int, user_email: str, user_name: str, feedback_text: str) -> Dict[str, Any]:
+    """
+    Inserts a new feedback entry into the 'feedback' table.
+
+    Args:
+        user_id (int): The ID of the user submitting feedback.
+        user_email (str): The email of the user.
+        user_name (str): The name of the user.
+        feedback_text (str): The feedback message.
+
+    Returns:
+        Dict containing the result of the insert operation.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        data = {
+            "user_id": user_id,
+            "user_email": user_email,
+            "user_name": user_name,
+            "feedback": feedback_text,
+        }
+        
+        result = supabase.table('feedback').insert(data).execute()
+        
+        if result.data:
+            return {"success": True, "data": result.data[0]}
+        else:
+            return {"success": False, "error": "No data returned on feedback insert."}
+
+    except Exception as e:
+        print(f"Error inserting feedback: {e}")
+        return {"success": False, "error": str(e)}

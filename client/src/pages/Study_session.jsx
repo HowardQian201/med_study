@@ -34,6 +34,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Link } from '@mui/material';
+import FeedbackButton from '../components/FeedbackButton';
 
 const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const navigate = useNavigate();
@@ -712,6 +713,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
           </CardContent>
         </Card>
       </Container>
+      <FeedbackButton />
     </Box>
   );
 };

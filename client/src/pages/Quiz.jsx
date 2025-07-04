@@ -43,6 +43,7 @@ import {
 import ThemeToggle from '../components/ThemeToggle';
 import { alpha } from '@mui/material/styles';
 import { Link } from '@mui/material';
+import FeedbackButton from '../components/FeedbackButton';
 
 const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) => {
   const navigate = useNavigate();
@@ -1703,6 +1704,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
           </CardContent>
         </Card>
       </Container>
+      <FeedbackButton />
     </Box>
   );
 };
