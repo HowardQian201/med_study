@@ -187,7 +187,7 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
                     Sign up:
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    <Link href="https://docs.google.com/forms/d/e/1FAIpQLSeTIoA9kL4aqhR7L_3NtR4F9sr_plsd3VqLU4kh--aLEe-Cvw/viewform?usp=dialog" target="_blank" rel="noopener" sx={{ color: 'primary.main', textDecoration: 'underline' }}>
+                    <Link href="https://docs.google.com/forms/d/e/1FAIpQLSeTIoA9kL4aqhR7L_3NtR4F9sr_plsd3VqLU4kh--aLEe-Cvw/viewform?usp=header" target="_blank" rel="noopener" sx={{ color: 'primary.main', textDecoration: 'underline' }}>
                       Sign up for a new account
                     </Link>
                   </Typography>
