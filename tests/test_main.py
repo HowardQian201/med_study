@@ -209,7 +209,7 @@ class TestMainRoutes(unittest.TestCase):
             sess['total_extracted_text'] = 'Test content'
             sess['content_hash'] = 'test_hash'
             sess['summary'] = 'Test summary for quiz'
-        
+
         mock_generate.return_value = (
             [
                 {
@@ -221,7 +221,7 @@ class TestMainRoutes(unittest.TestCase):
                 }
             ], ['hash1']
         )
-        
+
         response = self.client.post('/api/generate-quiz',
                                    data=json.dumps({'type': 'initial', 'isQuizMode': 'true'}),
                                    content_type='application/json')
@@ -230,11 +230,14 @@ class TestMainRoutes(unittest.TestCase):
         response_data = json.loads(response.data)
         self.assertTrue(response_data['success'])
         self.assertIn("Test question?", str(response_data['questions']))
+        
+        # First call should be with the requested mode (quiz mode)
         mock_generate.assert_any_call(
             'Test summary for quiz', 1, 'test_hash', incorrect_question_ids=[], previous_questions=[], num_questions=5, is_quiz_mode=True
         )
+        # Second call should be with the alternate mode (study mode)
         mock_generate.assert_any_call(
-            'Test summary for quiz', 1, None, incorrect_question_ids=None, previous_questions=None, num_questions=5, is_quiz_mode=False
+            'Test summary for quiz', 1, None, num_questions=5, is_quiz_mode=False
         )
     
     def test_generate_quiz_no_content(self):
@@ -1019,11 +1022,13 @@ class TestMainRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
         # Verify generate_quiz_questions was called with default num_questions=5
+        # First call should be with the default mode (study mode)
         mock_generate.assert_any_call(
             'Test summary for quiz', 1, 'test_hash', incorrect_question_ids=[], previous_questions=[], num_questions=5, is_quiz_mode=False
         )
+        # Second call should be with the alternate mode (quiz mode)
         mock_generate.assert_any_call(
-            'Test summary for quiz', 1, None, incorrect_question_ids=None, previous_questions=None, num_questions=5, is_quiz_mode=True
+            'Test summary for quiz', 1, None, num_questions=5, is_quiz_mode=True
         )
 
     @patch('backend.main.generate_quiz_questions')
@@ -1107,11 +1112,13 @@ class TestMainRoutes(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 
                 # Verify it uses the valid value
+                # First call should be with the default mode (study mode)
                 mock_generate.assert_any_call(
                     'Test summary for quiz', 1, f'test_hash_{valid_value}', incorrect_question_ids=[], previous_questions=[], num_questions=valid_value, is_quiz_mode=False
                 )
+                # Second call should be with the alternate mode (quiz mode)
                 mock_generate.assert_any_call(
-                    'Test summary for quiz', 1, None, incorrect_question_ids=None, previous_questions=None, num_questions=valid_value, is_quiz_mode=True
+                    'Test summary for quiz', 1, None, num_questions=valid_value, is_quiz_mode=True
                 )
 
     @patch('backend.main.generate_quiz_questions')
