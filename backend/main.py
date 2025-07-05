@@ -961,20 +961,6 @@ def submit_feedback():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-# @app.route('/api/trigger-print-task', methods=['POST'])
-# def trigger_print_task():
-#     data = request.get_json()
-#     number = data.get('number')
-
-#     if number is None:
-#         return jsonify({"message": "Number is required"}), 400
-
-#     try:
-#         # Dispatch the task to the Celery worker
-#         print_number_task.delay(number)
-#         return jsonify({"message": f"Task to print {number} dispatched!"}), 200
-#     except Exception as e:
-#         return jsonify({"message": f"Failed to dispatch task: {str(e)}"}), 500
 
 # Serve the React frontend
 @app.route("/")
