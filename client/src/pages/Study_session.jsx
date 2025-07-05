@@ -17,7 +17,14 @@ import {
   Stack,
   Paper,
   TextField,
-  CircularProgress
+  CircularProgress,
+  Checkbox,
+  FormControlLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton
 } from '@mui/material';
 import {
   CloudUpload,
@@ -28,7 +35,9 @@ import {
   Logout,
   Description,
   ContentCopy,
-  Home as HomeIcon
+  Home as HomeIcon,
+  Close as CloseIcon,
+  Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import ReactMarkdown from 'react-markdown';
@@ -38,16 +47,19 @@ import FeedbackButton from '../components/FeedbackButton';
 
 const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const navigate = useNavigate();
-  const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [userText, setUserText] = useState('');
   const abortController = useRef(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isContentLocked, setIsContentLocked] = useState(false);
-  const fileInputRef = useRef(null);
   const [numQuestions, setNumQuestions] = useState(5);
   const [isQuizMode, setIsQuizMode] = useState(false);
+
+  // New state for available and selected PDFs
+  const [availablePdfs, setAvailablePdfs] = useState([]); // Stores { hash, filename, text } from backend
+  const [selectedPdfHashes, setSelectedPdfHashes] = useState([]); // Stores only the hashes of selected PDFs
+  const [showExpandedPdfList, setShowExpandedPdfList] = useState(false); // New state for expanded view
 
   // Display existing results if available
   useEffect(() => {
@@ -75,48 +87,67 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
     }
   }, [summary]);
 
-  const handleFileSelect = (e) => {
-    console.log("selecting files");
-    const selectedFiles = Array.from(e.target.files);
-    
-    // Filter for only PDF files
-    const pdfFiles = selectedFiles.filter(file => file.type === 'application/pdf');
-    
-    if (pdfFiles.length > 0) {
-      setFiles(pdfFiles);
-      setError('');
-      console.log(`Selected ${pdfFiles.length} PDF files`);
-    } else {
-      setError('Please select at least one PDF file');
-      setFiles([]);
-    }
+  // New useEffect to fetch available PDFs on component mount
+  useEffect(() => {
+    const fetchAvailablePdfs = async () => {
+      try {
+        const response = await axios.get('/api/get-user-pdfs', { withCredentials: true });
+        if (response.data.success) {
+          setAvailablePdfs(response.data.pdfs);
+        } else {
+          console.error("Failed to fetch available PDFs:", response.data.error);
+          setError(response.data.error || 'Failed to load available PDFs.');
+        }
+      } catch (err) {
+        console.error("Error fetching available PDFs:", err);
+        if (err.response?.status === 401) {
+          setError('Session expired. Please log in again.');
+          setIsAuthenticated(false);
+          navigate('/login');
+        } else {
+          setError('An error occurred while fetching available PDFs.');
+        }
+      }
+    };
+
+    fetchAvailablePdfs();
+  }, [setIsAuthenticated, navigate]);
+
+  const handlePdfCheckboxChange = (event) => {
+    const { value, checked } = event.target;
+    console.log(`Checkbox clicked: value=${value}, checked=${checked}`);
+    setSelectedPdfHashes(prev => {
+      const newSelected = checked ? [...prev, value] : prev.filter(hash => hash !== value);
+      console.log('New selectedPdfHashes:', newSelected);
+      return newSelected;
+    });
   };
 
-  const uploadPDFs = async () => {
-    if (files.length === 0 && !userText.trim()) {
-      setError('Please select at least one file or enter some text');
+  const generateSummary = async () => {
+    if (selectedPdfHashes.length === 0 && !userText.trim()) {
+      setError('Please select at least one PDF or enter some text');
       return;
     }
   
-      setIsUploading(true);
-      setError('');
-      setSummary('');
-      abortController.current = new AbortController();
+    setIsUploading(true);
+    setError('');
+    setSummary('');
+    abortController.current = new AbortController();
   
-      const formData = new FormData();
-      files.forEach(file => {
-        formData.append('files', file);
-      });
-    if (userText.trim()) {
-      formData.append('userText', userText.trim());
-    }
-    // Include quiz mode in the form data
-    formData.append('isQuizMode', isQuizMode.toString());
+    // Send JSON data instead of FormData
+    const payload = {
+      selectedPdfHashes: selectedPdfHashes,
+      userText: userText.trim(),
+      isQuizMode: isQuizMode.toString()
+    };
 
     try {
-      const response = await fetch('/api/upload-multiple', {
+      const response = await fetch('/api/generate-summary', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
         signal: abortController.current.signal,
       });
 
@@ -175,11 +206,8 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const clearResults = async () => {
     try {
       setSummary('');
-      setFiles([]);
+      setSelectedPdfHashes([]); // Clear selected PDFs
       setUserText('');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
       await axios.post('/api/clear-session-content', {}, {
         withCredentials: true
       });
@@ -353,10 +381,10 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
           <CardContent sx={{ p: 4 }}>
 
             <Box sx={{ display: 'flex', gap: 4, flexDirection: { xs: 'column', md: 'row' } }}>
-              {/* Left Column - Upload and Text Input */}
+              {/* Left Column - PDF Selection and Text Input */}
               <Box sx={{ flex: 1 }}>
                 <Stack spacing={3}>
-                  {/* File Upload Area */}
+                  {/* PDF Selection Area (replaces File Upload) */}
                   <Paper
                     elevation={0}
                     sx={{
@@ -367,48 +395,68 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
                       width: 400,
                       height: 200,
+                      overflowY: 'auto',
                       transition: 'all 0.2s ease',
-                      '&:hover': {
-                        bgcolor: 'action.selected',
-                        borderColor: 'primary.main'
-                      }
                     }}
                   >
-                    <Stack spacing={2} alignItems="center" sx={{ height: '100%' }}>
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={handleFileSelect}
-                  multiple
-                  disabled={isContentLocked || isUploading}
-                  ref={fileInputRef}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: 'none',
-                    borderRadius: '8px',
-                    backgroundColor: 'transparent',
-                    cursor: 'pointer',
-                  }}
-                />
-                      
-                {files.length > 0 && (
-                        <Box sx={{ width: '100%', mt: 2, overflow: 'auto', maxHeight: 120 }}>
-                          <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Selected: {files.length} file(s)
-                          </Typography>
-                          <List dense>
-                      {files.map((file, index) => (
-                              <ListItem key={index} sx={{ pl: 0 }}>
-                                <Description sx={{ mr: 1, color: 'primary.main' }} />
-                                <ListItemText 
-                                  primary={file.name}
-                                  primaryTypographyProps={{ variant: 'body2' }}
-                                />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Box>
+                    <Stack spacing={2} alignItems="flex-start" sx={{ height: '100%' }}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ width: '100%' }}>
+                        <Typography variant="h6" fontWeight="600" gutterBottom>
+                          Select Existing PDFs
+                        </Typography>
+                        {availablePdfs.length > 0 && (
+                          <IconButton 
+                            onClick={() => setShowExpandedPdfList(true)} 
+                            disabled={isContentLocked || isUploading}
+                            size="small"
+                            aria-label="view all files"
+                            sx={{ mb: 1 }} // Add some bottom margin to align with Typography's gutterBottom
+                          >
+                            <VisibilityIcon fontSize="small" />
+                          </IconButton>
+                        )}
+                      </Stack>
+                      {availablePdfs.length > 0 ? (
+                        <List dense sx={{ width: '100%' }}>
+                          {availablePdfs.map((pdf) => (
+                            <ListItem 
+                              key={pdf.hash} 
+                              disablePadding 
+                              sx={{ 
+                                '&:hover': { 
+                                  bgcolor: 'action.hover',
+                                  borderRadius: 1
+                                },
+                                py: 0.5
+                              }}
+                            >
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    value={pdf.hash}
+                                    checked={selectedPdfHashes.includes(pdf.hash)}
+                                    onChange={handlePdfCheckboxChange}
+                                    disabled={isContentLocked || isUploading}
+                                  />
+                                }
+                                label={
+                                  <ListItemText 
+                                    primary={pdf.filename} 
+                                    primaryTypographyProps={{
+                                      variant: 'body2', 
+                                      fontWeight: 'medium',
+                                      color: 'text.primary'
+                                    }}
+                                  />
+                                }
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                          No PDFs uploaded yet. Upload via the "Upload PDFs" page to see them here.
+                        </Typography>
                       )}
                     </Stack>
                   </Paper>
@@ -451,8 +499,8 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                   {/* Generate Button */}
                   <Box display="flex" justifyContent="center">
                     <Button
-                      onClick={uploadPDFs}
-                      disabled={isContentLocked || (files.length === 0 && !userText.trim()) || isUploading}
+                      onClick={generateSummary}
+                      disabled={isContentLocked || (selectedPdfHashes.length === 0 && !userText.trim()) || isUploading}
                       variant="contained"
                       size="large"
                       startIcon={isUploading ? <CircularProgress size={24} color="inherit" /> : <CloudUpload />}
@@ -714,6 +762,65 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
         </Card>
       </Container>
       <FeedbackButton />
+
+      {/* Expanded PDF List Dialog */}
+      <Dialog open={showExpandedPdfList} onClose={() => setShowExpandedPdfList(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Typography variant="h6">All Available PDFs</Typography>
+            <IconButton onClick={() => setShowExpandedPdfList(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <List dense>
+            {availablePdfs.length > 0 ? (availablePdfs.map((pdf) => (
+              <ListItem 
+                key={pdf.hash} 
+                disablePadding
+                sx={{
+                  '&:hover': { 
+                    bgcolor: 'action.hover',
+                    borderRadius: 1
+                  },
+                  py: 0.5
+                }}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      value={pdf.hash}
+                      checked={selectedPdfHashes.includes(pdf.hash)}
+                      onChange={handlePdfCheckboxChange}
+                      disabled={isContentLocked || isUploading}
+                    />
+                  }
+                  label={
+                    <ListItemText 
+                      primary={pdf.filename} 
+                      primaryTypographyProps={{
+                        variant: 'body2', 
+                        fontWeight: 'medium',
+                        color: 'text.primary'
+                      }}
+                    />
+                  }
+                />
+              </ListItem>
+            ))) : (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                No PDFs uploaded yet. Please log in and upload via the Home screen to see them here.
+              </Typography>
+            )}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowExpandedPdfList(false)} color="primary" variant="contained">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

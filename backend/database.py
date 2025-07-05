@@ -659,3 +659,111 @@ def insert_feedback(user_id: int, user_email: str, user_name: str, feedback_text
     except Exception as e:
         print(f"Error inserting feedback: {e}")
         return {"success": False, "error": str(e)}
+
+def append_pdf_hash_to_user_pdfs(user_id: int, pdf_hash: str) -> Dict[str, Any]:
+    """
+    Appends a PDF hash to the 'pdfs' array column in the 'users' table.
+    Only appends if the hash doesn't already exist in the array.
+    
+    Args:
+        user_id (int): The ID of the user.
+        pdf_hash (str): The hash of the PDF file to append.
+        
+    Returns:
+        Dict containing the result of the update operation.
+    """
+    print(f"Appending hash {pdf_hash[:8]}... to user {user_id} pdfs.")
+
+    try:
+        supabase = get_supabase_client()
+        
+        # First, get the current user data to check if hash already exists
+        user_result = supabase.table('users').select('pdfs').eq('id', user_id).execute()
+        
+        if not user_result.data or len(user_result.data) == 0:
+            return {"success": False, "error": "User not found."}
+        
+        current_pdfs = user_result.data[0].get('pdfs', [])
+        
+        # Check if hash already exists in the array
+        if pdf_hash in current_pdfs:
+            print(f"Hash {pdf_hash[:8]}... already exists in user {user_id} pdfs, skipping append.")
+            return {"success": True, "data": user_result.data[0], "skipped": True}
+        
+        # If not, append it to the current list
+        updated_pdfs = current_pdfs + [pdf_hash]
+
+        # Update the 'pdfs' column with the new array
+        result = supabase.table('users').update({
+            'pdfs': updated_pdfs
+        }).eq('id', user_id).execute()
+
+        if result.data and len(result.data) > 0:
+            return {"success": True, "data": result.data[0]}
+        else:
+            return {"success": False, "error": "User not found or update failed."}
+
+    except Exception as e:
+        print(f"Error appending PDF hash to user {user_id} pdfs: {e}")
+        return {"success": False, "error": str(e)}
+
+def get_user_associated_pdf_metadata(user_id: int) -> Dict[str, Any]:
+    """
+    Retrieves metadata (hash, filename, text) for all PDFs associated with a user
+    from the 'pdfs' table, based on the 'pdfs' array in the 'users' table.
+    
+    Args:
+        user_id (int): The ID of the user.
+        
+    Returns:
+        Dict containing the result and a list of PDF metadata.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # 1. Get the list of PDF hashes from the user's profile
+        user_profile_result = supabase.table('users').select('pdfs').eq('id', user_id).maybe_single().execute()
+        
+        if not user_profile_result.data:
+            return {"success": False, "error": "User profile not found.", "data": []}
+            
+        pdf_hashes_from_user = user_profile_result.data.get('pdfs', [])
+        
+        if not pdf_hashes_from_user:
+            return {"success": True, "data": []} # No PDFs associated with user
+            
+        # 2. Fetch the corresponding PDF metadata from the 'pdfs' table
+        #    Ensure to get only the fields necessary for display and processing
+        pdfs_metadata_result = supabase.table('pdfs').select("hash, filename").in_('hash', pdf_hashes_from_user).execute()
+        
+        return {"success": True, "data": pdfs_metadata_result.data}
+        
+    except Exception as e:
+        print(f"Error getting user associated PDF metadata for user {user_id}: {e}")
+        return {"success": False, "error": str(e), "data": []}
+
+def get_pdf_text_by_hashes(pdf_hashes: List[str]) -> Dict[str, Any]:
+    """
+    Retrieves the text content for a list of PDF hashes from the 'pdfs' table.
+    
+    Args:
+        pdf_hashes (List[str]): A list of PDF hashes.
+        
+    Returns:
+        Dict containing the result and a dictionary of {hash: text} pairs.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        if not pdf_hashes:
+            return {"success": True, "data": {}}
+            
+        result = supabase.table('pdfs').select("hash, filename, text").in_('hash', pdf_hashes).execute()
+        
+        text_map = {item['hash']: {'text': item['text'], 'filename': item['filename']} for item in result.data}
+        
+        return {"success": True, "data": text_map}
+        
+    except Exception as e:
+        print(f"Error getting PDF text by hashes: {e}")
+        return {"success": False, "error": str(e), "data": {}}
