@@ -8,7 +8,8 @@ from .database import (
     check_file_exists, generate_content_hash, generate_file_hash,
     authenticate_user, star_all_questions_by_hashes,
     upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title,
-    touch_question_set, update_question_starred_status, delete_question_set_and_questions, insert_feedback
+    touch_question_set, update_question_starred_status, delete_question_set_and_questions, insert_feedback, 
+    append_pdf_hash_to_user_pdfs, get_user_associated_pdf_metadata, get_pdf_text_by_hashes
 )
 from .background.tasks import print_number_task
 from flask_session import Session
@@ -21,6 +22,7 @@ import gc
 from io import BytesIO
 import uuid
 import random
+from celery.result import AsyncResult # Import this to interact with task results
 
 # Streaming flag
 STREAMING_ENABLED = True
@@ -98,6 +100,13 @@ def login():
         
         # Clear any existing session data
         session.clear()
+
+        
+        # TODO remove later
+        # Dispatch the task to the Celery worker
+        for i in range(10):
+            task = print_number_task.delay(i)
+            print(f"Task dispatched: {task}")
         
         # Set new session data
         session['user_id'] = user['id']
@@ -147,156 +156,82 @@ def check_auth():
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
+# New endpoint to get user's associated PDFs
+@app.route('/api/get-user-pdfs', methods=['GET'])
+def get_user_pdfs():
+    print("get_user_pdfs()")
+    try:
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        user_id = session['user_id']
+        result = get_user_associated_pdf_metadata(user_id)
+        
+        if not result['success']:
+            return jsonify({'error': result.get('error', 'Failed to retrieve user PDFs')}), 500
+            
+        return jsonify({'success': True, 'pdfs': result['data']})
+    except Exception as e:
+        print(f"Error getting user PDFs: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/upload-multiple', methods=['POST'])
-def upload_multiple():
-    print("upload_multiple()")
+@app.route('/api/generate-summary', methods=['POST'])
+def generate_summary():
+    print("generate_summary()")
     try:
         # Check if user is authenticated
         if 'user_id' not in session:
             return jsonify({'error': 'Unauthorized'}), 401
                 
-        # Get memory limits for file size validation
-        try:
-            memory_limit = get_container_memory_limit()
-            available_memory = memory_limit * 0.7  # Use only 70% of available memory
-            max_file_size = min(available_memory * 0.3, 20 * 1024 * 1024)  # Max 30% of available or 20MB
-            print(f"Memory limit: {memory_limit/(1024*1024):.0f}MB, Max file size: {max_file_size/(1024*1024):.1f}MB")
-        except:
-            max_file_size = 10 * 1024 * 1024  # Default 10MB limit
-        
+        user_id = session.get('user_id')
 
-        set_process_priority()
-        
         # Get additional user text if provided
-        user_text = request.form.get('userText', '').strip()
+        data = request.get_json()
+        user_text = data.get('userText', '').strip()
+        selected_pdf_hashes = data.get('selectedPdfHashes', [])
+        is_quiz_mode = str(data.get('isQuizMode', 'false')).lower() == 'true'
         
-        # Get quiz mode from form data
-        is_quiz_mode = request.form.get('isQuizMode', 'false').lower() == 'true'
-        
-        # Check if files were uploaded
-        files = request.files.getlist('files') if 'files' in request.files else []
-        
-        # Must have either files or user text
-        if len(files) == 0 and not user_text:
+        # Must have either selected PDFs or user text
+        if not selected_pdf_hashes and not user_text:
             raise Exception("No files or text provided")
         
-        log_memory_usage("before file processing")
+        log_memory_usage("before content processing")
         
-        results = {}
         total_extracted_text = ""
         files_usertext_content = set()
-        
-        # Process each file
-        for file in files:
-            if file.filename == '':
-                continue
-                
-            log_memory_usage(f"processing {file.filename}")
-            
-            filename = file.filename
-            
-            # Read the file into an in-memory buffer to prevent "closed file" errors.
-            file_content = file.read()
-            files_usertext_content.add(file_content)
+        content_name_list = []
 
-            # Generate hash for the file content
-            file_hash = generate_file_hash(file_content)
+        # Process selected PDFs from database
+        if selected_pdf_hashes:
+            pdf_texts_result = get_pdf_text_by_hashes(selected_pdf_hashes)
+            if not pdf_texts_result['success']:
+                raise Exception(f"Failed to retrieve PDF texts: {pdf_texts_result.get('error')}")
             
-            # Check if this file already exists in the database
-            existing_file = check_file_exists(file_hash)
-            
-            if existing_file["exists"]:
-                print(f"File '{filename}' already processed (hash: {file_hash[:8]}...)")
-                # Use existing extracted text instead of reprocessing
-                extracted_text = existing_file["data"]["text"]
-                results[filename] = extracted_text
-                print(f"Reusing {len(extracted_text)} characters of previously extracted text")
-            else:
-                print(f"New file '{filename}' (hash: {file_hash[:8]}...)")
-                
-                # Create separate, isolated buffers for each operation
-                pdf_buffer = BytesIO(file_content)
-                
-                # Check memory before processing each file
-                check_memory()
-                
-                print(f"Processing file: {filename}")
-                
-                # Extract text from PDF directly from memory without saving to disk
-                if filename.endswith('.pdf'):
+            pdf_texts_map = pdf_texts_result['data']
+            for pdf_hash in selected_pdf_hashes:
+                # Retrieve the object containing both text and filename
+                pdf_data = pdf_texts_map.get(pdf_hash)
+                if pdf_data and pdf_data.get('text'):
+                    text = pdf_data['text']
+                    filename = pdf_data['filename'] # Get the filename
 
-                    # Get file size for validation and logging
-                    file_size = len(file_content)
-                    
-                    print(f"File: {filename}, {file_size / (1024*1024):.1f} MB")
-                    
-                    # Validate file size against memory constraints
-                    if file_size > max_file_size:
-                        error_msg = f"File '{filename}' ({file_size/(1024*1024):.1f}MB) exceeds maximum allowed size ({max_file_size/(1024*1024):.1f}MB) for current memory constraints"
-                        print(error_msg)
-                        raise Exception(error_msg)
-                    
-                    # Process PDF directly from memory
-                    extracted_text = extract_text_from_pdf_memory(pdf_buffer, filename)
-                    if extracted_text:
-                        results[filename] = extracted_text
-                        
-                        # Upload the raw PDF to Supabase Storage
-                        storage_result = upload_pdf_to_storage(file_content, file_hash, filename)
-
-                        if storage_result["success"]:
-                            print(f"Successfully uploaded '{filename}' to Supabase Storage.")
-                            storage_url = storage_result["public_url"]
-                            storage_file_path = storage_result["path"]
-                        else:
-                            print(f"Failed to upload '{filename}' to storage: {storage_result.get('error')}")
-                            storage_url = None
-                            storage_file_path = None
-
-                        # Store metadata with content hash and storage URL
-                        upsert_result = upsert_pdf_results({
-                            "hash": file_hash,
-                            "filename": filename,
-                            "text": extracted_text,
-                            "storage_url": storage_url,
-                            "storage_file_path": storage_file_path
-                        })
-                        
-                        if upsert_result["success"]:
-                            print(f"Successfully stored file data in database (hash: {file_hash[:8]}...)")
-                        else:
-                            print(f"Failed to store file data: {upsert_result.get('error', 'Unknown error')}")
-                    
+                    total_extracted_text += text
+                    files_usertext_content.add(text) # Add text content for hash generation
+                    if filename and filename not in content_name_list: # Add filename to list if not already present
+                        content_name_list.append(filename)
                 else:
-                    print(f"Skipping non-PDF file: {filename}")
-                    
-        log_memory_usage("after file processing")
-        
-        # Combine PDF text and user text
-        filenames = ""
-        for key, value in results.items():
-            filenames += key + " "
-            total_extracted_text += value
-                
+                    print(f"Warning: Text for hash {pdf_hash[:8]}... not found in DB.")
+
         # Add user text if provided
         print(f"User text: {user_text[:100]}")
         if user_text:
             files_usertext_content.add(user_text)
-            total_extracted_text += f"\n\nAdditional Notes:\n{user_text}"
-            if filenames:
-                filenames += "+ Additional Text"
-            else:
-                filenames = "User Text"
+            total_extracted_text += f"\n\nUser inputted text:\n{user_text}"
+            content_name_list.append("User Text") # Indicate user text was included
         
-        user_id = session.get('user_id')
         content_hash = generate_content_hash(files_usertext_content, user_id, is_quiz_mode)
         other_content_hash = generate_content_hash(files_usertext_content, user_id, not is_quiz_mode)
-        # Create a list of filenames
-        content_name_list = list(results.keys())
-        # Add "user text" to the list if user text was submitted
-        if user_text:
-            content_name_list.append("user text")
 
         session['content_hash'] = content_hash
         session['other_content_hash'] = other_content_hash
@@ -304,11 +239,10 @@ def upload_multiple():
         session.modified = True
 
         if not total_extracted_text:
-            raise Exception("No text could be extracted from PDFs and no additional text provided")
+            raise Exception("No text could be extracted from selected PDFs and no additional text provided")
         
         log_memory_usage("before summarization")
         
-        filenames = filenames.strip()
         
         print(f"Text length being sent to AI: {len(total_extracted_text)} characters")
         
