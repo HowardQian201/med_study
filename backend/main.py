@@ -10,6 +10,7 @@ from .database import (
     upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title,
     touch_question_set, update_question_starred_status, delete_question_set_and_questions, insert_feedback
 )
+from .background.tasks import print_number_task
 from flask_session import Session
 import os
 import re
@@ -959,6 +960,21 @@ def submit_feedback():
         print(f"Error submitting feedback: {str(e)}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+# @app.route('/api/trigger-print-task', methods=['POST'])
+# def trigger_print_task():
+#     data = request.get_json()
+#     number = data.get('number')
+
+#     if number is None:
+#         return jsonify({"message": "Number is required"}), 400
+
+#     try:
+#         # Dispatch the task to the Celery worker
+#         print_number_task.delay(number)
+#         return jsonify({"message": f"Task to print {number} dispatched!"}), 200
+#     except Exception as e:
+#         return jsonify({"message": f"Failed to dispatch task: {str(e)}"}), 500
 
 # Serve the React frontend
 @app.route("/")
