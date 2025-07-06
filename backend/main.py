@@ -11,7 +11,7 @@ from .database import (
     touch_question_set, update_question_starred_status, delete_question_set_and_questions, insert_feedback, 
     append_pdf_hash_to_user_pdfs, get_user_associated_pdf_metadata, get_pdf_text_by_hashes
 )
-from .background.tasks import print_number_task
+from .background.tasks import print_number_task, process_pdf_task
 from flask_session import Session
 import os
 import re
@@ -100,12 +100,6 @@ def login():
         
         # Clear any existing session data
         session.clear()
-
-        # # TODO remove later
-        # # Dispatch the task to the Celery worker
-        # for i in range(10):
-        #     task = print_number_task.delay(i)
-        #     print(f"Task dispatched: {task}")
         
         # Set new session data
         session['user_id'] = user['id']
@@ -891,6 +885,103 @@ def submit_feedback():
 
     except Exception as e:
         print(f"Error submitting feedback: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/upload-pdfs', methods=['POST'])
+def upload_pdfs():
+    print("upload_pdfs()")
+    try:
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        if 'files' not in request.files:
+            return jsonify({'error': 'No files part in the request'}), 400
+
+        files = request.files.getlist('files')
+        if not files:
+            return jsonify({'error': 'No selected files'}), 400
+
+        user_id = session['user_id']
+        uploaded_task_details = []
+        uploaded_files_details = []
+        existing_files_details = []
+        failed_files_details = []
+
+        for file in files:
+            if file.filename == '':
+                continue
+
+            print(f"Uploading file: {file.filename}")
+            
+            # Use file.stream to get a file-like object directly
+            file_stream = file.stream
+            original_filename = file.filename
+            
+            # Generate hash of the content from the stream
+            file_hash = generate_file_hash(file_stream)
+
+            # Reset stream position to the beginning after hashing, so it can be read again for upload
+            file_stream.seek(0)
+
+            # Check if file content already exists in our 'pdfs' table
+            file_exists_result = check_file_exists(file_hash)
+
+            if not file_exists_result['exists']:
+                # If file content is new, upload to Supabase Storage from the stream
+                upload_result = upload_pdf_to_storage(file_stream, file_hash, original_filename)
+
+                if not upload_result['success']:
+                    print(f"Error uploading {original_filename} to Supabase Storage: {upload_result.get('error')}")
+                    failed_files_details.append({'filename': original_filename, 'error': upload_result.get('error', 'Unknown upload error')})
+                    continue # Skip to next file if upload to storage failed
+                
+                # Upsert PDF metadata to 'pdfs' table (linking storage URL and path)
+                pdf_metadata = {
+                    "hash": file_hash,
+                    "filename": original_filename,
+                    "user_id": user_id, # The user who initially uploaded it
+                    "storage_url": upload_result['public_url'],
+                    "storage_file_path": upload_result['path'],
+                    "text": "" # Text will be extracted by background task
+                }
+                upsert_pdf_results_result = upsert_pdf_results(pdf_metadata)
+
+                if not upsert_pdf_results_result['success']:
+                    print(f"Error upserting PDF results for {original_filename}: {upsert_pdf_results_result.get('error')}")
+                    failed_files_details.append({'filename': original_filename, 'error': upsert_pdf_results_result.get('error', 'Unknown database error')})
+                    continue # Skip to next file if DB upsert failed
+                
+                # # Dispatch the Celery task to process the PDF text (using the hash to retrieve from Supabase)
+                # task = process_pdf_task.delay(file_hash) # Pass only the hash, worker will fetch from Supabase
+                # uploaded_task_details.append({'filename': original_filename, 'task_id': task.id, 'file_hash': file_hash})
+                uploaded_files_details.append({'filename': original_filename, 'message': 'Uploaded and queued for processing.'})
+
+            else:
+                print(f"File with hash {file_hash[:8]}... already exists in storage. Skipping re-upload.")
+                existing_files_details.append({'filename': original_filename, 'message': 'File already exists in storage.'})
+            
+            # Always associate the PDF hash with the user who uploaded it
+            append_result = append_pdf_hash_to_user_pdfs(user_id, file_hash)
+            if not append_result['success']:
+                print(f"Warning: Failed to associate PDF hash {file_hash[:8]}... with user {user_id}: {append_result.get('error')}")
+                # Consider adding this to failed_files_details if it's a critical failure
+                # For now, it's a warning as the file itself might have been uploaded/exists
+        
+        if not uploaded_task_details and not existing_files_details and not failed_files_details:
+            return jsonify({'success': False, 'message': 'No valid PDF files were provided or processed.'}), 200
+
+        return jsonify({
+            'success': True,
+            'message': f'{len(uploaded_files_details)} files uploaded, {len(existing_files_details)} existing files, {len(failed_files_details)} files failed.',
+            'uploaded_files': uploaded_files_details,
+            'existing_files': existing_files_details,
+            'failed_files': failed_files_details,
+            'task_details': uploaded_task_details # Still include for debugging if needed
+        })
+
+    except Exception as e:
+        print(f"Error uploading PDFs: {str(e)}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
