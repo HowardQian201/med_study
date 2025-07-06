@@ -101,12 +101,11 @@ def login():
         # Clear any existing session data
         session.clear()
 
-        
-        # TODO remove later
-        # Dispatch the task to the Celery worker
-        for i in range(10):
-            task = print_number_task.delay(i)
-            print(f"Task dispatched: {task}")
+        # # TODO remove later
+        # # Dispatch the task to the Celery worker
+        # for i in range(10):
+        #     task = print_number_task.delay(i)
+        #     print(f"Task dispatched: {task}")
         
         # Set new session data
         session['user_id'] = user['id']
