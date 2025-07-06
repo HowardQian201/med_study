@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import Study_session from './pages/Study_session'
 import Quiz from './pages/Quiz'
 import Home from './pages/Home'
+import Upload_pdfs from './pages/Upload_pdfs'
 import axios from 'axios'
 
 function App() {
@@ -120,6 +121,20 @@ function App() {
                 setIsAuthenticated={setIsAuthenticated} 
                 user={user}
                 summary={summary}
+                setSummary={setSummary}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        <Route 
+          path="/upload_pdfs" 
+          element={
+            isAuthenticated ? (
+              <Upload_pdfs 
+                setIsAuthenticated={setIsAuthenticated} 
+                user={user}
                 setSummary={setSummary}
               />
             ) : (
