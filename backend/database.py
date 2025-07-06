@@ -5,6 +5,7 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 from typing import Dict, Any, List, Union, Optional
 from datetime import datetime, timezone
+import io # Import io module for BytesIO and other stream types
 
 # Load environment variables from .env file
 load_dotenv()
@@ -84,19 +85,30 @@ def upsert_pdf_results(pdf_results: Dict[str, Any]) -> Dict[str, Any]:
     """
     return upsert_to_table("pdfs", pdf_results)
 
-def generate_file_hash(file_content: bytes, algorithm: str = "sha256") -> str:
+def generate_file_hash(file_stream: io.BytesIO, algorithm: str = "sha256", chunk_size: int = 4096) -> str:
     """
-    Generate a unique hash for file content.
+    Generate a unique hash for file content by reading it in chunks.
+    The stream's position will be reset to the beginning after hashing.
     
     Args:
-        file_content (bytes): The raw file content as bytes
-        algorithm (str): Hashing algorithm to use (default: "sha256")
+        file_stream (io.BytesIO): The file content as a binary stream.
+        algorithm (str): Hashing algorithm to use (default: "sha256").
+        chunk_size (int): Size of chunks to read for hashing.
     
     Returns:
-        str: Hexadecimal hash string that uniquely identifies the file content
+        str: Hexadecimal hash string that uniquely identifies the file content.
     """
     hash_obj = hashlib.new(algorithm)
-    hash_obj.update(file_content)
+    original_pos = file_stream.tell() # Store original position
+    file_stream.seek(0) # Go to the beginning of the stream
+    
+    while True:
+        chunk = file_stream.read(chunk_size)
+        if not chunk:
+            break
+        hash_obj.update(chunk)
+        
+    file_stream.seek(original_pos) # Reset stream position
     return hash_obj.hexdigest()
 
 def generate_content_hash(content_set: set, user_id: int, is_quiz_mode: bool = False, algorithm: str = "sha256") -> str:
@@ -390,12 +402,12 @@ def get_full_study_set_data(content_hash: str, user_id: int) -> Dict[str, Any]:
         print(f"Error getting full study set data: {e}")
         return {"success": False, "error": str(e), "data": None}
 
-def upload_pdf_to_storage(file_content: bytes, file_hash: str, original_filename: str) -> Dict[str, Any]:
+def upload_pdf_to_storage(file_stream: io.BytesIO, file_hash: str, original_filename: str) -> Dict[str, Any]:
     """
-    Uploads a PDF file to the Supabase Storage bucket.
+    Uploads a PDF file to the Supabase Storage bucket from a stream.
 
     Args:
-        file_content (bytes): The raw content of the PDF file.
+        file_stream (io.BytesIO): The raw content of the PDF file as a binary stream.
         file_hash (str): The SHA-256 hash of the file content.
         original_filename (str): The original name of the file.
 
@@ -409,10 +421,10 @@ def upload_pdf_to_storage(file_content: bytes, file_hash: str, original_filename
         # Use the hash as the filename to prevent duplicates and ensure a unique path
         file_path = f"{file_hash}.pdf"
         
-        # Upload the file. `file_options={"upsert": "false"}` prevents re-uploading.
+        # Upload the file from the stream
         supabase.storage.from_(bucket_name).upload(
             path=file_path,
-            file=file_content,
+            file=file_stream, # Pass the file stream directly
             file_options={"upsert": "false", "content-type": "application/pdf"}
         )
 
