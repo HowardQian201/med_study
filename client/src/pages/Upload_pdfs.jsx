@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Box, Typography, Container, AppBar, Toolbar, Stack, Button, Paper, Alert } from '@mui/material';
 import { Home as HomeIcon, Logout, CloudUpload } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +16,55 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
   const [uploadedFilesReport, setUploadedFilesReport] = useState([]);
   const [existingFilesReport, setExistingFilesReport] = useState([]);
   const [failedFilesReport, setFailedFilesReport] = useState([]);
+  const [processingJobs, setProcessingJobs] = useState(() => {
+    const savedJobs = sessionStorage.getItem('processingJobs');
+    return savedJobs ? JSON.parse(savedJobs) : [];
+  });
+
+  // Save processing jobs to sessionStorage whenever they change
+  useEffect(() => {
+    sessionStorage.setItem('processingJobs', JSON.stringify(processingJobs));
+  }, [processingJobs]);
+
+  // Polling for processing job statuses
+  useEffect(() => {
+    let interval;
+
+    if (processingJobs.length > 0) {
+      interval = setInterval(async () => {
+        const updatedJobs = await Promise.all(
+          processingJobs.map(async (job) => {
+            if (job.status === 'SUCCESS' || job.status === 'FAILURE') {
+              return job; // Already completed, no need to poll
+            }
+            try {
+              const response = await axios.get(`/api/pdf-processing-status/${job.task_id}`, {
+                withCredentials: true,
+              });
+              if (response.data.success) {
+                // Mark successful jobs with a displayUntil timestamp
+                if (response.data.status === 'SUCCESS') {
+                  return { ...job, status: response.data.status, message: response.data.message, displayUntil: Date.now() + (5 * 60 * 1000) }; // 5 minutes
+                }
+                return { ...job, status: response.data.status, message: response.data.message };
+              } else {
+                return { ...job, status: 'FAILURE', message: response.data.error || 'Failed to get status.' };
+              }
+            } catch (err) {
+              console.error(`Error polling for task ${job.task_id}:`, err);
+              return { ...job, status: 'FAILURE', message: 'Network error or server unreachable.' };
+            }
+          })
+        );
+        // Filter out jobs that are successful and have passed their displayUntil time
+        setProcessingJobs(updatedJobs.filter(job => !(job.status === 'SUCCESS' && job.displayUntil && job.displayUntil < Date.now())));
+      }, 3000); // Poll every 3 seconds
+    }
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [processingJobs]); // Dependency array: re-run effect if processingJobs changes
 
   const handleFileSelect = (event) => {
     // Implementation will go here later
@@ -60,6 +109,14 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
         setExistingFilesReport(response.data.existing_files || []);
         setFailedFilesReport(response.data.failed_files || []);
         
+        // Initialize processing jobs state
+        const initialProcessingJobs = (response.data.task_details || []).map(task => ({
+            ...task,
+            status: 'PENDING',
+            message: 'Queued for processing'
+        }));
+        setProcessingJobs(prevJobs => [...prevJobs, ...initialProcessingJobs]);
+
         let generalMessage = '';
         if (response.data.uploaded_files.length > 0) {
             generalMessage += `Successfully uploaded ${response.data.uploaded_files.length} files. `;
@@ -101,6 +158,7 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
       // Assuming logout clears session on backend
       await axios.post('/api/auth/logout', {}, { withCredentials: true });
       setIsAuthenticated(false);
+      sessionStorage.removeItem('processingJobs'); // Clear processing jobs from session storage on logout
       navigate('/login');
     } catch (err) {
       console.error('Logout failed:', err);
@@ -167,12 +225,120 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
       {/* Main Content */}
       <Container maxWidth="xl" sx={{ py: 4, textAlign: 'center' }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Upload PDFs
+          Upload PDFs and Begin Processing
         </Typography>
         <Typography variant="body1" color="text.secondary">
           Upload your PDFs here to start studying.
         </Typography>
         
+        <Box sx={{ mt: 4, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: 'stretch', justifyContent: 'center', gap: 3 }}>
+          {/* Left Column: Upload Box and Upload Button */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flex: 1 }}>
+            <Paper
+              elevation={2}
+              sx={{
+                border: '2px dashed',
+                borderColor: 'divider',
+                borderRadius: 2,
+                p: 4,
+                width: '100%',
+                minHeight: 200,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
+                '&:hover': { borderColor: 'primary.main' },
+                flexGrow: 1, // Allow the paper to grow vertically within its flex column
+              }}
+              onClick={() => fileInputRef.current.click()}
+            >
+              <CloudUpload sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                Drag & Drop PDF files here, or click to browse
+              </Typography>
+              {selectedFiles.length > 0 && (
+                <Stack sx={{ mt: 1, alignItems: 'center' }}>
+                  {selectedFiles.map((file, index) => (
+                    <Typography key={index} variant="body2" color="text.primary">
+                      {file.name}
+                    </Typography>
+                  ))}
+                </Stack>
+              )}
+              <input
+                type="file"
+                multiple
+                accept=".pdf"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+              />
+            </Paper>
+
+            <Button
+              variant="contained"
+              color="primary"
+              size="large"
+              startIcon={<CloudUpload />}
+              onClick={handleUploadFiles}
+              disabled={selectedFiles.length === 0 || isUploading}
+              sx={{ maxWidth: 200, flexShrink: 0 }} // Prevent button from shrinking
+            >
+              {isUploading ? 'Uploading...' : 'Upload Files'}
+            </Button>
+          </Box>
+
+          {/* Right Column: Processing Jobs Status Box */}
+          {
+              <Paper
+                elevation={2}
+                sx={{
+                  border: '2px dashed',
+                  borderColor: 'divider',
+                  borderRadius: 2,
+                  p: 4,
+                  width: '100%',
+                  minHeight: 200,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'flex-start', // Align items to the top
+                  bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
+                  flex: 1, // Make it take equal width and stretch height
+                }}
+              >
+                <Typography variant="h6" color="text.secondary" gutterBottom>
+                  Processing Statuses
+                </Typography>
+                {processingJobs.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                        No processing jobs active.
+                    </Typography>
+                ) : (
+                    <Stack sx={{ width: '100%', mt: 2 }} spacing={1} alignItems="flex-start">
+                        {processingJobs.map((job, index) => (
+                            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" color="text.primary">
+                                    {job.filename}:
+                                </Typography>
+                                <Typography variant="body2" color={(theme) => {
+                                    if (job.status === 'SUCCESS') return theme.palette.success.main;
+                                    if (job.status === 'FAILURE') return theme.palette.error.main;
+                                    return theme.palette.info.main; // PENDING, STARTED
+                                }}>
+                                    {job.message}
+                                </Typography>
+                            </Box>
+                        ))}
+                    </Stack>
+                )}
+              </Paper>
+          }
+        </Box>
+
+        {/* File Upload Report (moved to bottom) */}
         {error && (
           <Alert severity="error" sx={{ mt: 3, borderRadius: 2 }}>
             {error}
@@ -216,63 +382,6 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                 </ul>
             </Alert>
         )}
-        
-        <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-          <Paper
-            elevation={2}
-            sx={{
-              border: '2px dashed',
-              borderColor: 'divider',
-              borderRadius: 2,
-              p: 4,
-              width: '100%',
-              maxWidth: 600,
-              minHeight: 200,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
-              '&:hover': { borderColor: 'primary.main' },
-            }}
-            onClick={() => fileInputRef.current.click()}
-          >
-            <CloudUpload sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              Drag & Drop PDF files here, or click to browse
-            </Typography>
-            {selectedFiles.length > 0 && (
-              <Stack sx={{ mt: 1, alignItems: 'center' }}>
-                {selectedFiles.map((file, index) => (
-                  <Typography key={index} variant="body2" color="text.primary">
-                    {file.name}
-                  </Typography>
-                ))}
-              </Stack>
-            )}
-            <input
-              type="file"
-              multiple
-              accept=".pdf"
-              ref={fileInputRef}
-              onChange={handleFileSelect}
-              style={{ display: 'none' }}
-            />
-          </Paper>
-
-          <Button
-            variant="contained"
-            color="primary"
-            size="large"
-            startIcon={<CloudUpload />}
-            onClick={handleUploadFiles}
-            disabled={selectedFiles.length === 0 || isUploading}
-            sx={{ maxWidth: 200 }}
-          >
-            {isUploading ? 'Uploading...' : 'Upload Files'}
-          </Button>
-        </Box>
       </Container>
       <FeedbackButton />
     </Box>
