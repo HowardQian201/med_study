@@ -1457,11 +1457,11 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                 Keyboard shortcuts: {isQuizMode ? (
                                   <>
                                     Use <strong>1-4</strong> to select answers, <strong>Enter</strong> to submit,{' '}
-                                    <strong>←/→</strong> for navigation
+                                    <strong>←/→</strong> for navigation, <strong>s</strong> to star/unstar
                                   </>
                                 ) : (
                                   <>
-                                    Press <strong>Space</strong> to flip card, <strong>←/→</strong> for navigation
+                                    Press <strong>Space</strong> to flip card, <strong>←/→</strong> for navigation, <strong>s</strong> to star/unstar
                                   </>
                                 )}
                               </Typography>
