@@ -11,7 +11,7 @@ from .database import (
     touch_question_set, update_question_starred_status, delete_question_set_and_questions, insert_feedback, 
     append_pdf_hash_to_user_pdfs, get_user_associated_pdf_metadata, get_pdf_text_by_hashes
 )
-from .background.tasks import print_number_task, process_pdf_task
+from .background.tasks import print_number_task, process_pdf_task, celery_app
 from flask_session import Session
 import os
 import re
@@ -965,9 +965,14 @@ def upload_pdfs():
 
                 else:
                     print(f"File with hash {file_hash[:8]}... already exists in storage. Skipping re-upload.")
+                    # Even if file exists, ensure it's linked to this user
+                    append_result = append_pdf_hash_to_user_pdfs(user_id, file_hash)
+                    if not append_result['success']:
+                        print(f"Error linking existing PDF {file_hash[:8]}... to user {user_id}: {append_result.get('error')}")
+                        failed_files_details.append({'filename': original_filename, 'error': append_result.get('error', 'Failed to link file to user')})
+                        continue
                     existing_files_details.append({'filename': original_filename, 'message': 'File already exists in storage.'})
-                
-                
+
             except Exception as e:
                 print(f"An unexpected error occurred for file {file.filename}: {str(e)}")
                 failed_files_details.append({'filename': original_filename, 'error': str(e)})
@@ -992,6 +997,44 @@ def upload_pdfs():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+@app.route("/api/pdf-processing-status/<task_id>")
+def get_pdf_processing_status(task_id):
+    print(f"Checking status for task_id: {task_id}")
+    try:
+        # Check if user is authenticated (optional, but good practice if task results are user-specific)
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        task_result = AsyncResult(task_id, app=celery_app)
+        
+        status = task_result.status
+        result = task_result.result # This will be the return value of the task if successful
+
+        # Handle specific states
+        if status == 'PENDING':
+            # Task is not yet ready or does not exist
+            message = "Task is pending or not found."
+        elif status == 'STARTED':
+            message = "Task has started processing."
+        elif status == 'SUCCESS':
+            message = "Task completed successfully."
+        elif status == 'FAILURE':
+            message = f"Task failed: {result}"
+        else:
+            message = f"Task status: {status}"
+
+        return jsonify({
+            'success': True,
+            'task_id': task_id,
+            'status': status,
+            'result': result,
+            'message': message
+        })
+
+    except Exception as e:
+        print(f"Error checking task status: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # Serve the React frontend
 @app.route("/")
