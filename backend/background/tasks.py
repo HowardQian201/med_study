@@ -6,19 +6,24 @@ from backend.logic import extract_text_from_pdf_memory # Import PDF extraction l
 from backend.open_ai_calls import generate_short_title # Import short title generation
 from dotenv import load_dotenv
 
-load_dotenv()
-celery_app = Celery(
-    'med_study',
-    broker=os.getenv("REDIS_URL"),
-    backend=os.getenv("REDIS_URL")
-)
+# Import the main Celery app instance from worker.py
+from backend.background.worker import celery
 
-@celery_app.task
+load_dotenv()
+
+# The Celery app instance is now imported from worker.py
+# celery_app = Celery(
+#     'med_study',
+#     broker=os.getenv("REDIS_URL"),
+#     backend=os.getenv("REDIS_URL")
+# )
+
+@celery.task
 def print_number_task(number):
     print(f"Celery task received number: {number}")
     return f"Processed number: {number}"
 
-@celery_app.task
+@celery.task
 def process_pdf_task(file_hash, original_filename, bucket_name, file_path, user_id):
     """
     Celery task to: 
