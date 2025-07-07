@@ -83,6 +83,7 @@ def upsert_pdf_results(pdf_results: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict containing the result
     """
+    print("upsert_pdf_results()")
     return upsert_to_table("pdfs", pdf_results)
 
 def generate_file_hash(file_input: Union[io.BytesIO, str], algorithm: str = "sha256", chunk_size: int = 4096) -> str:
