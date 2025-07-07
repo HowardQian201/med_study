@@ -12,7 +12,7 @@ from .database import (
     append_pdf_hash_to_user_pdfs, get_user_associated_pdf_metadata, get_pdf_text_by_hashes
 )
 # Import the main Celery app instance from worker.py
-from .background.worker import celery
+from .background.worker import app as celery_app
 from .background.tasks import print_number_task, process_pdf_task
 from flask_session import Session
 import os
@@ -103,6 +103,10 @@ def login():
         
         # Clear any existing session data
         session.clear()
+
+        print("calling print_number_task.delay(10)")
+        print_number_task.delay(10)
+        print("print_number_task.delay(10) called")
         
         # Set new session data
         session['user_id'] = user['id']
@@ -1007,7 +1011,7 @@ def get_pdf_processing_status(task_id):
         if 'user_id' not in session:
             return jsonify({'error': 'Unauthorized'}), 401
         
-        task_result = AsyncResult(task_id, app=celery)
+        task_result = AsyncResult(task_id, app=celery_app)
         
         status = task_result.status
         result = task_result.result # This will be the return value of the task if successful

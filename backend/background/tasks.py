@@ -7,7 +7,7 @@ from backend.open_ai_calls import generate_short_title # Import short title gene
 from dotenv import load_dotenv
 
 # Import the main Celery app instance from worker.py
-from backend.background.worker import celery
+from backend.background.worker import app
 
 load_dotenv()
 
@@ -18,12 +18,12 @@ load_dotenv()
 #     backend=os.getenv("REDIS_URL")
 # )
 
-@celery.task
+@app.task
 def print_number_task(number):
     print(f"Celery task received number: {number}")
     return f"Processed number: {number}"
 
-@celery.task
+@app.task
 def process_pdf_task(file_hash, original_filename, bucket_name, file_path, user_id):
     """
     Celery task to: 
