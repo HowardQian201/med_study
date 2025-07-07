@@ -4,11 +4,13 @@ from io import BytesIO # Import BytesIO for in-memory binary streams
 from backend.database import download_file_from_storage, update_pdf_text_and_summary, append_pdf_hash_to_user_pdfs # Import new database functions
 from backend.logic import extract_text_from_pdf_memory # Import PDF extraction logic
 from backend.open_ai_calls import generate_short_title # Import short title generation
+from dotenv import load_dotenv
 
+load_dotenv()
 celery_app = Celery(
     'med_study',
-    broker=os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0'),
-    backend=os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+    broker=os.getenv("REDIS_URL"),
+    backend=os.getenv("REDIS_URL")
 )
 
 @celery_app.task
