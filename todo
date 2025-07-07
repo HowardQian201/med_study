@@ -1,23 +1,27 @@
 
 URGENT:
 
-Background workers to make a process queue for pdfs processing
-    - This prevents hitting RAM limits for app users
-    - Alternative to storing file in memory
-
 entering password should have button to show password
-
-Look into question set hashing for same file
-    - sometimes a new hashing
-
 disable file upload when uploding
-
+worker task fail after time limit/retry logic
 use file short summary in study session page
+Add navigation between pdf upload and study session
+show successfully uploaded/connected files in pdf_upload
+Remove upload status in pdf_upload
 
-worker task fail after time limit
+Store task ids in user table to poll from if logout log back in
+    - success should also be shown until redis clears
+    - set redis clear timer to 12 hours
+    - should store when the task id was stored and remove after redis timer
+
+
+
+
 
 
 IDEAS:
+realtime stats using posthog
+supabase mcp with cursor
 
 register new account
     - Payment page on register new account
@@ -25,10 +29,9 @@ register new account
 
 Database indexing on question_sets.user_id, pdfs.hash, and quiz_questions.hash so that db queries are fast when 
 Caching layer
+Look into question set hashing for same file
+    - sometimes a new hashing
 
-realtime stats using posthog
-
-supabase mcp with cursor
 
 Combine quiz sets
 implement some progress memorization from previous sessions
