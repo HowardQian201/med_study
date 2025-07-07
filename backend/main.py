@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, session, send_from_directory, Response
 from flask_cors import CORS
 import traceback
-from .logic import extract_text_from_pdf_memory, set_process_priority, log_memory_usage, check_memory, get_container_memory_limit
+from .logic import log_memory_usage
 from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_short_title
 from .database import (
     upsert_pdf_results, check_question_set_exists,
@@ -21,8 +21,6 @@ from datetime import timedelta, datetime
 import atexit
 import glob
 import gc
-from io import BytesIO
-import uuid
 import random
 from celery.result import AsyncResult # Import this to interact with task results
 import tempfile # Import tempfile for creating temporary files
@@ -103,10 +101,6 @@ def login():
         
         # Clear any existing session data
         session.clear()
-
-        print("calling print_number_task.delay(10)")
-        print_number_task.delay(10)
-        print("print_number_task.delay(10) called")
         
         # Set new session data
         session['user_id'] = user['id']

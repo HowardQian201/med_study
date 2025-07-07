@@ -1,22 +1,11 @@
-from celery import Celery
-import os
 from io import BytesIO # Import BytesIO for in-memory binary streams
 from backend.database import download_file_from_storage, update_pdf_text_and_summary, append_pdf_hash_to_user_pdfs # Import new database functions
 from backend.logic import extract_text_from_pdf_memory # Import PDF extraction logic
 from backend.open_ai_calls import generate_short_title # Import short title generation
-from dotenv import load_dotenv
 
 # Import the main Celery app instance from worker.py
 from backend.background.worker import app
 
-load_dotenv()
-
-# The Celery app instance is now imported from worker.py
-# celery_app = Celery(
-#     'med_study',
-#     broker=os.getenv("REDIS_URL"),
-#     backend=os.getenv("REDIS_URL")
-# )
 
 @app.task
 def print_number_task(number):
