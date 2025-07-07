@@ -521,6 +521,26 @@ def touch_question_set(content_hash: str, user_id: int) -> Dict[str, Any]:
         print(f"Error touching question set: {e}")
         return {"success": False, "error": str(e)}
 
+def touch_pdf(pdf_hash: str) -> Dict[str, Any]:
+    """Updates the created_at timestamp of a specific PDF to the current time."""
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.table('pdfs').update({
+            'created_at': datetime.now(timezone.utc).isoformat()
+        }).eq('hash', pdf_hash).execute()
+
+        if result.data and len(result.data) > 0:
+            return {"success": True, "data": result.data}
+        else:
+            print(f"Could not find PDF with hash {pdf_hash} to touch.")
+            return {"success": False, "error": "PDF not found to update timestamp"}
+
+    except Exception as e:
+        print(f"Error touching PDF: {e}")
+        return {"success": False, "error": str(e)}
+
+
 def update_question_starred_status(question_hash: str, starred_status: bool) -> Dict[str, Any]:
     """
     Updates the 'starred' status of a quiz question in the database.
@@ -765,7 +785,7 @@ def get_user_associated_pdf_metadata(user_id: int) -> Dict[str, Any]:
             
         # 2. Fetch the corresponding PDF metadata from the 'pdfs' table
         #    Ensure to get only the fields necessary for display and processing
-        pdfs_metadata_result = supabase.table('pdfs').select("hash, filename").in_('hash', pdf_hashes_from_user).execute()
+        pdfs_metadata_result = supabase.table('pdfs').select("hash, filename", "short_summary", "created_at").in_('hash', pdf_hashes_from_user).order('created_at', desc=True).execute()
         
         return {"success": True, "data": pdfs_metadata_result.data}
         

@@ -39,6 +39,14 @@ def process_pdf_task(file_hash, original_filename, bucket_name, file_path, user_
         extracted_text = extract_text_from_pdf_memory(BytesIO(pdf_content_bytes))
         if not extracted_text:
             raise Exception("No text extracted from PDF.")
+        
+        # Remove null characters from the extracted text before saving to database
+        cleaned_extracted_text = extracted_text.replace('\u0000', '')
+
+        # Further sanitize text for invalid UTF-8 characters
+        # Encode to bytes with 'ignore' errors, then decode back to string
+        final_cleaned_text = cleaned_extracted_text.encode('utf-8', errors='ignore').decode('utf-8')
+
         print(f"Successfully extracted text (length: {len(extracted_text)}) for hash {file_hash}.")
     except Exception as e:
         error_msg = f"Failed to extract text from PDF {file_hash}: {str(e)}"
@@ -47,7 +55,7 @@ def process_pdf_task(file_hash, original_filename, bucket_name, file_path, user_
 
     # 3. Generate a short title for the extracted text
     try:
-        short_title = generate_short_title(extracted_text)
+        short_title = generate_short_title(final_cleaned_text)
         print(f"Successfully generated short title: '{short_title}' for hash {file_hash}.")
     except Exception as e:
         error_msg = f"Failed to generate short title for PDF {file_hash}: {str(e)}"
@@ -56,7 +64,7 @@ def process_pdf_task(file_hash, original_filename, bucket_name, file_path, user_
         short_title = "No Summary"
 
     # 4. Update the 'pdfs' table in Supabase with the extracted text and short title
-    update_result = update_pdf_text_and_summary(file_hash, extracted_text, short_title)
+    update_result = update_pdf_text_and_summary(file_hash, final_cleaned_text, short_title)
     if not update_result['success']:
         error_msg = f"Failed to update database for PDF {file_hash}: {update_result.get('error', 'Unknown error')}"
         print(error_msg)

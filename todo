@@ -1,20 +1,19 @@
 
 URGENT:
 
-entering password should have button to show password
-disable file upload when uploding
+increase file size limit
+testing vs learning mode toggle is not super intuitive - add toggle to study_session page
+make uploaded pdfs look better in upload_pdfs and study_session
+
 worker task fail after time limit/retry logic
-use file short summary in study session page
-Add navigation between pdf upload and study session
-show successfully uploaded/connected files in pdf_upload
-Remove upload status in pdf_upload
 
 Store task ids in user table to poll from if logout log back in
+    - Can we store this in redis?
     - success should also be shown until redis clears
     - set redis clear timer to 12 hours
     - should store when the task id was stored and remove after redis timer
 
-
+Check what start command setting multiple threads means for 0.5 cpu in background worker
 
 
 
