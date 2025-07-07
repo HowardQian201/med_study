@@ -20,6 +20,9 @@ register new account
 Database indexing on question_sets.user_id, pdfs.hash, and quiz_questions.hash so that db queries are fast when 
 Caching layer
 
+realtime stats using posthog
+
+supabase mcp with cursor
 
 Combine quiz sets
 implement some progress memorization from previous sessions

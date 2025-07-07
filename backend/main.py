@@ -23,6 +23,7 @@ from io import BytesIO
 import uuid
 import random
 from celery.result import AsyncResult # Import this to interact with task results
+import tempfile # Import tempfile for creating temporary files
 
 # Streaming flag
 STREAMING_ENABLED = True
@@ -903,6 +904,7 @@ def upload_pdfs():
             return jsonify({'error': 'No selected files'}), 400
 
         user_id = session['user_id']
+        bucket_name = "pdfs"
         uploaded_task_details = []
         uploaded_files_details = []
         existing_files_details = []
@@ -914,59 +916,64 @@ def upload_pdfs():
 
             print(f"Uploading file: {file.filename}")
             
-            # Use file.stream to get a file-like object directly
-            file_stream = file.stream
-            original_filename = file.filename
-            
-            # Generate hash of the content from the stream
-            file_hash = generate_file_hash(file_stream)
-
-            # Reset stream position to the beginning after hashing, so it can be read again for upload
-            file_stream.seek(0)
-
-            # Check if file content already exists in our 'pdfs' table
-            file_exists_result = check_file_exists(file_hash)
-
-            if not file_exists_result['exists']:
-                # If file content is new, upload to Supabase Storage from the stream
-                upload_result = upload_pdf_to_storage(file_stream, file_hash, original_filename)
-
-                if not upload_result['success']:
-                    print(f"Error uploading {original_filename} to Supabase Storage: {upload_result.get('error')}")
-                    failed_files_details.append({'filename': original_filename, 'error': upload_result.get('error', 'Unknown upload error')})
-                    continue # Skip to next file if upload to storage failed
+            temp_file_path = None # Initialize to None
+            try:
+                # Create a temporary file to store the incoming PDF stream
+                # delete=True ensures the file is automatically deleted when closed
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                    file.stream.seek(0) # Ensure stream is at the beginning
+                    temp_file.write(file.stream.read())
+                    temp_file_path = temp_file.name # Get the path to the temporary file
                 
-                # Upsert PDF metadata to 'pdfs' table (linking storage URL and path)
-                pdf_metadata = {
-                    "hash": file_hash,
-                    "filename": original_filename,
-                    "user_id": user_id, # The user who initially uploaded it
-                    "storage_url": upload_result['public_url'],
-                    "storage_file_path": upload_result['path'],
-                    "text": "" # Text will be extracted by background task
-                }
-                upsert_pdf_results_result = upsert_pdf_results(pdf_metadata)
-
-                if not upsert_pdf_results_result['success']:
-                    print(f"Error upserting PDF results for {original_filename}: {upsert_pdf_results_result.get('error')}")
-                    failed_files_details.append({'filename': original_filename, 'error': upsert_pdf_results_result.get('error', 'Unknown database error')})
-                    continue # Skip to next file if DB upsert failed
+                original_filename = file.filename
                 
-                # # Dispatch the Celery task to process the PDF text (using the hash to retrieve from Supabase)
-                # task = process_pdf_task.delay(file_hash) # Pass only the hash, worker will fetch from Supabase
-                # uploaded_task_details.append({'filename': original_filename, 'task_id': task.id, 'file_hash': file_hash})
-                uploaded_files_details.append({'filename': original_filename, 'message': 'Uploaded and queued for processing.'})
+                # Generate hash of the content from the temporary file
+                file_hash = generate_file_hash(temp_file_path)
+                print(f"File hash: {file_hash}")
 
-            else:
-                print(f"File with hash {file_hash[:8]}... already exists in storage. Skipping re-upload.")
-                existing_files_details.append({'filename': original_filename, 'message': 'File already exists in storage.'})
-            
-            # Always associate the PDF hash with the user who uploaded it
-            append_result = append_pdf_hash_to_user_pdfs(user_id, file_hash)
-            if not append_result['success']:
-                print(f"Warning: Failed to associate PDF hash {file_hash[:8]}... with user {user_id}: {append_result.get('error')}")
-                # Consider adding this to failed_files_details if it's a critical failure
-                # For now, it's a warning as the file itself might have been uploaded/exists
+                # Check if file content already exists in our 'pdfs' table
+                file_exists_result = check_file_exists(file_hash)
+
+                if not file_exists_result['exists']:
+                    # If file content is new, upload to Supabase Storage from the temporary file
+                    upload_result = upload_pdf_to_storage(temp_file_path, file_hash, original_filename, bucket_name)
+
+                    if not upload_result['success']:
+                        print(f"Error uploading {original_filename} to Supabase Storage: {upload_result.get('error')}")
+                        failed_files_details.append({'filename': original_filename, 'error': upload_result.get('error', 'Unknown upload error')})
+                        continue # Skip to next file if upload to storage failed
+                    
+                    # Upsert PDF metadata to 'pdfs' table (linking storage URL and path)
+                    pdf_metadata = {
+                        "hash": file_hash,
+                        "filename": original_filename,
+                        "bucket_name": bucket_name,
+                        "storage_file_path": upload_result['path'],
+                        "text": "" # Text will be extracted by background task
+                    }
+                    upsert_pdf_results_result = upsert_pdf_results(pdf_metadata)
+
+                    if not upsert_pdf_results_result['success']:
+                        print(f"Error upserting PDF results for {original_filename}: {upsert_pdf_results_result.get('error')}")
+                        failed_files_details.append({'filename': original_filename, 'error': upsert_pdf_results_result.get('error', 'Unknown database error')})
+                        continue # Skip to next file if DB upsert failed
+                    
+                    # Dispatch the Celery task to process the PDF text (using the hash to retrieve from Supabase)
+                    task = process_pdf_task.delay(file_hash, original_filename, bucket_name, upload_result['path'], user_id)
+                    uploaded_task_details.append({'filename': original_filename, 'task_id': task.id, 'file_hash': file_hash})
+                    uploaded_files_details.append({'filename': original_filename, 'message': 'Uploaded and queued for processing.'})
+
+                else:
+                    print(f"File with hash {file_hash[:8]}... already exists in storage. Skipping re-upload.")
+                    existing_files_details.append({'filename': original_filename, 'message': 'File already exists in storage.'})
+                
+                
+            except Exception as e:
+                print(f"An unexpected error occurred for file {file.filename}: {str(e)}")
+                failed_files_details.append({'filename': original_filename, 'error': str(e)})
+            finally:
+                if temp_file_path and os.path.exists(temp_file_path):
+                    os.remove(temp_file_path) # Ensure temporary file is deleted
         
         if not uploaded_task_details and not existing_files_details and not failed_files_details:
             return jsonify({'success': False, 'message': 'No valid PDF files were provided or processed.'}), 200
