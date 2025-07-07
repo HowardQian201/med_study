@@ -91,8 +91,8 @@ def gpt_summarize_transcript(text, stream=False):
             {"role": "system", "content": "You are an expert medical educator and USMLE/COMLEX tutor with extensive experience creating comprehensive study materials. Your goal is to create the most thorough, detailed, and well-organized study guides possible. You excel at identifying high-yield content, explaining complex concepts clearly, and structuring information in ways that maximize learning and retention. Always double-check your responses for accuracy and completeness."},
             {"role": "user", "content": prompt},
         ],
-        temperature=1.2,
-        presence_penalty=0.6,
+        temperature=1.0,
+        frequency_penalty=0.25,
         stream=stream,
     )
 
@@ -233,7 +233,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
                     "schema": quiz_schema
                 }
             },
-            temperature=0.9,
+            temperature=1.0,
             presence_penalty=0.6,
             max_completion_tokens=3000,  # Increased for more questions
             top_p=0.9,
@@ -332,8 +332,7 @@ def generate_short_title(text_to_summarize: str) -> str:
                 {"role": "system", "content": "You are an expert at creating short, descriptive titles from text. You always follow length constraints and instructions precisely."},
                 {"role": "user", "content": prompt},
             ],
-            presence_penalty=0.5,
-            temperature=1.2,
+            temperature=1.0,
             max_tokens=25,  # Generous buffer for 10 words
             n=1,
             stop=None,

@@ -32,6 +32,7 @@ import {
   HelpOutline,
   Delete as DeleteIcon,
   Close as CloseIcon,
+  CloudUpload
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { format } from 'date-fns';
@@ -286,16 +287,29 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                 Transform your medical PDFs and notes into interactive study materials with AI-generated summaries, active recall flashcards, and USMLE clinical vignette style questions.
                             </Typography>
                         </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                size="large"
-                                startIcon={<Book />}
-                                onClick={handleStartNewSession}
-                            >
-                                Start New {showQuizSets ? 'Testing' : 'Learning'} Session
-                            </Button>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    size="large"
+                                    startIcon={<CloudUpload />}
+                                    onClick={() => navigate('/upload_pdfs')}
+                                    sx={{ width: '100%' }}
+                                >
+                                    Upload PDFs
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    size="large"
+                                    startIcon={<Book />}
+                                    onClick={handleStartNewSession}
+                                    sx={{ width: '100%' }}
+                                >
+                                    Start New {showQuizSets ? 'Testing' : 'Learning'} Session
+                                </Button>
+                            </Box>
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
                                 <Switch
                                     checked={showQuizSets}
