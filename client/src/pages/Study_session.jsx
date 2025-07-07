@@ -23,7 +23,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   IconButton
 } from '@mui/material';
 import {
@@ -31,13 +30,11 @@ import {
   Quiz,
   Refresh,
   Clear,
-  Cancel,
   Logout,
-  Description,
   ContentCopy,
   Home as HomeIcon,
   Close as CloseIcon,
-  Visibility as VisibilityIcon
+  OpenInNew as OpenInNewIcon
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import ReactMarkdown from 'react-markdown';
@@ -60,6 +57,22 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const [availablePdfs, setAvailablePdfs] = useState([]); // Stores { hash, filename, text } from backend
   const [selectedPdfHashes, setSelectedPdfHashes] = useState([]); // Stores only the hashes of selected PDFs
   const [showExpandedPdfList, setShowExpandedPdfList] = useState(false); // New state for expanded view
+
+  // Clear existing results when component mounts, ensuring a fresh start
+  useEffect(() => {
+    clearResults();
+  }, []);
+
+  // Abort any active fetch request when the component unmounts
+  useEffect(() => {
+    return () => {
+      if (abortController.current) {
+        console.log("Study_session unmounting, aborting any active stream.");
+        abortController.current.abort();
+        abortController.current = null; // Clear the ref to prevent stale closures
+      }
+    };
+  }, []); // Empty dependency array ensures this runs once on mount and cleanup on unmount
 
   // Display existing results if available
   useEffect(() => {
@@ -181,9 +194,12 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
         }
 
         // After stream is complete, save the final summary to the session
-        await axios.post('/api/save-summary', { summary: finalSummary }, {
-          withCredentials: true
-        });
+        // Only save if the operation was not aborted during streaming
+        if (!abortController.current.signal.aborted) {
+          await axios.post('/api/save-summary', { summary: finalSummary }, {
+            withCredentials: true
+          });
+        }
 
       } else {
         throw new Error(`Unexpected content type: ${contentType}`);
@@ -205,6 +221,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
 
   const clearResults = async () => {
     try {
+
       setSummary('');
       setSelectedPdfHashes([]); // Clear selected PDFs
       setUserText('');
@@ -258,9 +275,12 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
         }
 
         // After stream is complete, save the final summary to the session
-        await axios.post('/api/save-summary', { summary: finalSummary }, {
-        withCredentials: true
-      });
+        // Only save if the operation was not aborted during streaming
+        if (!abortController.current.signal.aborted) {
+          await axios.post('/api/save-summary', { summary: finalSummary }, {
+            withCredentials: true
+          });
+        }
       
       } else {
         throw new Error(`Unexpected content type: ${contentType}`);
@@ -340,6 +360,27 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                 >
                   Home
                 </Button>
+                <Button
+                  onClick={async () => {
+                    try {
+                      clearResults();
+                      // Clear summary in App.js state
+                      setSummary('');
+                      // Navigate to upload_pdfs
+                      navigate('/upload_pdfs');
+                    } catch (err) {
+                      console.error('Failed to clear session and navigate:', err);
+                      // Still attempt to navigate even if clearing fails
+                      navigate('/upload_pdfs');
+                    }
+                  }}
+                  variant="outlined"
+                  startIcon={<CloudUpload />}
+                  size="small"
+                  sx={{ ml: 0 }}
+                >
+                  Upload PDFs
+                </Button>
                 <Typography 
                   variant="body2" 
                   color="primary"
@@ -412,7 +453,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                             aria-label="view all files"
                             sx={{ mb: 1 }} // Add some bottom margin to align with Typography's gutterBottom
                           >
-                            <VisibilityIcon fontSize="small" />
+                            <OpenInNewIcon fontSize="small" />
                           </IconButton>
                         )}
                       </Stack>
@@ -441,11 +482,24 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                                 }
                                 label={
                                   <ListItemText 
-                                    primary={pdf.filename} 
+                                    primary={pdf.short_summary || pdf.filename} 
                                     primaryTypographyProps={{
                                       variant: 'body2', 
                                       fontWeight: 'medium',
                                       color: 'text.primary'
+                                    }}
+                                    secondary={
+                                      <>
+                                        {pdf.filename}
+                                        {pdf.created_at && (
+                                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.2 }}>
+                                            Uploaded: {new Date(pdf.created_at).toLocaleString()}
+                                          </Typography>
+                                        )}
+                                      </>
+                                    }
+                                    secondaryTypographyProps={{
+                                      component: 'div'
                                     }}
                                   />
                                 }
@@ -798,11 +852,24 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                   }
                   label={
                     <ListItemText 
-                      primary={pdf.filename} 
+                      primary={pdf.short_summary || pdf.filename} 
                       primaryTypographyProps={{
                         variant: 'body2', 
                         fontWeight: 'medium',
                         color: 'text.primary'
+                      }}
+                      secondary={
+                        <>
+                          {pdf.filename}
+                          {pdf.created_at && (
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.2 }}>
+                              Uploaded: {new Date(pdf.created_at).toLocaleString()}
+                            </Typography>
+                          )}
+                        </>
+                      }
+                      secondaryTypographyProps={{
+                        component: 'div'
                       }}
                     />
                   }
@@ -815,11 +882,6 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
             )}
           </List>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowExpandedPdfList(false)} color="primary" variant="contained">
-            Close
-          </Button>
-        </DialogActions>
       </Dialog>
     </Box>
   );

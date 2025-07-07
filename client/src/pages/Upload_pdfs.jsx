@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Typography, Container, AppBar, Toolbar, Stack, Button, Paper, Alert } from '@mui/material';
-import { Home as HomeIcon, Logout, CloudUpload } from '@mui/icons-material';
+import { Box, Typography, Container, AppBar, Toolbar, Stack, Button, Paper, Alert, List, ListItem, ListItemText } from '@mui/material';
+import { Home as HomeIcon, Logout, CloudUpload, Description } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import FeedbackButton from '../components/FeedbackButton';
@@ -20,11 +20,54 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
     const savedJobs = sessionStorage.getItem('processingJobs');
     return savedJobs ? JSON.parse(savedJobs) : [];
   });
+  const [userPdfs, setUserPdfs] = useState([]);
 
   // Save processing jobs to sessionStorage whenever they change
   useEffect(() => {
     sessionStorage.setItem('processingJobs', JSON.stringify(processingJobs));
   }, [processingJobs]);
+
+  // Clear success/error messages and reports after 10 seconds
+  useEffect(() => {
+    let timer;
+    if (successMessage || error || uploadedFilesReport.length > 0 || existingFilesReport.length > 0 || failedFilesReport.length > 0) {
+      timer = setTimeout(() => {
+        setSuccessMessage('');
+        setError('');
+        setUploadedFilesReport([]);
+        setExistingFilesReport([]);
+        setFailedFilesReport([]);
+      }, 10000); // 10 seconds
+    }
+    return () => clearTimeout(timer);
+  }, [successMessage, error, uploadedFilesReport, existingFilesReport, failedFilesReport]);
+
+  // New useEffect to fetch user's associated PDFs on component mount
+  useEffect(() => {
+    const fetchUserPdfs = async () => {
+      try {
+        const response = await axios.get('/api/get-user-pdfs', { withCredentials: true });
+        if (response.data.success) {
+          setUserPdfs(response.data.pdfs);
+        } else {
+          console.error("Failed to fetch user PDFs:", response.data.error);
+          // Optionally set an error state here if you want to display it
+        }
+      } catch (err) {
+        console.error("Error fetching user PDFs:", err);
+        if (err.response?.status === 401) {
+          // Session expired, redirect to login
+          setIsAuthenticated(false);
+          navigate('/login');
+        } else {
+          // Handle other errors, e.g., display a generic error message
+          // setError('Failed to load your PDFs.');
+        }
+      }
+    };
+
+    fetchUserPdfs();
+  }, [setIsAuthenticated, navigate]); // Dependencies to re-run effect if auth/navigation changes
 
   // Polling for processing job statuses
   useEffect(() => {
@@ -32,8 +75,11 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
 
     if (processingJobs.length > 0) {
       interval = setInterval(async () => {
+        // Capture the current state of processingJobs before mapping to detect transitions
+        const currentJobsSnapshot = [...processingJobs];
+
         const updatedJobs = await Promise.all(
-          processingJobs.map(async (job) => {
+          currentJobsSnapshot.map(async (job) => {
             if (job.status === 'SUCCESS' || job.status === 'FAILURE') {
               return job; // Already completed, no need to poll
             }
@@ -42,9 +88,10 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                 withCredentials: true,
               });
               if (response.data.success) {
-                // Mark successful jobs with a displayUntil timestamp
+                // If job just became SUCCESS, set displayUntil for the *new* job object
                 if (response.data.status === 'SUCCESS') {
-                  return { ...job, status: response.data.status, message: response.data.message, displayUntil: Date.now() + (5 * 60 * 1000) }; // 5 minutes
+                  // Removed displayUntil logic, successful jobs will now remain visible
+                  return { ...job, status: response.data.status, message: response.data.message };
                 }
                 return { ...job, status: response.data.status, message: response.data.message };
               } else {
@@ -56,15 +103,42 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
             }
           })
         );
-        // Filter out jobs that are successful and have passed their displayUntil time
-        setProcessingJobs(updatedJobs.filter(job => !(job.status === 'SUCCESS' && job.displayUntil && job.displayUntil < Date.now())));
+
+        // Detect if any job newly transitioned to SUCCESS
+        let shouldRefetchPdfs = false;
+        for (let i = 0; i < updatedJobs.length; i++) {
+            const oldJob = currentJobsSnapshot[i];
+            const newJob = updatedJobs[i];
+
+            // If the job was not SUCCESS before, but is SUCCESS now
+            if (oldJob.status !== 'SUCCESS' && newJob.status === 'SUCCESS') {
+                shouldRefetchPdfs = true;
+                break; // Found at least one newly successful task, no need to check further
+            }
+        }
+
+        // Update processingJobs state
+        // Successful jobs are no longer filtered out after a timer
+        setProcessingJobs(updatedJobs);
+
+        // Trigger re-fetch of user PDFs if any task just completed successfully
+        if (shouldRefetchPdfs) {
+            try {
+                const userPdfsResponse = await axios.get('/api/get-user-pdfs', { withCredentials: true });
+                if (userPdfsResponse.data.success) {
+                    setUserPdfs(userPdfsResponse.data.pdfs);
+                }
+            } catch (fetchErr) {
+                console.error('Error re-fetching user PDFs after task completion:', fetchErr);
+            }
+        }
       }, 3000); // Poll every 3 seconds
     }
 
     return () => {
       clearInterval(interval);
     };
-  }, [processingJobs]); // Dependency array: re-run effect if processingJobs changes
+  }, [processingJobs, setUserPdfs, setIsAuthenticated, navigate]); // Added setUserPdfs, setIsAuthenticated, navigate to dependency array
 
   const handleFileSelect = (event) => {
     // Implementation will go here later
@@ -134,6 +208,16 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
             setSuccessMessage('Operation completed with no new uploads, existing files, or failures.');
         }
 
+        // Re-fetch user PDFs after upload to reflect any 'touched' files in the UI
+        try {
+            const userPdfsResponse = await axios.get('/api/get-user-pdfs', { withCredentials: true });
+            if (userPdfsResponse.data.success) {
+                setUserPdfs(userPdfsResponse.data.pdfs);
+            }
+        } catch (fetchErr) {
+            console.error('Error re-fetching user PDFs after upload completion:', fetchErr);
+        }
+
         setSelectedFiles([]);
         fileInputRef.current.value = null;
       } else {
@@ -201,8 +285,30 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                 >
                   Home
                 </Button>
+                <Button
+                  onClick={async () => {
+                    try {
+                      // Clear session content on the server
+                      await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+                      // Clear summary in App.js state
+                      setSummary('');
+                      // Navigate to study_session
+                      navigate('/study_session');
+                    } catch (err) {
+                      console.error('Failed to clear session and navigate:', err);
+                      // Still attempt to navigate even if clearing fails
+                      navigate('/study_session');
+                    }
+                  }}
+                  variant="outlined"
+                  startIcon={<Description />}
+                  size="small"
+                  sx={{ ml: 0 }}
+                >
+                  Study Session
+                </Button>
               </Box>
-              <Stack direction="row" spacing={2} alignItems="center">
+              <Stack direction="row" spacing={2} alignItems="center" sx={{ ml: 6 }}>
                 <Typography variant="body2" color="text.secondary">
                   Welcome, {user?.name}
                 </Typography>
@@ -223,12 +329,9 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
       </AppBar>
 
       {/* Main Content */}
-      <Container maxWidth="xl" sx={{ py: 4, textAlign: 'center' }}>
+      <Container maxWidth={false} sx={{ py: 4, px: { xs: 2, md: 4 }, textAlign: 'center' }}>
         <Typography variant="h4" component="h1" gutterBottom>
           Upload PDFs and Begin Processing
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Upload your PDFs here to start studying.
         </Typography>
         
         <Box sx={{ mt: 4, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: 'stretch', justifyContent: 'center', gap: 3 }}>
@@ -236,9 +339,10 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flex: 1 }}>
             <Paper
               elevation={2}
+              onClick={!isUploading ? () => fileInputRef.current.click() : undefined}
               sx={{
                 border: '2px dashed',
-                borderColor: 'divider',
+                borderColor: isUploading ? 'action.disabled' : 'divider',
                 borderRadius: 2,
                 p: 4,
                 width: '100%',
@@ -247,12 +351,17 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                cursor: 'pointer',
-                bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
-                '&:hover': { borderColor: 'primary.main' },
+                cursor: isUploading ? 'not-allowed' : 'pointer',
+                bgcolor: (theme) => (
+                  isUploading 
+                    ? theme.palette.action.disabledBackground 
+                    : (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper')
+                ),
+                '&:hover': { 
+                  borderColor: isUploading ? 'action.disabled' : 'primary.main' 
+                },
                 flexGrow: 1, // Allow the paper to grow vertically within its flex column
               }}
-              onClick={() => fileInputRef.current.click()}
             >
               <CloudUpload sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
               <Typography variant="h6" color="text.secondary" gutterBottom>
@@ -261,7 +370,17 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
               {selectedFiles.length > 0 && (
                 <Stack sx={{ mt: 1, alignItems: 'center' }}>
                   {selectedFiles.map((file, index) => (
-                    <Typography key={index} variant="body2" color="text.primary">
+                    <Typography 
+                      key={index} 
+                      variant="body2" 
+                      color="text.primary"
+                      sx={{
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        maxWidth: '250px', // Adjust as needed
+                      }}
+                    >
                       {file.name}
                     </Typography>
                   ))}
@@ -303,8 +422,8 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                   minHeight: 200,
                   display: 'flex',
                   flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'flex-start', // Align items to the top
+                  alignItems: 'flex-start', // Align items to the top
+                  justifyContent: 'flex-start', 
                   bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
                   flex: 1, // Make it take equal width and stretch height
                 }}
@@ -320,7 +439,16 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                     <Stack sx={{ width: '100%', mt: 2 }} spacing={1} alignItems="flex-start">
                         {processingJobs.map((job, index) => (
                             <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography variant="body2" color="text.primary">
+                                <Typography 
+                                    variant="body2" 
+                                    color="text.primary"
+                                    sx={{
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: '250px', // Adjust as needed, considering the gap for message
+                                    }}
+                                >
                                     {job.filename}:
                                 </Typography>
                                 <Typography variant="body2" color={(theme) => {
@@ -338,52 +466,124 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
           }
         </Box>
 
-        {/* File Upload Report (moved to bottom) */}
-        {error && (
-          <Alert severity="error" sx={{ mt: 3, borderRadius: 2 }}>
-            {error}
-          </Alert>
-        )}
-        {successMessage && (
-          <Alert severity="success" sx={{ mt: 3, borderRadius: 2 }}>
-            {successMessage}
-          </Alert>
-        )}
-        
-        {uploadedFilesReport.length > 0 && (
-            <Alert severity="success" sx={{ mt: 1, borderRadius: 2 }}>
-                <Typography variant="subtitle2">Successfully Uploaded:</Typography>
-                <ul>
-                    {uploadedFilesReport.map((file, index) => (
-                        <li key={index}>{file.filename}</li>
-                    ))}
-                </ul>
-            </Alert>
-        )}
-
-        {existingFilesReport.length > 0 && (
-            <Alert severity="info" sx={{ mt: 1, borderRadius: 2 }}>
-                <Typography variant="subtitle2">Already Existed:</Typography>
-                <ul>
-                    {existingFilesReport.map((file, index) => (
-                        <li key={index}>{file.filename}</li>
-                    ))}
-                </ul>
-            </Alert>
-        )}
-
-        {failedFilesReport.length > 0 && (
-            <Alert severity="error" sx={{ mt: 1, borderRadius: 2 }}>
-                <Typography variant="subtitle2">Failed Uploads:</Typography>
-                <ul>
-                    {failedFilesReport.map((file, index) => (
-                        <li key={index}>{file.filename} - {file.error}</li>
-                    ))}
-                </ul>
-            </Alert>
-        )}
+        {/* User's Uploaded PDFs Box */}
+        <Paper
+          elevation={2}
+          sx={{
+            mt: 3, // Margin top to separate from the above boxes
+            p: 4,
+            width: '100%',
+            bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
+            borderRadius: 2,
+            textAlign: 'left',
+          }}
+        >
+          <Typography variant="h3" color="text.primary" gutterBottom>
+            Your Uploaded PDFs... navigate to the study session page!
+          </Typography>
+          <List dense sx={{ width: '100%' }}>
+            {userPdfs.length > 0 ? (
+              userPdfs.map((pdf) => (
+                <ListItem 
+                  key={pdf.hash}
+                  disablePadding 
+                  sx={{
+                    '&:hover': { 
+                      bgcolor: 'action.hover',
+                      borderRadius: 1
+                    },
+                    py: 0.5
+                  }}
+                >
+                  <ListItemText 
+                    primary={pdf.short_summary || pdf.filename} 
+                    primaryTypographyProps={{
+                      variant: 'body2', 
+                      fontWeight: 'medium',
+                      color: 'text.primary'
+                    }}
+                    secondary={
+                      <>
+                        {pdf.filename}
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.2 }}>
+                          Uploaded: {new Date(pdf.created_at).toLocaleString()}
+                        </Typography>
+                      </>
+                    } // Display filename and created_at as secondary
+                    secondaryTypographyProps={{
+                      component: 'div' // Ensure secondary is rendered as a block to contain inner elements
+                    }}
+                  />
+                </ListItem>
+              ))
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                No PDFs found. Upload new PDFs using the section above.
+              </Typography>
+            )}
+          </List>
+        </Paper>
       </Container>
       <FeedbackButton />
+
+      {/* Floating Alerts for Upload Status */} 
+      <Box 
+        sx={{
+          position: 'fixed',
+          bottom: 16,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 1300, // Above AppBars and other content
+          width: { xs: '90%', sm: '60%', md: '40%' }, // Responsive width
+          maxWidth: '500px', // Max width for larger screens
+        }}
+      >
+        <Stack spacing={1}>
+          {error && (
+            <Alert severity="error" sx={{ borderRadius: 2, width: '100%' }}>
+              {error}
+            </Alert>
+          )}
+          {successMessage && (
+            <Alert severity="success" sx={{ borderRadius: 2, width: '100%' }}>
+              {successMessage}
+            </Alert>
+          )}
+          
+          {uploadedFilesReport.length > 0 && (
+              <Alert severity="success" sx={{ borderRadius: 2, width: '100%' }}>
+                  <Typography variant="subtitle2">Successfully Uploaded:</Typography>
+                  <ul>
+                      {uploadedFilesReport.map((file, index) => (
+                          <li key={index}>{file.filename}</li>
+                      ))}
+                  </ul>
+              </Alert>
+          )}
+
+          {existingFilesReport.length > 0 && (
+              <Alert severity="info" sx={{ borderRadius: 2, width: '100%' }}>
+                  <Typography variant="subtitle2">Already Existed:</Typography>
+                  <ul>
+                      {existingFilesReport.map((file, index) => (
+                          <li key={index}>{file.filename}</li>
+                      ))}
+                  </ul>
+              </Alert>
+          )}
+
+          {failedFilesReport.length > 0 && (
+              <Alert severity="error" sx={{ borderRadius: 2, width: '100%' }}>
+                  <Typography variant="subtitle2">Failed Uploads:</Typography>
+                  <ul>
+                      {failedFilesReport.map((file, index) => (
+                          <li key={index}>{file.filename} - {file.error}</li>
+                      ))}
+                  </ul>
+              </Alert>
+          )}
+        </Stack>
+      </Box>
     </Box>
   );
 };
