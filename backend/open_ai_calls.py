@@ -304,23 +304,22 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
 
 def generate_short_title(text_to_summarize: str) -> str:
     """
-    Generates a short, max 10-word title for a given text.
+    Generates a short, max 8-word title for a given text.
 
     Args:
         text_to_summarize (str): The text to summarize into a title.
 
     Returns:
-        str: A title of 10 words or less.
+        str: A title of 8 words or less.
     """
     if not text_to_summarize:
         return "Untitled"
 
     try:
-        # We only need the beginning of the text to generate a title
         prompt = f"""
         Based on the following text, create a very short, concise title.
-        The title must be a maximum of 10 words.
-        Do not use quotes or any introductory phrases like "Title:".
+        The title must be a maximum of 8 words.
+        Do not use quotes or any introductory phrases like "Title:" or "Summary".
         
         Text:
         {text_to_summarize}
@@ -333,17 +332,17 @@ def generate_short_title(text_to_summarize: str) -> str:
                 {"role": "user", "content": prompt},
             ],
             temperature=1.0,
-            max_tokens=25,  # Generous buffer for 10 words
+            max_tokens=20,  # Generous buffer for 10 words
             n=1,
             stop=None,
         )
 
         title = completion.choices[0].message.content.strip()
 
-        # Enforce the 10-word limit just in case
+        # Enforce the 8-word limit just in case
         words = title.split()
-        if len(words) > 10:
-            title = " ".join(words[:10])
+        if len(words) > 8:
+            title = " ".join(words[:8])
 
         print(f"Generated short title: {title}")
         return title
