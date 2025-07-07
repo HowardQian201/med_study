@@ -1,12 +1,14 @@
 
 URGENT:
 
+remove pyc files from github repo
 increase file size limit
 testing vs learning mode toggle is not super intuitive - add toggle to study_session page
 make uploaded pdfs look better in upload_pdfs and study_session
 
 worker task fail after time limit/retry logic
 
+Make the task status display logic more sound
 Store task ids in user table to poll from if logout log back in
     - Can we store this in redis?
     - success should also be shown until redis clears
