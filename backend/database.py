@@ -5,6 +5,7 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 from typing import Dict, Any, List, Union, Optional
 from datetime import datetime, timezone
+import io # Import io module for BytesIO and other stream types
 
 # Load environment variables from .env file
 load_dotenv()
@@ -84,19 +85,43 @@ def upsert_pdf_results(pdf_results: Dict[str, Any]) -> Dict[str, Any]:
     """
     return upsert_to_table("pdfs", pdf_results)
 
-def generate_file_hash(file_content: bytes, algorithm: str = "sha256") -> str:
+def generate_file_hash(file_input: Union[io.BytesIO, str], algorithm: str = "sha256", chunk_size: int = 4096) -> str:
     """
-    Generate a unique hash for file content.
+    Generate a unique hash for file content. Can take a BytesIO stream or a file path.
+    If a stream is provided, its position will be reset to the beginning after hashing.
     
     Args:
-        file_content (bytes): The raw file content as bytes
-        algorithm (str): Hashing algorithm to use (default: "sha256")
+        file_input (Union[io.BytesIO, str]): The file content as a binary stream (BytesIO) or a file path (str).
+        algorithm (str): Hashing algorithm to use (default: "sha256").
+        chunk_size (int): Size of chunks to read for hashing.
     
     Returns:
-        str: Hexadecimal hash string that uniquely identifies the file content
+        str: Hexadecimal hash string that uniquely identifies the file content.
     """
+    print("generate_file_hash()")
     hash_obj = hashlib.new(algorithm)
-    hash_obj.update(file_content)
+
+    if isinstance(file_input, str): # It's a file path
+        with open(file_input, 'rb') as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                hash_obj.update(chunk)
+    elif isinstance(file_input, io.BytesIO): # It's a BytesIO stream
+        original_pos = file_input.tell() # Store original position
+        file_input.seek(0) # Go to the beginning of the stream
+        
+        while True:
+            chunk = file_input.read(chunk_size)
+            if not chunk:
+                break
+            hash_obj.update(chunk)
+            
+        file_input.seek(original_pos) # Reset stream position
+    else:
+        raise TypeError("file_input must be a BytesIO stream or a file path string.")
+
     return hash_obj.hexdigest()
 
 def generate_content_hash(content_set: set, user_id: int, is_quiz_mode: bool = False, algorithm: str = "sha256") -> str:
@@ -147,9 +172,14 @@ def check_file_exists(file_hash: str) -> Dict[str, Any]:
         
         result = supabase.table('pdfs').select("*").eq('hash', file_hash).execute()
         
+        # Check if file exists and has a valid title (not "Untitled")
+        exists = len(result.data) > 0
+        if exists and result.data[0].get('short_summary') == "Untitled":
+            exists = False
+        
         return {
             "success": True,
-            "exists": len(result.data) > 0,
+            "exists": exists,
             "data": result.data[0] if result.data else None,
             "count": len(result.data)
         }
@@ -390,53 +420,53 @@ def get_full_study_set_data(content_hash: str, user_id: int) -> Dict[str, Any]:
         print(f"Error getting full study set data: {e}")
         return {"success": False, "error": str(e), "data": None}
 
-def upload_pdf_to_storage(file_content: bytes, file_hash: str, original_filename: str) -> Dict[str, Any]:
+def upload_pdf_to_storage(file_input: Union[io.BytesIO, str], file_hash: str, original_filename: str, bucket_name: str) -> Dict[str, Any]:
     """
-    Uploads a PDF file to the Supabase Storage bucket.
+    Uploads a PDF file to the Supabase Storage bucket. Can take a BytesIO stream or a file path.
 
     Args:
-        file_content (bytes): The raw content of the PDF file.
+        file_input (Union[io.BytesIO, str]): The raw content of the PDF file as a binary stream (BytesIO) or a file path (str).
         file_hash (str): The SHA-256 hash of the file content.
         original_filename (str): The original name of the file.
 
     Returns:
         Dict containing the result of the upload operation.
     """
+    print("upload_pdf_to_storage()")
     try:
         supabase = get_supabase_client()
-        bucket_name = "pdfs"
         
         # Use the hash as the filename to prevent duplicates and ensure a unique path
         file_path = f"{file_hash}.pdf"
         
-        # Upload the file. `file_options={"upsert": "false"}` prevents re-uploading.
+        # Determine if we're uploading from a stream or a file path
+        if isinstance(file_input, str): # It's a file path
+            upload_file_arg = file_input # Pass the path directly
+        elif isinstance(file_input, io.BytesIO): # It's a BytesIO stream
+            upload_file_arg = file_input # Pass the BytesIO object
+        else:
+            raise TypeError("file_input must be a BytesIO stream or a file path string.")
+
         supabase.storage.from_(bucket_name).upload(
             path=file_path,
-            file=file_content,
+            file=upload_file_arg,
             file_options={"upsert": "false", "content-type": "application/pdf"}
         )
-
-        # Get the public URL to store in our database metadata
-        public_url = supabase.storage.from_(bucket_name).get_public_url(file_path)
         
         return {
             "success": True,
             "path": file_path,
-            "public_url": public_url,
             "message": f"File '{original_filename}' uploaded successfully to '{file_path}'."
         }
         
     except Exception as e:
         error_message = str(e)
-        # If the error indicates the file already exists, we treat it as a success for our workflow.
         if "resource already exists" in error_message.lower():
              file_path = f"{file_hash}.pdf"
-             public_url = get_supabase_client().storage.from_('pdfs').get_public_url(file_path)
              return {
                 "success": True,
                 "message": "File already exists in storage.",
                 "path": file_path,
-                "public_url": public_url
              }
 
         return {
@@ -659,3 +689,169 @@ def insert_feedback(user_id: int, user_email: str, user_name: str, feedback_text
     except Exception as e:
         print(f"Error inserting feedback: {e}")
         return {"success": False, "error": str(e)}
+
+def append_pdf_hash_to_user_pdfs(user_id: int, pdf_hash: str) -> Dict[str, Any]:
+    """
+    Appends a PDF hash to the 'pdfs' array column in the 'users' table.
+    Only appends if the hash doesn't already exist in the array.
+    
+    Args:
+        user_id (int): The ID of the user.
+        pdf_hash (str): The hash of the PDF file to append.
+        
+    Returns:
+        Dict containing the result of the update operation.
+    """
+    print(f"Appending hash {pdf_hash[:8]}... to user {user_id} pdfs.")
+
+    try:
+        supabase = get_supabase_client()
+        
+        # First, get the current user data to check if hash already exists
+        user_result = supabase.table('users').select('pdfs').eq('id', user_id).execute()
+        
+        if not user_result.data or len(user_result.data) == 0:
+            return {"success": False, "error": "User not found."}
+        
+        current_pdfs = user_result.data[0].get('pdfs', [])
+        
+        # Check if hash already exists in the array
+        if pdf_hash in current_pdfs:
+            print(f"Hash {pdf_hash[:8]}... already exists in user {user_id} pdfs, skipping append.")
+            return {"success": True, "data": user_result.data[0], "skipped": True}
+        
+        # If not, append it to the current list
+        updated_pdfs = current_pdfs + [pdf_hash]
+
+        # Update the 'pdfs' column with the new array
+        result = supabase.table('users').update({
+            'pdfs': updated_pdfs
+        }).eq('id', user_id).execute()
+
+        if result.data and len(result.data) > 0:
+            return {"success": True, "data": result.data[0]}
+        else:
+            return {"success": False, "error": "User not found or update failed."}
+
+    except Exception as e:
+        print(f"Error appending PDF hash to user {user_id} pdfs: {e}")
+        return {"success": False, "error": str(e)}
+
+def get_user_associated_pdf_metadata(user_id: int) -> Dict[str, Any]:
+    """
+    Retrieves metadata (hash, filename, text) for all PDFs associated with a user
+    from the 'pdfs' table, based on the 'pdfs' array in the 'users' table.
+    
+    Args:
+        user_id (int): The ID of the user.
+        
+    Returns:
+        Dict containing the result and a list of PDF metadata.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # 1. Get the list of PDF hashes from the user's profile
+        user_profile_result = supabase.table('users').select('pdfs').eq('id', user_id).maybe_single().execute()
+        
+        if not user_profile_result.data:
+            return {"success": False, "error": "User profile not found.", "data": []}
+            
+        pdf_hashes_from_user = user_profile_result.data.get('pdfs', [])
+        
+        if not pdf_hashes_from_user:
+            return {"success": True, "data": []} # No PDFs associated with user
+            
+        # 2. Fetch the corresponding PDF metadata from the 'pdfs' table
+        #    Ensure to get only the fields necessary for display and processing
+        pdfs_metadata_result = supabase.table('pdfs').select("hash, filename").in_('hash', pdf_hashes_from_user).execute()
+        
+        return {"success": True, "data": pdfs_metadata_result.data}
+        
+    except Exception as e:
+        print(f"Error getting user associated PDF metadata for user {user_id}: {e}")
+        return {"success": False, "error": str(e), "data": []}
+
+def get_pdf_text_by_hashes(pdf_hashes: List[str]) -> Dict[str, Any]:
+    """
+    Retrieves the text content for a list of PDF hashes from the 'pdfs' table.
+    
+    Args:
+        pdf_hashes (List[str]): A list of PDF hashes.
+        
+    Returns:
+        Dict containing the result and a dictionary of {hash: text} pairs.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        if not pdf_hashes:
+            return {"success": True, "data": {}}
+            
+        result = supabase.table('pdfs').select("hash, filename, text").in_('hash', pdf_hashes).execute()
+        
+        text_map = {item['hash']: {'text': item['text'], 'filename': item['filename']} for item in result.data}
+        
+        return {"success": True, "data": text_map}
+        
+    except Exception as e:
+        print(f"Error getting PDF text by hashes: {e}")
+        return {"success": False, "error": str(e), "data": {}}
+
+def download_file_from_storage(bucket_name: str, file_path: str) -> Dict[str, Any]:
+    """
+    Downloads a file from the Supabase Storage bucket.
+
+    Args:
+        file_hash (str): The hash of the file to download.
+
+    Returns:
+        Dict containing the result of the download operation, including file content as bytes.
+    """
+    try:
+        supabase = get_supabase_client()
+
+        # Download the file
+        file_content_bytes = supabase.storage.from_(bucket_name).download(file_path)
+
+        if file_content_bytes:
+            return {"success": True, "data": file_content_bytes, "message": f"File {file_path} downloaded successfully."}
+        else:
+            return {"success": False, "error": "File content is empty or not found.", "data": None}
+
+    except Exception as e:
+        error_message = str(e)
+        print(f"Error downloading file {file_path} from storage: {error_message}")
+        return {"success": False, "error": error_message, "data": None}
+
+def update_pdf_text_and_summary(file_hash: str, extracted_text: str, short_summary: str) -> Dict[str, Any]:
+    """
+    Updates the 'text' and 'short_summary' fields for a PDF in the 'pdfs' table.
+
+    Args:
+        file_hash (str): The hash of the PDF to update.
+        extracted_text (str): The extracted text content of the PDF.
+        short_summary (str): The AI-generated short summary of the PDF.
+
+    Returns:
+        Dict containing the result of the update operation.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        update_data = {
+            'text': extracted_text,
+            'short_summary': short_summary
+        }
+
+        result = supabase.table('pdfs').update(update_data).eq('hash', file_hash).execute()
+
+        if result.data and len(result.data) > 0:
+            return {"success": True, "data": result.data[0], "message": "PDF text and summary updated successfully."}
+        else:
+            return {"success": False, "error": "PDF not found or update failed.", "data": None}
+
+    except Exception as e:
+        error_message = str(e)
+        print(f"Error updating PDF text and summary for hash {file_hash}: {error_message}")
+        return {"success": False, "error": error_message, "data": None}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHotkeys } from 'react-hotkeys-hook';
 import axios from 'axios';
@@ -124,6 +124,42 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   useHotkeys('2', () => handleKeyboardAnswer(1), [currentQuestion, submittedAnswers, isQuizMode]);
   useHotkeys('3', () => handleKeyboardAnswer(2), [currentQuestion, submittedAnswers, isQuizMode]);
   useHotkeys('4', () => handleKeyboardAnswer(3), [currentQuestion, submittedAnswers, isQuizMode]);
+
+  // Hotkey for starring/unstarring current question
+  const handleToggleStar = useCallback(async (questionId) => {
+    try {
+      const response = await axios.post('/api/toggle-star-question', { questionId }, { withCredentials: true });
+      if (response.data.success && response.data.question) {
+        setQuestions(prevQuestions =>
+          prevQuestions.map(q =>
+            q.id === questionId ? { ...q, starred: response.data.question.starred } : q
+          )
+        );
+
+        // Also update the allPreviousQuestions state if the question exists there
+        setAllPreviousQuestions(prevAllQuestionsSets =>
+          prevAllQuestionsSets.map(questionSet =>
+            questionSet.map(q =>
+              q.id === questionId ? { ...q, starred: response.data.question.starred } : q
+            )
+          )
+        );
+
+      } else {
+        setError('Failed to toggle star status');
+      }
+    } catch (err) {
+      console.error('Error toggling star status:', err);
+      setError(err.response?.data?.error || 'Failed to toggle star status');
+    }
+  }, [setQuestions, setAllPreviousQuestions, setError]);
+
+  useHotkeys('s', (e) => {
+    e.preventDefault();
+    if (questions.length > 0 && !isPreviewing && !showResults) {
+      handleToggleStar(questions[currentQuestion].id);
+    }
+  }, [currentQuestion, questions, isPreviewing, showResults, handleToggleStar]);
 
   // Helper function to clean option text and remove existing A), B), C), D) prefixes
   const cleanOptionText = (option) => {
@@ -529,34 +565,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       }
     } else {
       setShowAllPreviousQuestions(false);
-    }
-  };
-
-  const handleToggleStar = async (questionId) => {
-    try {
-      const response = await axios.post('/api/toggle-star-question', { questionId }, { withCredentials: true });
-      if (response.data.success && response.data.question) {
-        setQuestions(prevQuestions =>
-          prevQuestions.map(q =>
-            q.id === questionId ? { ...q, starred: response.data.question.starred } : q
-          )
-        );
-
-        // Also update the allPreviousQuestions state if the question exists there
-        setAllPreviousQuestions(prevAllQuestionsSets =>
-          prevAllQuestionsSets.map(questionSet =>
-            questionSet.map(q =>
-              q.id === questionId ? { ...q, starred: response.data.question.starred } : q
-            )
-          )
-        );
-
-      } else {
-        setError('Failed to toggle star status');
-      }
-    } catch (err) {
-      console.error('Error toggling star status:', err);
-      setError(err.response?.data?.error || 'Failed to toggle star status');
     }
   };
 
