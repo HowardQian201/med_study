@@ -675,7 +675,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         color: 'text.primary'
                       }}
                     >
-                      {isQuizMode ? 'Testing Mode' : 'Learning Mode'}
+                      {isQuizMode ? 'USMLE Mode' : 'Flashcard Mode'}
                     </Typography>
                   );
                 })()}
@@ -866,7 +866,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     {!showAllPreviousQuestions && (
                       <Box>
                         <Typography variant="h3" fontWeight="600" gutterBottom>
-                          {isQuizMode ? 'Testing Set Review' : 'Learning Set Review'}
+                          {isQuizMode ? 'USMLE Set Review' : 'Flashcard Set Review'}
                         </Typography>
                         <Stack spacing={3}>
                           {stats.questionsWithStatus.map((question, index) => (

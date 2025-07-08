@@ -478,9 +478,29 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
             textAlign: 'left',
           }}
         >
-          <Typography variant="h3" color="text.primary" gutterBottom>
-            Your Uploaded PDFs... navigate to the study session page!
-          </Typography>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h3" color="text.primary" gutterBottom sx={{ mb: 0 }}>
+              Your Uploaded PDFs
+            </Typography>
+            <Button
+              onClick={async () => {
+                try {
+                  await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+                  setSummary('');
+                  navigate('/study_session');
+                } catch (err) {
+                  console.error('Failed to clear session and navigate:', err);
+                  navigate('/study_session');
+                }
+              }}
+              variant="outlined"
+              startIcon={<Description />}
+              size="small"
+              sx={{ ml: 0 }}
+            >
+              Start a New Study Session
+            </Button>
+          </Box>
           <List dense sx={{ width: '100%' }}>
             {userPdfs.length > 0 ? (
               userPdfs.map((pdf) => (

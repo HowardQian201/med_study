@@ -12,8 +12,8 @@ def print_number_task(number):
     print(f"Celery task received number: {number}")
     return f"Processed number: {number}"
 
-@app.task
-def process_pdf_task(file_hash, original_filename, bucket_name, file_path, user_id):
+@app.task(bind=True, soft_time_limit=300, time_limit=330)
+def process_pdf_task(self, file_hash, bucket_name, file_path, user_id):
     """
     Celery task to: 
     1. Retrieve a PDF file from Supabase Storage using its storage_url and file_path.
@@ -22,18 +22,22 @@ def process_pdf_task(file_hash, original_filename, bucket_name, file_path, user_
     4. Update the 'pdfs' table in Supabase with the extracted text and short title.
     """
     print(f"Starting process_pdf_task for file hash: {file_hash}")
+    self.update_state(state='PROGRESS', meta={'message': 'Starting PDF processing'})
 
     # 1. Retrieve the PDF file from Supabase Storage
+    self.update_state(state='PROGRESS', meta={'message': 'Downloading PDF'})
     download_result = download_file_from_storage(bucket_name, file_path)
     if not download_result['success']:
         error_msg = f"Failed to download PDF with hash {file_hash}: {download_result.get('error', 'Unknown error')}"
         print(error_msg)
+        self.update_state(state='FAILURE', meta={'exc': error_msg, 'message': error_msg})
         return {"status": "failed", "message": error_msg}
     
     pdf_content_bytes = download_result['data']
     print(f"Successfully downloaded {len(pdf_content_bytes)} bytes for hash {file_hash}.")
 
     # 2. Extract text from the PDF
+    self.update_state(state='PROGRESS', meta={'message': 'Extracting text from PDF'})
     try:
         # extract_text_from_pdf_memory expects a BytesIO object
         extracted_text = extract_text_from_pdf_memory(BytesIO(pdf_content_bytes))
@@ -51,30 +55,36 @@ def process_pdf_task(file_hash, original_filename, bucket_name, file_path, user_
     except Exception as e:
         error_msg = f"Failed to extract text from PDF {file_hash}: {str(e)}"
         print(error_msg)
+        self.update_state(state='FAILURE', meta={'exc': str(e), 'message': error_msg})
         return {"status": "failed", "message": error_msg}
 
     # 3. Generate a short title for the extracted text
+    self.update_state(state='PROGRESS', meta={'message': 'Generating short title with AI'})
     try:
         short_title = generate_short_title(final_cleaned_text)
         print(f"Successfully generated short title: '{short_title}' for hash {file_hash}.")
     except Exception as e:
         error_msg = f"Failed to generate short title for PDF {file_hash}: {str(e)}"
         print(error_msg)
-        # It's okay to proceed without a short title if it fails, just log it.
+        self.update_state(state='FAILURE', meta={'exc': str(e), 'message': error_msg})
         short_title = "No Summary"
 
     # 4. Update the 'pdfs' table in Supabase with the extracted text and short title
+    self.update_state(state='PROGRESS', meta={'message': 'Updating database with extracted content'})
     update_result = update_pdf_text_and_summary(file_hash, final_cleaned_text, short_title)
     if not update_result['success']:
         error_msg = f"Failed to update database for PDF {file_hash}: {update_result.get('error', 'Unknown error')}"
         print(error_msg)
+        self.update_state(state='FAILURE', meta={'exc': error_msg, 'message': error_msg})
         return {"status": "failed", "message": error_msg}
     
     # 5. Append the PDF hash to the user's list of PDFs
+    self.update_state(state='PROGRESS', meta={'message': 'Linking PDF to user account'})
     append_result = append_pdf_hash_to_user_pdfs(user_id, file_hash)
     if not append_result['success']:
         error_msg = f"Failed to append PDF hash {file_hash} to user {user_id}'s PDFs: {append_result.get('error', 'Unknown error')}"
         print(error_msg)
+        self.update_state(state='FAILURE', meta={'exc': error_msg, 'message': error_msg})
         return {"status": "failed", "message": error_msg}
     
     print(f"Successfully processed and updated database for file hash: {file_hash}.")

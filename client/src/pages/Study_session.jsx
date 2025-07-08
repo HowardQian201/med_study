@@ -23,7 +23,8 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  IconButton
+  IconButton,
+  Switch
 } from '@mui/material';
 import {
   CloudUpload,
@@ -393,7 +394,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                     color: 'text.primary'
                   }}
                 >
-                  {isQuizMode ? 'Testing Mode' : 'Learning Mode'}
+                  {isQuizMode ? 'USMLE Mode' : 'Flashcard Mode'}
                 </Typography>
               </Box>
               <Stack direction="row" spacing={2} alignItems="center">
@@ -738,6 +739,26 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                     >
                       {isUploading ? 'Regenerating...' : 'Regenerate'}
                     </Button>
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={isQuizMode}
+                                onChange={(e) => {
+                                    setIsQuizMode(e.target.checked);
+                                    sessionStorage.setItem('isQuizMode', e.target.checked.toString());
+                                }}
+                                size="small"
+                                color="primary"
+                            />
+                        }
+                        label={
+                            <Typography variant="body2" color="text.secondary">
+                                {isQuizMode ? 'USMLE Mode' : 'Flashcard Mode'}
+                            </Typography>
+                        }
+                        labelPlacement="bottom"
+                        sx={{ m: 0, mx: 1, flexShrink: 0 }}
+                    />
                     <Button
                       onClick={goToQuiz}
                       disabled={!summary || isUploading}
