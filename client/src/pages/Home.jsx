@@ -242,7 +242,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                   color: 'text.primary'
                 }}
               >
-                {showQuizSets ? 'Testing Mode' : 'Learning Mode'}
+                {showQuizSets ? 'USMLE Mode' : 'Flashcard Mode'}
               </Typography>
             </Box>
             <Stack direction="row" spacing={2} alignItems="center">
@@ -307,29 +307,8 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                     onClick={handleStartNewSession}
                                     sx={{ width: '100%' }}
                                 >
-                                    Start New {showQuizSets ? 'Testing' : 'Learning'} Session
+                                    Start New Study Session
                                 </Button>
-                            </Box>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                                <Switch
-                                    checked={showQuizSets}
-                                    onChange={(e) => setShowQuizSets(e.target.checked)}
-                                    size="small"
-                                    color="primary"
-                                />
-                                <Typography 
-                                    variant="body2" 
-                                    color="text.secondary"
-                                    sx={{ 
-                                        whiteSpace: 'normal',
-                                        wordWrap: 'break-word',
-                                        maxWidth: '120px',
-                                        textAlign: 'center',
-                                        fontSize: '0.875rem'
-                                    }}
-                                >
-                                    {showQuizSets ? 'Testing Mode (USMLE)' : 'Learning Mode (Flashcards)'}
-                                </Typography>
                             </Box>
                         </Box>
                     </Box>
@@ -342,7 +321,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                     <Box display="flex" alignItems="center">
                         <History sx={{ mr: 1, color: 'text.secondary' }}/>
                         <Typography variant="h5" component="h3" fontWeight="600">
-                            Previous {showQuizSets ? 'Testing' : 'Learning'} Sets
+                            Previous {showQuizSets ? 'USMLE' : 'Flashcard'} Sets
                         </Typography>
                         {sets.length > 0 && (
                             <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
@@ -356,7 +335,34 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                             </Typography>
                         )}
                     </Box>
-                    <Box display="flex" alignItems="center" gap={2}>
+                    <Box display="flex" alignItems="center" gap={3}>
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={showQuizSets}
+                                    onChange={(e) => setShowQuizSets(e.target.checked)}
+                                    size="small"
+                                    color="primary"
+                                />
+                            }
+                            label={
+                                <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                    sx={{
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: '120px', // Adjust as needed
+                                        textAlign: 'center'
+                                    }}
+                                >
+                                    {showQuizSets ? 'USMLE Mode' : 'Flashcard Mode'}
+                                </Typography>
+                            }
+                            labelPlacement="bottom"
+                            sx={{ m: 0, mr: 1 }}
+                        />
                         {sets.length > 0 && (
                             <Button
                                 variant={isDeleteMode ? "contained" : "outlined"}

@@ -950,7 +950,7 @@ def upload_pdfs():
                         "bucket_name": bucket_name,
                         "storage_file_path": upload_result['path'],
                         "text": "", # Text will be extracted by background task
-                        "created_at": datetime.datetime.now().isoformat()
+                        "created_at": datetime.now().isoformat()
                     }
                     upsert_pdf_results_result = upsert_pdf_results(pdf_metadata)
 
@@ -960,7 +960,7 @@ def upload_pdfs():
                         continue # Skip to next file if DB upsert failed
                     
                     # Dispatch the Celery task to process the PDF text (using the hash to retrieve from Supabase)
-                    task = process_pdf_task.delay(file_hash, original_filename, bucket_name, upload_result['path'], user_id)
+                    task = process_pdf_task.delay(file_hash, bucket_name, upload_result['path'], user_id)
                     uploaded_task_details.append({'filename': original_filename, 'task_id': task.id, 'file_hash': file_hash})
                     uploaded_files_details.append({'filename': original_filename, 'message': 'Uploaded and queued for processing.'})
 
@@ -982,7 +982,13 @@ def upload_pdfs():
                 failed_files_details.append({'filename': original_filename, 'error': str(e)})
             finally:
                 if temp_file_path and os.path.exists(temp_file_path):
-                    os.remove(temp_file_path) # Ensure temporary file is deleted
+                    try:
+                        # Explicitly close the file handle before attempting to remove it
+                        if 'temp_file' in locals() and not temp_file.closed:
+                            temp_file.close()
+                        os.remove(temp_file_path) # Ensure temporary file is deleted
+                    except Exception as e_clean:
+                        print(f"Error cleaning up temporary file {temp_file_path}: {str(e_clean)}")
         
         if not uploaded_task_details and not existing_files_details and not failed_files_details:
             return jsonify({'success': False, 'message': 'No valid PDF files were provided or processed.'}), 200
