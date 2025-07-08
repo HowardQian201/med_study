@@ -7,7 +7,7 @@ Store task ids in user table to poll from if logout log back in
     - Can we store this in redis?
     - user_id: [task_ids]
 
-Stream openai calls from the background worker
+Stream openai calls from the background worker (Celery + Redis Pub/Sub + SSE)
 
 rate limit api calls
 Make UI better
