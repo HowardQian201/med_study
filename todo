@@ -1,11 +1,13 @@
 
 URGENT:
 
-
+Reduce what is stored in redis (i.e. total extracted text)
 Make the task status display logic more sound
 Store task ids in user table to poll from if logout log back in
     - Can we store this in redis?
     - user_id: [task_ids]
+
+Stream openai calls from the background worker
 
 rate limit api calls
 Make UI better
@@ -13,11 +15,12 @@ Make UI better
 
 
 IDEAS:
-realtime stats using posthog
+realtime stats using posthog, amplitude
 supabase mcp with cursor
+Bug stats with Sentry.io
 
 register new account
-    - Payment page on register new account
+    - Payment page on register new account with Stripe
     - supabase auth
 
 Database indexing on question_sets.user_id, pdfs.hash, and quiz_questions.hash so that db queries are fast when querying
