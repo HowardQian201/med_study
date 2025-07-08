@@ -15,7 +15,7 @@ load_dotenv()
 # AWS Textract Configuration
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 
 
 def extract_text_with_ocr_from_pdf(file_obj, page_num):
@@ -77,9 +77,9 @@ def extract_text_with_ocr_from_pdf(file_obj, page_num):
             
             # Calculate confidence statistics
             confidences = []
-            for block in response['Blocks']:
-                if 'Confidence' in block:
-                    confidences.append(block['Confidence'])
+            # for block in response['Blocks']:
+            #     if 'Confidence' in block:
+            #         confidences.append(block['Confidence'])
             
             if confidences:
                 avg_confidence = sum(confidences) / len(confidences)

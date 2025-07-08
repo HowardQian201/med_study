@@ -12,7 +12,7 @@ def print_number_task(number):
     print(f"Celery task received number: {number}")
     return f"Processed number: {number}"
 
-@app.task(bind=True, soft_time_limit=300, time_limit=330)
+@app.task(bind=True, soft_time_limit=150, time_limit=155)
 def process_pdf_task(self, file_hash, bucket_name, file_path, user_id):
     """
     Celery task to: 
