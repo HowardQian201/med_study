@@ -493,7 +493,7 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                   navigate('/study_session');
                 }
               }}
-              variant="outlined"
+              variant="contained"
               startIcon={<Description />}
               size="small"
               sx={{ ml: 0 }}
