@@ -1,6 +1,8 @@
 
 ###URGENT:
 
+Move render servers and aws textract to us east (Ohio)
+
 Make UI better
     - pdf doc display in pdf_upload and study_session
     - select pdfs in study_session
@@ -12,7 +14,7 @@ switch to redis for session storage
 
 realtime stats using posthog
 Switch to fastAPI for concurrency
-Move render servers and aws textract to us east (Ohio)
+
 
 
 
