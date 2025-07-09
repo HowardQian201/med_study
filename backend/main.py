@@ -960,7 +960,6 @@ def upload_pdfs():
         bucket_name = "pdfs"
         uploaded_task_details = []
         uploaded_files_details = []
-        existing_files_details = []
         failed_files_details = []
 
         for file in files:
@@ -1037,7 +1036,8 @@ def upload_pdfs():
                         print(f"Error linking existing PDF {file_hash[:8]}... to user {user_id}: {append_result.get('error')}")
                         failed_files_details.append({'filename': original_filename, 'error': append_result.get('error', 'Failed to link file to user')})
                         continue
-                    existing_files_details.append({'filename': original_filename, 'message': 'File already exists in storage.'})
+                    # For display purposes, treat existing files as successfully "uploaded"
+                    uploaded_files_details.append({'filename': original_filename, 'message': 'Uploaded and queued for processing.'})
 
             except Exception as e:
                 print(f"An unexpected error occurred for file {file.filename}: {str(e)}")
@@ -1052,14 +1052,13 @@ def upload_pdfs():
                     except Exception as e_clean:
                         print(f"Error cleaning up temporary file {temp_file_path}: {str(e_clean)}")
         
-        if not uploaded_task_details and not existing_files_details and not failed_files_details:
+        if not uploaded_task_details and not failed_files_details and not uploaded_files_details:
             return jsonify({'success': False, 'message': 'No valid PDF files were provided or processed.'}), 200
 
         return jsonify({
             'success': True,
-            'message': f'{len(uploaded_files_details)} files uploaded, {len(existing_files_details)} existing files, {len(failed_files_details)} files failed.',
+            'message': f'{len(uploaded_files_details)} files uploaded, {len(failed_files_details)} files failed.',
             'uploaded_files': uploaded_files_details,
-            'existing_files': existing_files_details,
             'failed_files': failed_files_details,
             'task_details': uploaded_task_details # Still include for debugging if needed
         })

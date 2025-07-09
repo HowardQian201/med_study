@@ -519,6 +519,7 @@ def update_question_set_title(content_hash, user_id, new_title):
 
 def touch_question_set(content_hash: str, user_id: int) -> Dict[str, Any]:
     """Updates the created_at timestamp of a specific question set to the current time."""
+    print(f"Touching question set {content_hash}.")
     try:
         supabase = get_supabase_client()
         
@@ -539,6 +540,7 @@ def touch_question_set(content_hash: str, user_id: int) -> Dict[str, Any]:
 
 def touch_pdf(pdf_hash: str) -> Dict[str, Any]:
     """Updates the created_at timestamp of a specific PDF to the current time."""
+    print(f"Touching PDF {pdf_hash}.")
     try:
         supabase = get_supabase_client()
         
