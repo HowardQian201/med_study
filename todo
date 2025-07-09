@@ -12,7 +12,7 @@ switch to redis for session storage
 
 realtime stats using posthog
 Switch to fastAPI for concurrency
-
+Move render servers and aws textract to us east (Ohio)
 
 
 
