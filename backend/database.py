@@ -538,26 +538,6 @@ def touch_question_set(content_hash: str, user_id: int) -> Dict[str, Any]:
         print(f"Error touching question set: {e}")
         return {"success": False, "error": str(e)}
 
-def touch_pdf(pdf_hash: str) -> Dict[str, Any]:
-    """Updates the created_at timestamp of a specific PDF to the current time."""
-    print(f"Touching PDF {pdf_hash}.")
-    try:
-        supabase = get_supabase_client()
-        
-        result = supabase.table('pdfs').update({
-            'created_at': datetime.now(timezone.utc).isoformat()
-        }).eq('hash', pdf_hash).execute()
-
-        if result.data and len(result.data) > 0:
-            return {"success": True, "data": result.data}
-        else:
-            print(f"Could not find PDF with hash {pdf_hash} to touch.")
-            return {"success": False, "error": "PDF not found to update timestamp"}
-
-    except Exception as e:
-        print(f"Error touching PDF: {e}")
-        return {"success": False, "error": str(e)}
-
 
 def update_question_starred_status(question_hash: str, starred_status: bool) -> Dict[str, Any]:
     """
@@ -731,8 +711,8 @@ def insert_feedback(user_id: int, user_email: str, user_name: str, feedback_text
 
 def append_pdf_hash_to_user_pdfs(user_id: int, pdf_hash: str) -> Dict[str, Any]:
     """
-    Appends a PDF hash to the 'pdfs' array column in the 'users' table.
-    Only appends if the hash doesn't already exist in the array.
+    Appends a PDF hash to the 'pdfs' JSON object column in the 'users' table.
+    Updates the timestamp even if hash already exists.
     
     Args:
         user_id (int): The ID of the user.
@@ -746,25 +726,23 @@ def append_pdf_hash_to_user_pdfs(user_id: int, pdf_hash: str) -> Dict[str, Any]:
     try:
         supabase = get_supabase_client()
         
-        # First, get the current user data to check if hash already exists
-        user_result = supabase.table('users').select('pdfs').eq('id', user_id).execute()
+        # First, get the current user data
+        user_result = supabase.table('users').select('pdfs').eq('id', user_id).maybe_single().execute()
         
-        if not user_result.data or len(user_result.data) == 0:
+        if not user_result.data:
             return {"success": False, "error": "User not found."}
         
-        current_pdfs = user_result.data[0].get('pdfs', [])
+        # Initialize empty dict if pdfs is None
+        current_pdfs = user_result.data.get('pdfs') or {}
         
-        # Check if hash already exists in the array
-        if pdf_hash in current_pdfs:
-            print(f"Hash {pdf_hash[:8]}... already exists in user {user_id} pdfs, skipping append.")
-            return {"success": True, "data": user_result.data[0], "skipped": True}
-        
-        # If not, append it to the current list
-        updated_pdfs = current_pdfs + [pdf_hash]
+        # Always update/add the hash with current timestamp
+        current_pdfs[pdf_hash] = {
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
 
-        # Update the 'pdfs' column with the new array
+        # Update the 'pdfs' column with the new object
         result = supabase.table('users').update({
-            'pdfs': updated_pdfs
+            'pdfs': current_pdfs
         }).eq('id', user_id).execute()
 
         if result.data and len(result.data) > 0:
@@ -779,33 +757,44 @@ def append_pdf_hash_to_user_pdfs(user_id: int, pdf_hash: str) -> Dict[str, Any]:
 def get_user_associated_pdf_metadata(user_id: int) -> Dict[str, Any]:
     """
     Retrieves metadata (hash, filename, text) for all PDFs associated with a user
-    from the 'pdfs' table, based on the 'pdfs' array in the 'users' table.
+    from the 'pdfs' table, based on the 'pdfs' JSON object in the 'users' table.
     
     Args:
         user_id (int): The ID of the user.
         
     Returns:
-        Dict containing the result and a list of PDF metadata.
+        Dict containing the result and a list of PDF metadata including updated_at timestamps.
     """
     try:
         supabase = get_supabase_client()
         
-        # 1. Get the list of PDF hashes from the user's profile
+        # 1. Get the PDF hashes and timestamps from the user's profile
         user_profile_result = supabase.table('users').select('pdfs').eq('id', user_id).maybe_single().execute()
         
         if not user_profile_result.data:
             return {"success": False, "error": "User profile not found.", "data": []}
             
-        pdf_hashes_from_user = user_profile_result.data.get('pdfs', [])
+        pdfs_object = user_profile_result.data.get('pdfs', {})
         
-        if not pdf_hashes_from_user:
+        if not pdfs_object:
             return {"success": True, "data": []} # No PDFs associated with user
             
+        pdf_hashes = list(pdfs_object.keys())
+            
         # 2. Fetch the corresponding PDF metadata from the 'pdfs' table
-        #    Ensure to get only the fields necessary for display and processing
-        pdfs_metadata_result = supabase.table('pdfs').select("hash, filename", "short_summary", "created_at").in_('hash', pdf_hashes_from_user).order('created_at', desc=True).execute()
+        pdfs_metadata_result = supabase.table('pdfs').select("hash, filename, short_summary").in_('hash', pdf_hashes).execute()
         
-        return {"success": True, "data": pdfs_metadata_result.data}
+        # 3. Add the updated_at timestamp from the user's pdfs object to each PDF's metadata
+        enriched_metadata = []
+        for pdf in pdfs_metadata_result.data:
+            pdf_hash = pdf['hash']
+            pdf['created_at'] = pdfs_object[pdf_hash].get('updated_at')
+            enriched_metadata.append(pdf)
+            
+        # Sort by updated_at timestamp in descending order (most recent first)
+        enriched_metadata.sort(key=lambda x: x['created_at'] if x['created_at'] else '', reverse=True)
+        
+        return {"success": True, "data": enriched_metadata}
         
     except Exception as e:
         print(f"Error getting user associated PDF metadata for user {user_id}: {e}")
@@ -912,6 +901,7 @@ def update_user_task_status(user_id: int, task_id: str, filename: str, status: s
     Returns:
         Dict containing the result of the Redis operation.
     """
+    print(f"Updating task status for user {user_id} with task_id {task_id}, filename {filename}, status {status}, message {message}.")
     if not redis_client:
         # If redis is not available, we don't treat it as a hard error, but log it.
         # The application can proceed without Redis-based task persistence.
@@ -1005,7 +995,7 @@ def delete_user_tasks_by_status(user_id: int, statuses_to_clear: List[str]) -> D
 
 def remove_pdf_hashes_from_user(user_id: int, pdf_hashes_to_remove: List[str]) -> Dict[str, Any]:
     """
-    Removes a list of PDF hashes from the 'pdfs' array column in the 'users' table.
+    Removes a list of PDF hashes from the 'pdfs' JSON object column in the 'users' table.
     
     Args:
         user_id (int): The ID of the user.
@@ -1025,22 +1015,23 @@ def remove_pdf_hashes_from_user(user_id: int, pdf_hashes_to_remove: List[str]) -
         if not user_result.data or len(user_result.data) == 0:
             return {"success": False, "error": "User not found.", "deleted_count": 0}
         
-        current_pdfs = user_result.data.get('pdfs', [])
+        current_pdfs = user_result.data.get('pdfs', {})
         
         initial_count = len(current_pdfs)
         
-        # Filter out the hashes that are in pdf_hashes_to_remove
-        updated_pdfs = [pdf_hash for pdf_hash in current_pdfs if pdf_hash not in pdf_hashes_to_remove]
+        # Remove the specified hashes from the pdfs object
+        for hash_to_remove in pdf_hashes_to_remove:
+            current_pdfs.pop(hash_to_remove, None)
         
-        deleted_count = initial_count - len(updated_pdfs)
+        deleted_count = initial_count - len(current_pdfs)
 
         if deleted_count == 0:
             print(f"No matching PDFs found to remove for user {user_id}.")
             return {"success": True, "message": "No matching PDFs found to remove.", "deleted_count": 0}
 
-        # Update the 'pdfs' column with the new filtered array
+        # Update the 'pdfs' column with the filtered object
         result = supabase.table('users').update({
-            'pdfs': updated_pdfs
+            'pdfs': current_pdfs
         }).eq('id', user_id).execute()
 
         if result.data and len(result.data) > 0:

@@ -1,18 +1,20 @@
 
-URGENT:
+###URGENT:
 
-Touch pdfs should on file upload should only update for the user
+Switch to fastAPI for concurrency
 
 Make UI better
+realtime stats using posthog, amplitude
 
 
 
 
 
-IDEAS:
+### LATER:
+
+
 rate limit api calls
 
-realtime stats using posthog, amplitude
 supabase mcp with cursor
 Bug stats with Sentry.io
 
