@@ -30,71 +30,61 @@ def process_pdf_task(self, file_hash, bucket_name, file_path, user_id, original_
         update_user_task_status(user_id, self.request.id, original_filename, state, full_message)
 
     print(f"Starting process_pdf_task for file: {file_path}")
-
-    # 1. Retrieve the PDF file from Supabase Storage
-    _update_status('IN PROGRESS', '[1/5] Downloading PDF')
-    download_result = download_file_from_storage(bucket_name, file_path)
-    if not download_result['success']:
-        error_msg = f"Failed to download PDF: {download_result.get('error', 'Unknown error')}"
-        print(error_msg)
-        _update_status('FAILURE', error_msg)
-        return {"status": "failed", "message": error_msg}
     
-    pdf_content_bytes = download_result['data']
-    print(f"Successfully downloaded {len(pdf_content_bytes)} bytes for hash {file_hash}.")
-
-    # 2. Extract text from the PDF
-    _update_status('IN PROGRESS', '[2/5] Extracting text from PDF')
     try:
-        # extract_text_from_pdf_memory expects a BytesIO object
+
+        # 1. Retrieve the PDF file from Supabase Storage
+        _update_status('IN PROGRESS', '[1/5] Downloading PDF')
+        download_result = download_file_from_storage(bucket_name, file_path)
+        if not download_result['success']:
+            raise ValueError(f"Failed to download PDF: {download_result.get('error', 'Unknown error')}")
+        
+        pdf_content_bytes = download_result['data']
+        print(f"Successfully downloaded {len(pdf_content_bytes)} bytes for hash {file_hash}.")
+
+        # 2. Extract text from the PDF
+        _update_status('IN PROGRESS', '[2/5] Extracting text from PDF')
         extracted_text = extract_text_from_pdf_memory(BytesIO(pdf_content_bytes))
         if not extracted_text:
-            raise Exception("No text extracted from PDF.")
+            raise ValueError("No text extracted from PDF.")
         
-        # Remove null characters from the extracted text before saving to database
-        cleaned_extracted_text = extracted_text.replace('\u0000', '')
+        cleaned_extracted_text = extracted_text.replace('\u0000', '').encode('utf-8', errors='ignore').decode('utf-8')
+        print(f"Successfully extracted text (length: {len(cleaned_extracted_text)}) for hash {file_hash}.")
 
-        # Further sanitize text for invalid UTF-8 characters
-        # Encode to bytes with 'ignore' errors, then decode back to string
-        final_cleaned_text = cleaned_extracted_text.encode('utf-8', errors='ignore').decode('utf-8')
+        # 3. Generate a short title for the extracted text
+        _update_status('IN PROGRESS', '[3/5] Generating short title')
+        try:
+            short_title = generate_short_title(cleaned_extracted_text)
+            print(f"Successfully generated short title: '{short_title}' for hash {file_hash}.")
+        except Exception as e:
+            # Not a critical failure, we just log it and continue.
+            print(f"Warning: Failed to generate short title: {str(e)}")
+            _update_status('IN PROGRESS', f"Warning: could not generate title ({e})")
+            short_title = "Untitled PDF"
 
-        print(f"Successfully extracted text (length: {len(extracted_text)}) for hash {file_hash}.")
+        # 4. Update the 'pdfs' table in Supabase with the extracted text and short title
+        _update_status('IN PROGRESS', '[4/5] Saving extracted content to database')
+        update_result = update_pdf_text_and_summary(file_hash, cleaned_extracted_text, short_title)
+        if not update_result['success']:
+            raise ValueError(f"Failed to update database: {update_result.get('error', 'Unknown error')}")
+        
+        # 5. Append the PDF hash to the user's list of PDFs
+        _update_status('IN PROGRESS', '[5/5] Linking PDF to your account')
+        append_result = append_pdf_hash_to_user_pdfs(user_id, file_hash)
+        if not append_result['success']:
+            raise ValueError(f"Failed to link PDF to user: {append_result.get('error', 'Unknown error')}")
+        
+        print(f"Successfully processed and updated database for file hash: {file_hash}.")
+        _update_status('SUCCESS', 'PDF processing complete')
+        return {"status": "completed", "file_hash": file_hash, "extracted_text_length": len(cleaned_extracted_text)}
+
     except Exception as e:
-        error_msg = f"Failed to extract text from PDF: {str(e)}"
+        error_msg = f"PDF processing failed: {str(e)}"
         print(error_msg)
-        _update_status('FAILURE', error_msg)
-        return {"status": "failed", "message": error_msg}
-
-    # 3. Generate a short title for the extracted text
-    _update_status('IN PROGRESS', '[3/5] Generating short title')
-    try:
-        short_title = generate_short_title(final_cleaned_text)
-        print(f"Successfully generated short title: '{short_title}' for hash {file_hash}.")
-    except Exception as e:
-        error_msg = f"Failed to generate short title: {str(e)}"
-        print(error_msg)
-        _update_status('IN PROGRESS', error_msg)
-        # We can continue without a title, so we don't return failure here.
-        short_title = "No Summary"
-
-    # 4. Update the 'pdfs' table in Supabase with the extracted text and short title
-    _update_status('IN PROGRESS', '[4/5] Saving extracted content to database')
-    update_result = update_pdf_text_and_summary(file_hash, final_cleaned_text, short_title)
-    if not update_result['success']:
-        error_msg = f"Failed to update database: {update_result.get('error', 'Unknown error')}"
-        print(error_msg)
-        _update_status('FAILURE', error_msg)
-        return {"status": "failed", "message": error_msg}
-    
-    # 5. Append the PDF hash to the user's list of PDFs
-    _update_status('IN PROGRESS', '[5/5] Linking PDF to your account')
-    append_result = append_pdf_hash_to_user_pdfs(user_id, file_hash)
-    if not append_result['success']:
-        error_msg = f"Failed to link PDF to user: {append_result.get('error', 'Unknown error')}"
-        print(error_msg)
-        _update_status('FAILURE', error_msg)
-        return {"status": "failed", "message": error_msg}
-    
-    print(f"Successfully processed and updated database for file hash: {file_hash}.")
-    _update_status('SUCCESS', 'PDF processing complete')
-    return {"status": "completed", "file_hash": file_hash, "extracted_text_length": len(extracted_text)}
+        # Manually update our custom Redis store to ensure the 'FAILURE' state is immediately persisted.
+        timestamp = datetime.now(timezone.utc).strftime("%m-%d %H:%M")
+        full_message = f"{error_msg} (UTC {timestamp})"
+        update_user_task_status(user_id, self.request.id, original_filename, 'FAILURE', full_message)
+        # Now, raise the exception to let Celery handle its internal state.
+        # This will mark the task as FAILURE in the Celery backend and store the traceback.
+        raise e

@@ -4,7 +4,7 @@ import traceback
 from .logic import log_memory_usage
 from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_short_title
 from .database import (
-    upsert_pdf_results, check_question_set_exists, touch_pdf,
+    upsert_pdf_results, check_question_set_exists,
     check_file_exists, generate_content_hash, generate_file_hash,
     authenticate_user, star_all_questions_by_hashes,
     upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title,
@@ -938,8 +938,13 @@ def get_user_tasks_endpoint():
     result = get_user_tasks(user_id)
     
     if not result['success']:
+        print(f"Error retrieving tasks from Redis for user {user_id}: {result.get('error', 'Unknown error')}")
         return jsonify({'error': result.get('error', 'Failed to get tasks')}), 500
-        
+    
+    print(f"Tasks retrieved from Redis for user {user_id}:")
+    for task in result['data']:
+        print(f"  Task ID: {task.get('task_id', '')}, Filename: {task.get('filename', '')}, Status: {task.get('status', '')}, Message: {task.get('message', '')}")
+            
     return jsonify({'success': True, 'tasks': result['data']})
 
 @app.route('/api/upload-pdfs', methods=['POST'])
@@ -1029,9 +1034,6 @@ def upload_pdfs():
                     print(f"File with hash {file_hash[:8]}... already exists in storage. Skipping re-upload.")
                     # Even if file exists, ensure it's linked to this user
                     append_result = append_pdf_hash_to_user_pdfs(user_id, file_hash)
-                    touch_result = touch_pdf(file_hash)
-                    if not touch_result['success']:
-                        print(f"Warning: Failed to touch PDF {file_hash[:8]}...: {touch_result.get('error')}")
                     if not append_result['success']:
                         print(f"Error linking existing PDF {file_hash[:8]}... to user {user_id}: {append_result.get('error')}")
                         failed_files_details.append({'filename': original_filename, 'error': append_result.get('error', 'Failed to link file to user')})
@@ -1092,16 +1094,26 @@ def get_pdf_processing_status(task_id):
         elif status == 'SUCCESS':
             message = task_result.info.get('message', 'Task completed successfully')
         elif status == 'FAILURE':
-            # Get the message from the meta information (info), or fallback to result if info not set
-            message = task_result.info.get('message', f"{result}")
+            # For a failed task, the `result` attribute typically contains the exception.
+            # The `info` field might contain our last custom progress message or the exception itself.
+            # We check if `info` is a dictionary; if so, we get our message. Otherwise, the exception is the message.
+            if isinstance(task_result.info, dict):
+                message = task_result.info.get('message', str(task_result.result))
+            else:
+                message = str(task_result.result)
         else:
             message = f"Task status: {status}"
+
+        # Sanitize the result for JSON serialization if it's an exception object
+        json_safe_result = result
+        if isinstance(result, Exception):
+            json_safe_result = str(result)
 
         return jsonify({
             'success': True,
             'task_id': task_id,
             'status': status,
-            'result': result,
+            'result': json_safe_result,
             'message': message
         })
 
