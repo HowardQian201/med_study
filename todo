@@ -7,9 +7,12 @@ Make UI better
     - USMLE vs Flashcard sets need to be more distinct
 
 
+switch to redis for session storage
+    - remove unnecessary long text storage
 
-Switch to fastAPI for concurrency
 realtime stats using posthog
+Switch to fastAPI for concurrency
+
 
 
 
@@ -31,7 +34,6 @@ Database indexing on question_sets.user_id, pdfs.hash, and quiz_questions.hash s
 
 worker task retry logic
 
-switch to redis for session storage
 
 Caching layer
 Look into question set hashing for same file
