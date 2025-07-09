@@ -198,6 +198,12 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
     setDeletingSetHash(contentHash);
     setError('');
     
+    // Add confirmation pop-up
+    if (!window.confirm('Are you sure you want to delete this study set? This action cannot be undone.')) {
+      setDeletingSetHash(null); // Reset deleting state if user cancels
+      return;
+    }
+
     try {
       const response = await axios.post('/api/delete-question-set', {
         content_hash: contentHash

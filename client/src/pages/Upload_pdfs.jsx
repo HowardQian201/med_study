@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Typography, Container, AppBar, Toolbar, Stack, Button, Paper, Alert, List, ListItem, ListItemText } from '@mui/material';
+import { Box, Typography, Container, AppBar, Toolbar, Stack, Button, Paper, Alert, List, ListItem, ListItemText, Checkbox } from '@mui/material';
 import { Home as HomeIcon, Logout, CloudUpload, Description } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
@@ -16,16 +16,34 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
   const [uploadedFilesReport, setUploadedFilesReport] = useState([]);
   const [existingFilesReport, setExistingFilesReport] = useState([]);
   const [failedFilesReport, setFailedFilesReport] = useState([]);
-  const [processingJobs, setProcessingJobs] = useState(() => {
-    const savedJobs = sessionStorage.getItem('processingJobs');
-    return savedJobs ? JSON.parse(savedJobs) : [];
-  });
+  const [processingJobs, setProcessingJobs] = useState([]);
   const [userPdfs, setUserPdfs] = useState([]);
+  const [selectedPdfHashes, setSelectedPdfHashes] = useState([]);
 
-  // Save processing jobs to sessionStorage whenever they change
+  // Fetch initial processing tasks from the backend on component mount
   useEffect(() => {
-    sessionStorage.setItem('processingJobs', JSON.stringify(processingJobs));
-  }, [processingJobs]);
+    const fetchInitialTasks = async () => {
+        try {
+            const response = await axios.get('/api/get-user-tasks', { withCredentials: true });
+            if (response.data.success) {
+                // The data from backend has keys: task_id, filename, status, message, updated_at
+                // The polling logic will take over for any non-terminal tasks.
+                setProcessingJobs(response.data.tasks || []);
+            } else {
+                console.error("Failed to fetch user tasks:", response.data.error);
+            }
+        } catch (err) {
+            console.error("Error fetching user tasks:", err);
+            if (err.response?.status === 401) {
+                setIsAuthenticated(false);
+                navigate('/login');
+            }
+        }
+    };
+
+    fetchInitialTasks();
+  }, [setIsAuthenticated, navigate]); // Run only on mount
+
 
   // Clear success/error messages and reports after 10 seconds
   useEffect(() => {
@@ -237,12 +255,65 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
     }
   };
 
+  const handleClearCompletedTasks = async () => {
+    try {
+      const response = await axios.post('/api/clear-completed-tasks', {}, { withCredentials: true });
+      if (response.data.success) {
+        setProcessingJobs(prevJobs => prevJobs.filter(job => job.status !== 'SUCCESS' && job.status !== 'FAILURE'));
+        setSuccessMessage('Completed and failed tasks cleared successfully.');
+      } else {
+        setError(response.data.error || 'Failed to clear completed tasks.');
+      }
+    } catch (err) {
+      console.error('Error clearing completed tasks:', err);
+      if (err.response?.status === 401) {
+        setError('Session expired. Please log in again.');
+        setIsAuthenticated(false);
+        navigate('/login');
+      } else {
+        setError(err.response?.data?.error || 'An unknown error occurred during task clearing.');
+      }
+    }
+  };
+
+  const handleRemoveSelectedPdfs = async () => {
+    if (selectedPdfHashes.length === 0) return;
+
+    if (!window.confirm(`Are you sure you want to remove ${selectedPdfHashes.length} selected PDF(s) from your account? This action cannot be undone.`)) {
+      return; // User cancelled the operation
+    }
+
+    try {
+      const response = await axios.post('/api/remove-user-pdfs', { pdf_hashes: selectedPdfHashes }, { withCredentials: true });
+      if (response.data.success) {
+        setSuccessMessage(response.data.message || 'Selected PDFs removed successfully.');
+        setSelectedPdfHashes([]); // Clear selection after removal
+        // Re-fetch user PDFs to update the displayed list
+        const userPdfsResponse = await axios.get('/api/get-user-pdfs', { withCredentials: true });
+        if (userPdfsResponse.data.success) {
+          setUserPdfs(userPdfsResponse.data.pdfs);
+        }
+      } else {
+        setError(response.data.error || 'Failed to remove selected PDFs.');
+      }
+    } catch (err) {
+      console.error('Error removing selected PDFs:', err);
+      if (err.response?.status === 401) {
+        setError('Session expired. Please log in again.');
+        setIsAuthenticated(false);
+        navigate('/login');
+      } else {
+        setError(err.response?.data?.error || 'An unknown error occurred during PDF removal.');
+      }
+    }
+  };
+
   const handleLogout = async () => {
     try {
       // Assuming logout clears session on backend
       await axios.post('/api/auth/logout', {}, { withCredentials: true });
       setIsAuthenticated(false);
-      sessionStorage.removeItem('processingJobs'); // Clear processing jobs from session storage on logout
+      // No longer need to clear sessionStorage for processingJobs
       navigate('/login');
     } catch (err) {
       console.error('Logout failed:', err);
@@ -329,14 +400,14 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
       </AppBar>
 
       {/* Main Content */}
-      <Container maxWidth={false} sx={{ py: 4, px: { xs: 2, md: 4 }, textAlign: 'center' }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Upload PDFs and Begin Processing
+      <Container maxWidth={false} sx={{ py: 2, px: { xs: 2, md: 6 }, textAlign: 'center' }}>
+        <Typography variant="h2" component="h1" gutterBottom sx={{ mt: 2, mb: 4 }}>
+          Upload PDFs to Begin
         </Typography>
         
         <Box sx={{ mt: 4, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: 'stretch', justifyContent: 'center', gap: 3 }}>
           {/* Left Column: Upload Box and Upload Button */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flex: 1 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flex: 1.1 }}>
             <Paper
               elevation={2}
               onClick={!isUploading ? () => fileInputRef.current.click() : undefined}
@@ -425,14 +496,26 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                   alignItems: 'flex-start', // Align items to the top
                   justifyContent: 'flex-start', 
                   bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
-                  flex: 1, // Make it take equal width and stretch height
+                  flex: 1.2, // Make it take equal width and stretch height
                 }}
               >
-                <Typography variant="h6" color="text.secondary" gutterBottom>
-                  Processing Statuses
-                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', mb: 2 }}>
+                  <Typography variant="h4" color="text.secondary" gutterBottom sx={{ mb: 0 }}>
+                    PDF Processing Statuses
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    size="small"
+                    onClick={handleClearCompletedTasks}
+                    disabled={processingJobs.filter(job => job.status === 'SUCCESS' || job.status === 'FAILURE').length === 0}
+                  >
+                    Clear Completed
+                  </Button>
+                </Box>
+                
                 {processingJobs.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2, alignSelf: 'center' }}>
                         No processing jobs active.
                     </Typography>
                 ) : (
@@ -446,17 +529,19 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                                         whiteSpace: 'nowrap',
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis',
+                                        minWidth: '250px',
                                         maxWidth: '250px', // Adjust as needed, considering the gap for message
                                     }}
                                 >
-                                    {job.filename}:
+                                    {job.filename}
                                 </Typography>
                                 <Typography variant="body2" color={(theme) => {
                                     if (job.status === 'SUCCESS') return theme.palette.success.main;
                                     if (job.status === 'FAILURE') return theme.palette.error.main;
                                     return theme.palette.info.main; // PENDING, STARTED
                                 }}>
-                                    {job.message}
+                                    {/* Display both status and message */}
+                                    {job.status} - {job.message}
                                 </Typography>
                             </Box>
                         ))}
@@ -479,28 +564,59 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
           }}
         >
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h3" color="text.primary" gutterBottom sx={{ mb: 0 }}>
+            <Typography variant="h3" color="text.primary" gutterBottom sx={{ mb: 0, ml: 4 }}>
               Your Uploaded PDFs
             </Typography>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}> {/* Added alignItems for vertical alignment */}
+              <Button
+                variant="contained"
+                startIcon={<Description />}
+                size="small"
+                onClick={async () => {
+                  try {
+                    await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+                    setSummary('');
+                    navigate('/study_session');
+                  } catch (err) {
+                    console.error('Failed to clear session and navigate:', err);
+                    navigate('/study_session');
+                  }
+                }}
+              >
+                Start a New Study Session
+              </Button>
+            </Box>
+          </Box>
+          
+          {/* New row for Select All and Remove PDFs button */}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mt: 1, mr: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}> {/* Added mr for spacing */}
+              <Checkbox
+                indeterminate={selectedPdfHashes.length > 0 && selectedPdfHashes.length < userPdfs.length}
+                checked={userPdfs.length > 0 && selectedPdfHashes.length === userPdfs.length}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedPdfHashes(userPdfs.map(pdf => pdf.hash));
+                  } else {
+                    setSelectedPdfHashes([]);
+                  }
+                }}
+                disabled={userPdfs.length === 0}
+                size="small"
+              />
+              <Typography variant="body2" color="text.secondary">Select All</Typography>
+            </Box>
             <Button
-              onClick={async () => {
-                try {
-                  await axios.post('/api/clear-session-content', {}, { withCredentials: true });
-                  setSummary('');
-                  navigate('/study_session');
-                } catch (err) {
-                  console.error('Failed to clear session and navigate:', err);
-                  navigate('/study_session');
-                }
-              }}
               variant="contained"
-              startIcon={<Description />}
+              color="error"
               size="small"
-              sx={{ ml: 0 }}
+              onClick={handleRemoveSelectedPdfs}
+              disabled={selectedPdfHashes.length === 0}
             >
-              Start a New Study Session
+              Remove PDFs ({selectedPdfHashes.length})
             </Button>
           </Box>
+          
           <List dense sx={{ width: '100%' }}>
             {userPdfs.length > 0 ? (
               userPdfs.map((pdf) => (
@@ -515,6 +631,19 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                     py: 0.5
                   }}
                 >
+                  <Checkbox
+                    checked={selectedPdfHashes.includes(pdf.hash)}
+                    onChange={() => {
+                      setSelectedPdfHashes(prevSelected => {
+                        if (prevSelected.includes(pdf.hash)) {
+                          return prevSelected.filter(hash => hash !== pdf.hash);
+                        } else {
+                          return [...prevSelected, pdf.hash];
+                        }
+                      });
+                    }}
+                    size="small"
+                  />
                   <ListItemText 
                     primary={pdf.short_summary || pdf.filename} 
                     primaryTypographyProps={{
@@ -546,7 +675,7 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
       </Container>
       <FeedbackButton />
 
-      {/* Floating Alerts for Upload Status */} 
+      {/* Floating Alerts for Upload Status */ }
       <Box 
         sx={{
           position: 'fixed',
