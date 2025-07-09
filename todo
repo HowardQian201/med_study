@@ -1,20 +1,16 @@
 
 URGENT:
+download/view/delete pdfs that users uploaded
 
-Reduce what is stored in redis (i.e. total extracted text)
-Make the task status display logic more sound
-Store task ids in user table to poll from if logout log back in
-    - Can we store this in redis?
-    - user_id: [task_ids]
-
-Stream openai calls from the background worker (Celery + Redis Pub/Sub + SSE)
-
-rate limit api calls
 Make UI better
 
 
 
+
+
 IDEAS:
+rate limit api calls
+
 realtime stats using posthog, amplitude
 supabase mcp with cursor
 Bug stats with Sentry.io
@@ -27,14 +23,18 @@ Database indexing on question_sets.user_id, pdfs.hash, and quiz_questions.hash s
 
 worker task retry logic
 
+switch to redis for session storage
+
 Caching layer
 Look into question set hashing for same file
     - sometimes a new hashing
 
+Stream quiz question generation
+Stream openai calls from the background worker (Celery + Redis Pub/Sub + SSE)
+
 
 Combine quiz sets
 implement some progress memorization from previous sessions
-Stream quiz questions
 switch to replit or vercel for deployment
 Login page use google
 Allow users to download quiz questions?

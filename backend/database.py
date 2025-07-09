@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from typing import Dict, Any, List, Union, Optional
 from datetime import datetime, timezone
 import io # Import io module for BytesIO and other stream types
+import redis
+import json
 
 # Load environment variables from .env file
 load_dotenv()
@@ -13,6 +15,20 @@ load_dotenv()
 # Supabase configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+
+# Redis Configuration
+REDIS_URL = os.getenv("REDIS_URL")
+redis_client = None
+if REDIS_URL:
+    try:
+        # decode_responses=True makes redis client return strings instead of bytes
+        redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+        # Test connection to ensure it's working
+        redis_client.ping()
+        print("Successfully connected to Redis.")
+    except redis.exceptions.ConnectionError as e:
+        print(f"Warning: Could not connect to Redis at {REDIS_URL}. Task status persistence will be disabled. Error: {e}")
+        redis_client = None
 
 def get_supabase_client() -> Client:
     """Create and return a Supabase client."""
@@ -876,3 +892,160 @@ def update_pdf_text_and_summary(file_hash: str, extracted_text: str, short_summa
         error_message = str(e)
         print(f"Error updating PDF text and summary for hash {file_hash}: {error_message}")
         return {"success": False, "error": error_message, "data": None}
+
+
+# --- Redis Task Management Functions ---
+
+def update_user_task_status(user_id: int, task_id: str, filename: str, status: str, message: str) -> Dict[str, Any]:
+    """
+    Updates a user's task status in a Redis hash.
+
+    Args:
+        user_id (int): The ID of the user.
+        task_id (str): The Celery task ID.
+        filename (str): The name of the file being processed.
+        status (str): The current status of the task (e.g., 'PROGRESS', 'SUCCESS', 'FAILURE').
+        message (str): A descriptive message for the current status.
+
+    Returns:
+        Dict containing the result of the Redis operation.
+    """
+    if not redis_client:
+        # If redis is not available, we don't treat it as a hard error, but log it.
+        # The application can proceed without Redis-based task persistence.
+        print("Warning: Redis client not available. Skipping task status update.")
+        return {"success": False, "error": "Redis client not available."}
+
+    try:
+        key = f"user_tasks:{user_id}"
+        task_data = {
+            "task_id": task_id,
+            "filename": filename,
+            "status": status,
+            "message": message,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        # Store the dictionary as a JSON string
+        redis_client.hset(key, task_id, json.dumps(task_data))
+        
+        # Expire tasks after 12 hours so Redis doesn't fill up with old completed tasks
+        redis_client.expire(key, 60 * 60 * 12)
+
+        return {"success": True}
+    except Exception as e:
+        print(f"Error updating task status in Redis for user {user_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+def get_user_tasks(user_id: int) -> Dict[str, Any]:
+    """
+    Retrieves all tasks and their statuses for a given user from Redis.
+
+    Args:
+        user_id (int): The ID of the user.
+
+    Returns:
+        Dict containing a list of task data dictionaries.
+    """
+    if not redis_client:
+        return {"success": True, "data": []} # Return empty list if no redis
+
+    try:
+        key = f"user_tasks:{user_id}"
+        tasks_raw = redis_client.hgetall(key)
+        
+        # hgetall with decode_responses=True returns a dict of str:str
+        # We just need to parse the JSON string values
+        tasks = [json.loads(task_json) for task_json in tasks_raw.values()]
+        
+        # Sort tasks by last updated timestamp, most recent first
+        tasks.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
+        
+        return {"success": True, "data": tasks}
+    except Exception as e:
+        print(f"Error retrieving tasks from Redis for user {user_id}: {e}")
+        return {"success": False, "error": str(e), "data": []}
+
+def delete_user_tasks_by_status(user_id: int, statuses_to_clear: List[str]) -> Dict[str, Any]:
+    """
+    Deletes tasks from a user's Redis task hash based on their status.
+
+    Args:
+        user_id (int): The ID of the user.
+        statuses_to_clear (List[str]): A list of statuses for tasks to be cleared (e.g., ['SUCCESS', 'FAILURE']).
+
+    Returns:
+        Dict containing the result of the Redis operation and count of deleted tasks.
+    """
+    if not redis_client:
+        return {"success": False, "error": "Redis client not available."}
+
+    try:
+        key = f"user_tasks:{user_id}"
+        tasks_raw = redis_client.hgetall(key)
+        
+        tasks_to_delete = []
+        for task_id, task_json in tasks_raw.items():
+            task_data = json.loads(task_json)
+            if task_data.get('status') in statuses_to_clear:
+                tasks_to_delete.append(task_id)
+        
+        if tasks_to_delete:
+            deleted_count = redis_client.hdel(key, *tasks_to_delete) # Use * to unpack list into args
+            print(f"Deleted {deleted_count} tasks for user {user_id} with statuses {statuses_to_clear}.")
+            return {"success": True, "deleted_count": deleted_count}
+        else:
+            print(f"No tasks to delete for user {user_id} with statuses {statuses_to_clear}.")
+            return {"success": True, "deleted_count": 0}
+
+    except Exception as e:
+        print(f"Error deleting tasks from Redis for user {user_id}: {e}")
+        return {"success": False, "error": str(e), "deleted_count": 0}
+
+def remove_pdf_hashes_from_user(user_id: int, pdf_hashes_to_remove: List[str]) -> Dict[str, Any]:
+    """
+    Removes a list of PDF hashes from the 'pdfs' array column in the 'users' table.
+    
+    Args:
+        user_id (int): The ID of the user.
+        pdf_hashes_to_remove (List[str]): A list of PDF hashes to remove.
+        
+    Returns:
+        Dict containing the result of the update operation.
+    """
+    print(f"Attempting to remove hashes {pdf_hashes_to_remove} from user {user_id} pdfs.")
+
+    try:
+        supabase = get_supabase_client()
+        
+        # First, get the current user data to filter the hashes
+        user_result = supabase.table('users').select('pdfs').eq('id', user_id).maybe_single().execute()
+        
+        if not user_result.data or len(user_result.data) == 0:
+            return {"success": False, "error": "User not found.", "deleted_count": 0}
+        
+        current_pdfs = user_result.data.get('pdfs', [])
+        
+        initial_count = len(current_pdfs)
+        
+        # Filter out the hashes that are in pdf_hashes_to_remove
+        updated_pdfs = [pdf_hash for pdf_hash in current_pdfs if pdf_hash not in pdf_hashes_to_remove]
+        
+        deleted_count = initial_count - len(updated_pdfs)
+
+        if deleted_count == 0:
+            print(f"No matching PDFs found to remove for user {user_id}.")
+            return {"success": True, "message": "No matching PDFs found to remove.", "deleted_count": 0}
+
+        # Update the 'pdfs' column with the new filtered array
+        result = supabase.table('users').update({
+            'pdfs': updated_pdfs
+        }).eq('id', user_id).execute()
+
+        if result.data and len(result.data) > 0:
+            return {"success": True, "data": result.data[0], "deleted_count": deleted_count}
+        else:
+            return {"success": False, "error": "User not found or update failed.", "deleted_count": 0}
+
+    except Exception as e:
+        print(f"Error removing PDF hashes from user {user_id} pdfs: {e}")
+        return {"success": False, "error": str(e), "deleted_count": 0}

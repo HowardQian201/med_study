@@ -9,7 +9,8 @@ from .database import (
     authenticate_user, star_all_questions_by_hashes,
     upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title,
     touch_question_set, update_question_starred_status, delete_question_set_and_questions, insert_feedback, 
-    append_pdf_hash_to_user_pdfs, get_user_associated_pdf_metadata, get_pdf_text_by_hashes
+    append_pdf_hash_to_user_pdfs, get_user_associated_pdf_metadata, get_pdf_text_by_hashes,
+    update_user_task_status, get_user_tasks, delete_user_tasks_by_status, remove_pdf_hashes_from_user
 )
 # Import the main Celery app instance from worker.py
 from .background.worker import app as celery_app
@@ -24,6 +25,7 @@ import gc
 import random
 from celery.result import AsyncResult # Import this to interact with task results
 import tempfile # Import tempfile for creating temporary files
+from datetime import datetime, timezone # Import timezone for UTC
 
 # Streaming flag
 STREAMING_ENABLED = True
@@ -889,6 +891,57 @@ def submit_feedback():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/clear-completed-tasks', methods=['POST'])
+def clear_completed_tasks_endpoint():
+    print("clear_completed_tasks_endpoint()")
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user_id = session['user_id']
+    # Define statuses to clear: SUCCESS and FAILURE
+    statuses_to_clear = ['SUCCESS', 'FAILURE']
+    
+    result = delete_user_tasks_by_status(user_id, statuses_to_clear)
+    
+    if not result['success']:
+        return jsonify({'error': result.get('error', 'Failed to clear tasks')}), 500
+        
+    return jsonify({'success': True, 'message': f"Cleared {result.get('deleted_count', 0)} completed tasks."})
+
+@app.route('/api/remove-user-pdfs', methods=['POST'])
+def remove_user_pdfs_endpoint():
+    print("remove_user_pdfs_endpoint()")
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user_id = session['user_id']
+    data = request.get_json()
+    pdf_hashes = data.get('pdf_hashes', [])
+
+    if not pdf_hashes:
+        return jsonify({'success': False, 'message': 'No PDF hashes provided for removal.'}), 400
+
+    result = remove_pdf_hashes_from_user(user_id, pdf_hashes)
+    
+    if not result['success']:
+        return jsonify({'error': result.get('error', 'Failed to remove PDFs')}), 500
+        
+    return jsonify({'success': True, 'message': f"Removed {result.get('deleted_count', 0)} PDFs from your account."})
+
+@app.route('/api/get-user-tasks', methods=['GET'])
+def get_user_tasks_endpoint():
+    print("get_user_tasks()")
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user_id = session['user_id']
+    result = get_user_tasks(user_id)
+    
+    if not result['success']:
+        return jsonify({'error': result.get('error', 'Failed to get tasks')}), 500
+        
+    return jsonify({'success': True, 'tasks': result['data']})
+
 @app.route('/api/upload-pdfs', methods=['POST'])
 def upload_pdfs():
     print("upload_pdfs()")
@@ -960,9 +1013,18 @@ def upload_pdfs():
                         continue # Skip to next file if DB upsert failed
                     
                     # Dispatch the Celery task to process the PDF text (using the hash to retrieve from Supabase)
-                    task = process_pdf_task.delay(file_hash, bucket_name, upload_result['path'], user_id)
+                    task = process_pdf_task.delay(file_hash, bucket_name, upload_result['path'], user_id, original_filename)
                     uploaded_task_details.append({'filename': original_filename, 'task_id': task.id, 'file_hash': file_hash})
                     uploaded_files_details.append({'filename': original_filename, 'message': 'Uploaded and queued for processing.'})
+                    
+                    # Store initial task status in Redis
+                    update_user_task_status(
+                        user_id=user_id,
+                        task_id=task.id,
+                        filename=original_filename,
+                        status='PENDING',
+                        message=f'Task is queued for processing'
+                    )
 
                 else:
                     print(f"File with hash {file_hash[:8]}... already exists in storage. Skipping re-upload.")
@@ -1023,13 +1085,16 @@ def get_pdf_processing_status(task_id):
         # Handle specific states
         if status == 'PENDING':
             # Task is not yet ready or does not exist
-            message = "Task is pending or not found."
-        elif status == 'STARTED':
-            message = "Task has started processing."
+            timestamp = datetime.now(timezone.utc).strftime("%m-%d %H:%M")
+            message = f"Task is queued for processing (UTC {timestamp})"
+        elif status == 'IN PROGRESS' or status == 'STARTED':
+            # Get the message from the meta information
+            message = task_result.info.get('message', 'Task is in progress...')
         elif status == 'SUCCESS':
-            message = "Task completed successfully."
+            message = task_result.info.get('message', 'Task completed successfully')
         elif status == 'FAILURE':
-            message = f"Task failed: {result}"
+            # Get the message from the meta information (info), or fallback to result if info not set
+            message = task_result.info.get('message', f"{result}")
         else:
             message = f"Task status: {status}"
 
