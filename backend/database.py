@@ -920,8 +920,8 @@ def update_user_task_status(user_id: int, task_id: str, filename: str, status: s
         # Store the dictionary as a JSON string
         redis_client.hset(key, task_id, json.dumps(task_data))
         
-        # Expire tasks after 12 hours so Redis doesn't fill up with old completed tasks
-        redis_client.expire(key, 60 * 60 * 12)
+        # Expire tasks after 36 hours so Redis doesn't fill up with old completed tasks
+        redis_client.expire(key, 60 * 60 * 36)
 
         return {"success": True}
     except Exception as e:
