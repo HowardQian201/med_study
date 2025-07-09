@@ -444,7 +444,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                     <Stack spacing={2} alignItems="flex-start" sx={{ height: '100%' }}>
                       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ width: '100%' }}>
                         <Typography variant="h6" fontWeight="600" gutterBottom>
-                          Select Existing PDFs
+                          Select Existing PDFs ({availablePdfs.length})
                         </Typography>
                         {availablePdfs.length > 0 && (
                           <IconButton 

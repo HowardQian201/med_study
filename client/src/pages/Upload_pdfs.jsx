@@ -14,7 +14,6 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [uploadedFilesReport, setUploadedFilesReport] = useState([]);
-  const [existingFilesReport, setExistingFilesReport] = useState([]);
   const [failedFilesReport, setFailedFilesReport] = useState([]);
   const [processingJobs, setProcessingJobs] = useState([]);
   const [userPdfs, setUserPdfs] = useState([]);
@@ -48,17 +47,16 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
   // Clear success/error messages and reports after 10 seconds
   useEffect(() => {
     let timer;
-    if (successMessage || error || uploadedFilesReport.length > 0 || existingFilesReport.length > 0 || failedFilesReport.length > 0) {
+    if (successMessage || error || uploadedFilesReport.length > 0 || failedFilesReport.length > 0) {
       timer = setTimeout(() => {
         setSuccessMessage('');
         setError('');
         setUploadedFilesReport([]);
-        setExistingFilesReport([]);
         setFailedFilesReport([]);
       }, 10000); // 10 seconds
     }
     return () => clearTimeout(timer);
-  }, [successMessage, error, uploadedFilesReport, existingFilesReport, failedFilesReport]);
+  }, [successMessage, error, uploadedFilesReport, failedFilesReport]);
 
   // New useEffect to fetch user's associated PDFs on component mount
   useEffect(() => {
@@ -165,7 +163,6 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
     setError('');
     setSuccessMessage('');
     setUploadedFilesReport([]);
-    setExistingFilesReport([]);
     setFailedFilesReport([]);
   };
 
@@ -179,7 +176,6 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
     setError('');
     setSuccessMessage('');
     setUploadedFilesReport([]);
-    setExistingFilesReport([]);
     setFailedFilesReport([]);
 
     const formData = new FormData();
@@ -198,7 +194,6 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
       if (response.data.success) {
         // setSuccessMessage(response.data.message || 'Files uploaded successfully!');
         setUploadedFilesReport(response.data.uploaded_files || []);
-        setExistingFilesReport(response.data.existing_files || []);
         setFailedFilesReport(response.data.failed_files || []);
         
         // Initialize processing jobs state
@@ -212,9 +207,6 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
         let generalMessage = '';
         if (response.data.uploaded_files.length > 0) {
             generalMessage += `Successfully uploaded ${response.data.uploaded_files.length} files. `;
-        }
-        if (response.data.existing_files.length > 0) {
-            generalMessage += `Skipped ${response.data.existing_files.length} existing files. `;
         }
         if (response.data.failed_files.length > 0) {
             generalMessage += `Failed to upload ${response.data.failed_files.length} files.`;
@@ -565,7 +557,7 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
         >
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
             <Typography variant="h3" color="text.primary" gutterBottom sx={{ mb: 0, ml: 4 }}>
-              Your Uploaded PDFs
+              Your Uploaded PDFs ({userPdfs.length})
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}> {/* Added alignItems for vertical alignment */}
               <Button
@@ -704,17 +696,6 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                   <Typography variant="subtitle2">Successfully Uploaded:</Typography>
                   <ul>
                       {uploadedFilesReport.map((file, index) => (
-                          <li key={index}>{file.filename}</li>
-                      ))}
-                  </ul>
-              </Alert>
-          )}
-
-          {existingFilesReport.length > 0 && (
-              <Alert severity="info" sx={{ borderRadius: 2, width: '100%' }}>
-                  <Typography variant="subtitle2">Already Existed:</Typography>
-                  <ul>
-                      {existingFilesReport.map((file, index) => (
                           <li key={index}>{file.filename}</li>
                       ))}
                   </ul>
