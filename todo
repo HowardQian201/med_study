@@ -9,7 +9,7 @@ Make UI better
 
 
 Switch to fastAPI for concurrency
-realtime stats using posthog, amplitude
+realtime stats using posthog
 
 
 
