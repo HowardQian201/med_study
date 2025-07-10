@@ -601,7 +601,7 @@ def load_study_set():
     print(f"get_full_study_set_data() result:")
     for i, q_set in enumerate(result['data']['quiz_questions']):
         for j, question in enumerate(q_set):
-            print(f"{i}.{j}: {question['text']}")
+            print(f"{i}.{j}: {question['text'][:50]}")
     
     if not result['success']:
         print(f"Failed to get study set data: {result.get('error')}")

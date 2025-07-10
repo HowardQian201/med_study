@@ -109,7 +109,7 @@ def gpt_summarize_transcript(text, temperature=1.0, stream=False):
     text = completion.choices[0].message.content.strip()
     return text
 
-def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_question_ids=None, previous_questions=None, num_questions=5, is_quiz_mode=True):
+def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_question_ids=None, previous_questions=None, num_questions=5, is_quiz_mode=True, model="gpt-4o-mini"):
     """Generate quiz questions from a summary text using OpenAI's API
     
     Args:
@@ -128,36 +128,6 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
     
     try:
 
-        quiz_schema = {
-            "type": "object",
-            "required": ["questions"],
-            "additionalProperties": False,
-            "properties": {
-                "questions": {
-                    "type": "array",
-                    "minItems": num_questions,
-                    "maxItems": num_questions,
-                    "items": {
-                        "type": "object",
-                        "required": ["id", "text", "options", "correctAnswer", "reason"],
-                        "properties": {
-                            "id":           {"type": "integer", "minimum": 1, "maximum": num_questions},
-                            "text":         {"type": "string"},
-                            "options": {
-                                "type": "array",
-                                "minItems": 4,
-                                "maxItems": 4,
-                                "items": {"type": "string"}
-                            },
-                            "correctAnswer": {"type": "integer", "minimum": 0, "maximum": 3},
-                            "reason":       {"type": "string"}
-                        },
-                        "additionalProperties": False
-                    }
-                }
-            }
-        }
-
         is_questions = previous_questions is not None and incorrect_question_ids is not None
 
         incorrect_questions = []
@@ -172,10 +142,41 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
         if len(correct_questions) > 0:
             previous_questions_text += f"The user previously answered the following questions CORRECTLY and should be tested on different topics mentioned in the summary:\n{json.dumps(correct_questions)}\n"
 
-        print("previous_questions_text")
-        print(previous_questions_text)
+        # print("previous_questions_text")
+        # print(previous_questions_text[:100])
         print(f"is_quiz_mode: {is_quiz_mode}")
+        
         if is_quiz_mode:
+            max_completion_tokens = 3000
+            quiz_schema = {
+                "type": "object",
+                "required": ["questions"],
+                "additionalProperties": False,
+                "properties": {
+                    "questions": {
+                        "type": "array",
+                        "minItems": num_questions,
+                        "maxItems": num_questions,
+                        "items": {
+                            "type": "object",
+                            "required": ["id", "text", "options", "correctAnswer", "reason"],
+                            "properties": {
+                                "id":           {"type": "integer", "minimum": 1, "maximum": num_questions},
+                                "text":         {"type": "string"},
+                                "options": {
+                                    "type": "array",
+                                    "minItems": 4,
+                                    "maxItems": 4,
+                                    "items": {"type": "string"}
+                                },
+                                "correctAnswer": {"type": "integer", "minimum": 0, "maximum": 3},
+                                "reason":       {"type": "string"}
+                            },
+                            "additionalProperties": False
+                        }
+                    }
+                }
+            }
             prompt = f"""
             Based on the following medical text summary, create {num_questions} VERY challenging USMLE clinical vignette style \
                 multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
@@ -183,7 +184,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             For each question:
             1. A clear, specific and challenging clinical vignette stem.
             2. Be in the style of a USMLE clinical vignette (Example clinical vignette stem: "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
-            3. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
+            3. Include a thorough explanation (under 400 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
             
             {previous_questions_text}
 
@@ -197,14 +198,44 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             Generate ONLY valid JSON matching the provided schema.
             """
         else:
+            max_completion_tokens = 1500
+            quiz_schema = {
+                "type": "object",
+                "required": ["questions"],
+                "additionalProperties": False,
+                "properties": {
+                    "questions": {
+                        "type": "array",
+                        "minItems": num_questions,
+                        "maxItems": num_questions,
+                        "items": {
+                            "type": "object",
+                            "required": ["id", "text", "options", "correctAnswer", "reason"],
+                            "properties": {
+                                "id":           {"type": "integer", "minimum": 1, "maximum": num_questions},
+                                "text":         {"type": "string"},
+                                "options": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 1,
+                                    "items": {"type": "string"}
+                                },
+                                "correctAnswer": {"type": "integer", "minimum": 0, "maximum": 0},
+                                "reason":       {"type": "string"}
+                            },
+                            "additionalProperties": False
+                        }
+                    }
+                }
+            }
             prompt = f"""
             Based on the following medical text summary, create {num_questions} VERY challenging
-                multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
+                active recall flashcard questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
 
             For each question:
-            1. A clear, specific, and concise question stem for active recall flashcards. Do not include the answer in the question stem or suggest there are multiple answers.
-            2. Simple multiple choice questions based on the summary.
-            3. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
+            1. A clear, specific, and concise question stem for active recall flashcards. Ideally under 200 characters. Do not include the answer in the question stem or suggest there are multiple answers.
+            2. Simple, direct active recall flashcard questions based on the summary.
+            3. Include a thorough explanation (under 400 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
             
             {previous_questions_text}
 
@@ -214,13 +245,14 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
 
             system_prompt = """
             You are an expert medical professor that creates 
-            accurate, challenging multiple choice questions. 
+            accurate, active recall flashcard questions. 
             Generate ONLY valid JSON matching the provided schema.
             """
-                
+        
+        print(f"Using model: {model} for quiz generation USMLE mode: {is_quiz_mode} with max completion tokens: {max_completion_tokens}")
         gpt_time_start = time.time()
         response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
@@ -233,16 +265,20 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
                     "schema": quiz_schema
                 }
             },
-            temperature=1.0,
-            presence_penalty=0.6,
-            max_completion_tokens=3000,  # Increased for more questions
+            temperature=0.5,
+            presence_penalty=0.0,
+            max_completion_tokens=max_completion_tokens,
             top_p=0.9,
             frequency_penalty=0.25,
         )
+        print(f"Completion tokens used: {response.usage.completion_tokens}")
         gpt_time_end = time.time()
         print(f"GPT time: {gpt_time_end - gpt_time_start} seconds")
 
         response_text = response.choices[0].message.content.strip()
+        # print("\n--- Raw OpenAI Response Text (Quiz Generation) ---")
+        # print(response_text)
+        # print("--------------------------------------------------\n")
         
         response_json = json.loads(response_text)
         questions = response_json["questions"]
@@ -255,7 +291,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             required_fields = ['id', 'text', 'options', 'correctAnswer', 'reason']
             if not all(field in q for field in required_fields):
                 raise ValueError(f"Question missing required fields: {q}")
-            if not isinstance(q.get('options'), list) or len(q['options']) != 4:
+            if not isinstance(q.get('options'), list) or len(q['options']) not in [1, 4]:
                 raise ValueError(f"Question options is not a list of 4: {q}")
             if not isinstance(q.get('correctAnswer'), int) or not (0 <= q['correctAnswer'] <= 3):
                 raise ValueError(f"Invalid correctAnswer: {q}")
@@ -272,7 +308,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             question_text = q.get('text', '')
             
             # Create a hash for the question content
-            question_hash = hashlib.sha256((question_text + str(user_id)).encode('utf-8')).hexdigest()
+            question_hash = hashlib.sha256((question_text + q['id'] + str(user_id)).encode('utf-8')).hexdigest()
             question_hashes.append(question_hash)
             q['hash'] = question_hash
 
