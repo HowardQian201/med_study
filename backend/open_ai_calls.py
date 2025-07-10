@@ -147,7 +147,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
         print(f"is_quiz_mode: {is_quiz_mode}")
         
         if is_quiz_mode:
-            max_completion_tokens = 3000
+            max_completion_tokens = 5000
             quiz_schema = {
                 "type": "object",
                 "required": ["questions"],
@@ -198,7 +198,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             Generate ONLY valid JSON matching the provided schema.
             """
         else:
-            max_completion_tokens = 1500
+            max_completion_tokens = 4000
             quiz_schema = {
                 "type": "object",
                 "required": ["questions"],

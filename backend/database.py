@@ -310,7 +310,13 @@ def upsert_question_set(
             existing_question_hashes = existing_metadata.get('question_hashes', [])
             
             # Use a set to avoid duplicates, then convert back to list
-            updated_hashes = list(set(existing_question_hashes + question_hashes))
+            combined_hashes = existing_question_hashes + question_hashes
+            updated_hashes = list(set(combined_hashes))
+            
+            # Print info about duplicates
+            num_duplicates = len(combined_hashes) - len(updated_hashes)
+            print(f"Removed {num_duplicates} duplicate question hashes")
+            print(f"Original length: {len(combined_hashes)}, After deduplication: {len(updated_hashes)}")
             
             # Prepare data for update
             update_data = {
