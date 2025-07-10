@@ -13,10 +13,6 @@ switch to redis for session storage
 realtime stats using posthog
 Switch to fastAPI for concurrency
 
-Look into question set hashing for same file
-    - sometimes a new hashing
-
-
 
 ### LATER:
 

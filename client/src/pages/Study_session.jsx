@@ -342,9 +342,9 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
           <Box sx={{ maxWidth: '100%', mx: 'auto' }}>
             <Toolbar>
               <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <img src="/favicon.png" alt="MedStudy.AI Logo" style={{ width: 28, height: 28 }} />
+                <img src="/favicon.png" alt="MedStudyAI Logo" style={{ width: 28, height: 28 }} />
                 <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
-                  MedStudy.AI
+                  MedStudyAI
                 </Typography>
                 <Button
                   onClick={async () => {
