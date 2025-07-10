@@ -11,7 +11,7 @@ from .logic import log_memory_usage, check_memory, analyze_memory_usage
 from .database import upsert_quiz_questions_batch
 
 load_dotenv()
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), timeout=600.0)
 
 def randomize_answer_choices(question):
     """
@@ -53,7 +53,7 @@ def randomize_answer_choices(question):
     
     return question
 
-def gpt_summarize_transcript(text, stream=False):
+def gpt_summarize_transcript(text, temperature=1.0, stream=False):
     print(f"gpt_summarize_transcript called with stream={stream}")
     gpt_time_start = time.time()
     prompt = f"""Create a comprehensive, detailed study guide/summary from this transcript that covers ALL content thoroughly.
@@ -91,7 +91,7 @@ def gpt_summarize_transcript(text, stream=False):
             {"role": "system", "content": "You are an expert medical educator and USMLE/COMLEX tutor with extensive experience creating comprehensive study materials. Your goal is to create the most thorough, detailed, and well-organized study guides possible. You excel at identifying high-yield content, explaining complex concepts clearly, and structuring information in ways that maximize learning and retention. Always double-check your responses for accuracy and completeness."},
             {"role": "user", "content": prompt},
         ],
-        temperature=1.0,
+        temperature=temperature,
         frequency_penalty=0.25,
         stream=stream,
     )

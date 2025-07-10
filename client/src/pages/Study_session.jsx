@@ -239,11 +239,18 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
     setError('');
     setSummary(''); // Clear previous summary before regenerating
 
+    // Send JSON data instead of FormData
+    const payload = {
+      selectedPdfHashes: selectedPdfHashes,
+      userText: userText.trim(),
+    };
+
     try {
       const response = await fetch('/api/regenerate-summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify(payload), // Send the payload here
       });
 
       if (!response.ok) {

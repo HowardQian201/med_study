@@ -275,7 +275,6 @@ def upsert_question_set(
     user_id: int, 
     question_hashes: List[str], 
     content_names: List[str], 
-    total_extracted_text: Optional[str] = '', 
     short_summary: Optional[str] = '', 
     summary: Optional[str] = '',
     is_quiz: Optional[bool] = False
@@ -284,14 +283,13 @@ def upsert_question_set(
     Upsert a question set to the question_sets table.
     
     If content_hash exists, append new question_hashes to the existing list.
-    If not, create a new record. For new records, total_extracted_text and short_summary are required.
+    If not, create a new record. For new records, short_summary is required.
     
     Args:
         content_hash (str): The hash of the content (PDFs, user text)
         user_id (int): The ID of the user
         question_hashes (List[str]): List of hashes of the generated questions
         content_names (List[str]): List of names of the content files/sources
-        total_extracted_text (Optional[str]): The full text content that was summarized.
         short_summary (Optional[str]): A short, AI-generated title for the content.
         summary (Optional[str]): The full summary text.
         is_quiz (Optional[bool]): Whether this is a quiz set (True) or study set (False).
@@ -339,7 +337,6 @@ def upsert_question_set(
                 'hash': content_hash,
                 'user_id': user_id,
                 'metadata': new_metadata,
-                'text_content': total_extracted_text,
                 'short_summary': short_summary,
                 'content_summary': summary,
                 'created_at': datetime.now(timezone.utc).isoformat(),
@@ -424,7 +421,6 @@ def get_full_study_set_data(content_hash: str, user_id: int) -> Dict[str, Any]:
             "data": {
                 "summary": study_set.get('content_summary'),
                 "short_summary": study_set.get('short_summary'),
-                "total_extracted_text": study_set.get('text_content'),
                 "content_hash": study_set.get('hash'),
                 "content_name_list": study_set.get('metadata', {}).get('content_names', []),
                 # The session expects a list containing one set of questions.

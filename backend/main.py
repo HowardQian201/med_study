@@ -112,7 +112,6 @@ def login():
         # Ensure PDF results are empty on fresh login
         session['summary'] = ""
         session['quiz_questions'] = []
-        session['total_extracted_text'] = ""
         
         return jsonify({'success': True})
 
@@ -241,9 +240,7 @@ def generate_summary():
         
         
         print(f"Text length being sent to AI: {len(total_extracted_text)} characters")
-        
-        session['total_extracted_text'] = total_extracted_text
-        
+                
         if not STREAMING_ENABLED:
             summary = gpt_summarize_transcript(total_extracted_text, stream=STREAMING_ENABLED)
             session['summary'] = summary
@@ -295,7 +292,6 @@ def generate_quiz():
         content_hash = session.get('content_hash')
         other_content_hash = session.get('other_content_hash')
         content_name_list = session.get('content_name_list', [])
-        total_extracted_text = session.get('total_extracted_text', '')
         
         # Check if there's a summary to work with
         summary = session.get('summary', '')
@@ -320,14 +316,6 @@ def generate_quiz():
         # For initial generation, check if we already have questions to prevent duplicates
         if question_type == 'initial':
             other_quiz_exists = check_question_set_exists(other_content_hash, user_id)['exists']
-            existing_questions = session.get('quiz_questions', [])
-            if existing_questions:
-                latest_questions = existing_questions[-1]
-                print(f"Found existing questions ({len(latest_questions)} questions) - returning cached")
-                return jsonify({
-                    'success': True,
-                    'questions': latest_questions
-                })
         
         # Generate questions (can be initial or focused based on parameters)
         questions, question_hashes = generate_quiz_questions(
@@ -340,16 +328,16 @@ def generate_quiz():
         
         # Only generate short title and upsert question set for initial generation
         if question_type == 'initial':
-            short_summary = generate_short_title(total_extracted_text)
+            short_summary = generate_short_title(summary)
             # Upsert the question set to the database
-            upsert_question_set(content_hash, user_id, question_hashes, content_name_list, total_extracted_text, short_summary, summary, is_quiz_mode)
+            upsert_question_set(content_hash, user_id, question_hashes, content_name_list, short_summary, summary, is_quiz_mode)
             if not other_quiz_exists:
                 other_questions, other_question_hashes = generate_quiz_questions(
                     summary, user_id, other_content_hash,
                     num_questions=num_questions,
                     is_quiz_mode=not is_quiz_mode
                 )
-                upsert_question_set(other_content_hash, user_id, other_question_hashes, content_name_list, total_extracted_text, short_summary, summary, not is_quiz_mode)
+                upsert_question_set(other_content_hash, user_id, other_question_hashes, content_name_list, short_summary, summary, not is_quiz_mode)
         else:
             # For focused/additional questions, just upsert the new questions
             upsert_question_set(content_hash, user_id, question_hashes, content_name_list, is_quiz=is_quiz_mode)
@@ -481,8 +469,37 @@ def regenerate_summary():
         if 'user_id' not in session:
             return jsonify({'error': 'Unauthorized'}), 401
         
-        # Get stored data from session
-        total_extracted_text = session.get('total_extracted_text', '')
+        # Get additional user text if provided
+        data = request.get_json()
+        user_text = data.get('userText', '').strip()
+        selected_pdf_hashes = data.get('selectedPdfHashes', [])
+        
+        # Must have either selected PDFs or user text
+        if not selected_pdf_hashes and not user_text:
+            raise Exception("No files or text provided")
+        
+        total_extracted_text = ""
+        # Process selected PDFs from database
+        if selected_pdf_hashes:
+            pdf_texts_result = get_pdf_text_by_hashes(selected_pdf_hashes)
+            if not pdf_texts_result['success']:
+                raise Exception(f"Failed to retrieve PDF texts: {pdf_texts_result.get('error')}")
+            
+            pdf_texts_map = pdf_texts_result['data']
+            for pdf_hash in selected_pdf_hashes:
+                # Retrieve the object containing both text and filename
+                pdf_data = pdf_texts_map.get(pdf_hash)
+                if pdf_data and pdf_data.get('text'):
+                    text = pdf_data['text']
+
+                    total_extracted_text += text
+                else:
+                    print(f"Warning: Text for hash {pdf_hash[:8]}... not found in DB.")
+
+        # Add user text if provided
+        print(f"User text: {user_text[:100]}")
+        if user_text:
+            total_extracted_text += f"\n\nUser inputted text:\n{user_text}"
 
         # Must have text to regenerate from
         if not total_extracted_text:
@@ -490,7 +507,7 @@ def regenerate_summary():
         
         # Generate new summary
         if not STREAMING_ENABLED:
-            summary = gpt_summarize_transcript(total_extracted_text, stream=STREAMING_ENABLED)
+            summary = gpt_summarize_transcript(total_extracted_text, temperature=1.2, stream=STREAMING_ENABLED)
             session['summary'] = summary
             session['quiz_questions'] = []
             session.modified = True
@@ -498,7 +515,7 @@ def regenerate_summary():
 
         # --- Streaming Response ---
         def stream_generator(text_to_summarize):
-            stream_gen = gpt_summarize_transcript(text_to_summarize, stream=STREAMING_ENABLED)
+            stream_gen = gpt_summarize_transcript(text_to_summarize, temperature=1.2, stream=STREAMING_ENABLED)
             for chunk in stream_gen:
                 content = chunk.choices[0].delta.content
                 if content:
@@ -597,7 +614,6 @@ def load_study_set():
     session['summary'] = summary_text
     session['short_summary'] = set_data.get('short_summary', '')
     session['quiz_questions'] = set_data.get('quiz_questions', [])
-    session['total_extracted_text'] = set_data.get('total_extracted_text', '')
     session['content_hash'] = set_data.get('content_hash', '')
     session['content_name_list'] = set_data.get('content_name_list', [])
     session.modified = True
@@ -642,7 +658,6 @@ def clear_session_content():
         session.pop('other_content_hash', None)
         session.pop('content_name_list', None)
         session.pop('short_summary', None)
-        session.pop('total_extracted_text', None)
         session.modified = True
         
         return jsonify({'success': True, 'message': 'Session content cleared.'})
@@ -852,7 +867,6 @@ def delete_question_set():
             session.pop('other_content_hash', None)
             session.pop('content_name_list', None)
             session.pop('short_summary', None)
-            session.pop('total_extracted_text', None)
             session.modified = True
             print(f"Cleared session data for deleted set: {content_hash}")
         
