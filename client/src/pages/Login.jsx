@@ -102,14 +102,14 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
         <CardContent>
           <Stack spacing={3} alignItems="center">
             <Box display="flex" alignItems="center" gap={1.5}>
-              <img src="/favicon.png" alt="MedStudy.AI Logo" style={{ width: 40, height: 40 }} />
+              <img src="/favicon.png" alt="MedStudyAI Logo" style={{ width: 40, height: 40 }} />
               <Typography 
                 component="h1" 
                 variant="h4" 
                 fontWeight="bold"
                 color="text.primary"
               >
-                MedStudy.AI
+                MedStudyAI
               </Typography>
             </Box>
             
