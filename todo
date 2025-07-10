@@ -1,6 +1,8 @@
 
 ###URGENT:
 
+Flashcards sets not saving full amount bug
+
 Make UI better
     - pdf doc display in pdf_upload and study_session
     - select pdfs in study_session
@@ -12,6 +14,8 @@ switch to redis for session storage
 
 realtime stats using posthog
 Switch to fastAPI for concurrency
+
+Stream quiz question generation
 
 
 ### LATER:
@@ -33,9 +37,6 @@ worker task retry logic
 
 Caching layer
 
-
-Stream quiz question generation
-Stream openai calls from the background worker (Celery + Redis Pub/Sub + SSE)
 
 
 Combine quiz sets
