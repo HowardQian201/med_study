@@ -382,7 +382,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       navigate('/upload_pdfs');
                     }
                   }}
-                  variant="outlined"
+                  variant={availablePdfs.length === 0 ? 'contained' : 'outlined'}
                   startIcon={<CloudUpload />}
                   size="small"
                   sx={{ ml: 0 }}
@@ -448,21 +448,21 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       transition: 'all 0.2s ease',
                     }}
                   >
-                    <Stack spacing={2} alignItems="flex-start" sx={{ height: '100%' }}>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ width: '100%' }}>
-                        <Typography variant="h6" fontWeight="600" gutterBottom>
-                          Select Existing PDFs ({availablePdfs.length})
+                    <Stack spacing={-1} alignItems="flex-start" sx={{ height: '100%' }}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ width: '100%', mb: 0 }}>
+                        <Typography variant="h6" fontWeight="600" sx={{ mb: 2 }}>
+                          Select PDFs ({availablePdfs.length})
                         </Typography>
                         {availablePdfs.length > 0 && (
-                          <IconButton 
-                            onClick={() => setShowExpandedPdfList(true)} 
+                          <Button
+                            onClick={() => setShowExpandedPdfList(true)}
                             disabled={isContentLocked || isUploading}
                             size="small"
-                            aria-label="view all files"
-                            sx={{ mb: 1 }} // Add some bottom margin to align with Typography's gutterBottom
+                            startIcon={<OpenInNewIcon fontSize="small" />}
+                            sx={{ mb: 2 , ml: 0 }} // Add some bottom margin to align with Typography's gutterBottom
                           >
-                            <OpenInNewIcon fontSize="small" />
-                          </IconButton>
+                            Expand
+                          </Button>
                         )}
                       </Stack>
                       {availablePdfs.length > 0 ? (
@@ -516,7 +516,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                           ))}
                         </List>
                       ) : (
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
                           No PDFs uploaded yet. Upload via the "Upload PDFs" page to see them here.
                         </Typography>
                       )}
@@ -849,7 +849,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
       <Dialog open={showExpandedPdfList} onClose={() => setShowExpandedPdfList(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
           <Stack direction="row" alignItems="center" justifyContent="space-between">
-            <Typography variant="h6">All Available PDFs</Typography>
+            <Typography variant="h5">All Available PDFs</Typography>
             <IconButton onClick={() => setShowExpandedPdfList(false)}>
               <CloseIcon />
             </IconButton>
@@ -882,7 +882,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                     <ListItemText 
                       primary={pdf.short_summary || pdf.filename} 
                       primaryTypographyProps={{
-                        variant: 'body2', 
+                        variant: 'body1', 
                         fontWeight: 'medium',
                         color: 'text.primary'
                       }}
@@ -890,8 +890,8 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         <>
                           {pdf.filename}
                           {pdf.created_at && (
-                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.2 }}>
-                              Uploaded: {new Date(pdf.created_at).toLocaleString()}
+                            <Typography variant="body2" color="text.secondary" display="block" sx={{ mt: 0.2 }}>
+                              {new Date(pdf.created_at).toLocaleString()}
                             </Typography>
                           )}
                         </>
