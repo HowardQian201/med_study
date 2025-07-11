@@ -64,6 +64,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [numFocusedQuestions, setNumFocusedQuestions] = useState(5);
   const [isQuizMode, setIsQuizMode] = useState(false);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
+  const [currentSessionSources, setCurrentSessionSources] = useState([]); // New state for sources
+  const [currentSessionShortSummary, setCurrentSessionShortSummary] = useState('');
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -229,6 +231,29 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         isFetching.current = false;
     }
   }, [propSummary]);
+
+  // New useEffect to fetch current session sources
+  useEffect(() => {
+    const fetchCurrentSessionSources = async () => {
+      try {
+        const response = await axios.get('/api/get-current-session-sources', { withCredentials: true });
+        if (response.data.success) {
+          setCurrentSessionSources(response.data.content_names);
+          setCurrentSessionShortSummary(response.data.short_summary);
+        } else {
+          console.error("Failed to fetch current session sources:", response.data.error);
+        }
+      } catch (err) {
+        console.error("Error fetching current session sources:", err);
+        if (err.response?.status === 401) {
+          setIsAuthenticated(false);
+          navigate('/login');
+        }
+      }
+    };
+
+    fetchCurrentSessionSources();
+  }, [setIsAuthenticated, navigate]); // Dependencies to re-run effect if auth/navigation changes
 
   const handleAnswerSelect = (questionId, optionIndex) => {
     // Only allow selection if the answer hasn't been submitted yet
@@ -987,7 +1012,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                   ) : (
                                     <Box>
                                       <Typography variant="h6" color="success.main" gutterBottom>
-                                        Correct Answer:
+                                        Answer:
                                       </Typography>
                                       <Typography variant="body1" sx={{ mb: 2 }}>
                                         {cleanOptionText(question.options[question.correctAnswer])}
@@ -1151,7 +1176,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                             ) : (
                                               <Box>
                                                 <Typography variant="h6" color="success.main" gutterBottom>
-                                                  Correct Answer:
+                                                  Answer:
                                                 </Typography>
                                                 <Typography variant="body1" sx={{ mb: 2 }}>
                                                   {cleanOptionText(question.options[question.correctAnswer])}
@@ -1298,8 +1323,21 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                       </Button>
                     </Box>
 
+                    
+                    {currentSessionShortSummary && (
+                      <Typography variant="h2" color="text.primary" sx={{ textAlign: 'center', mb: 0 }}>
+                        {currentSessionShortSummary}
+                      </Typography>
+                    )}
+                    {currentSessionSources.length > 0 && (
+                      <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', mb: 2 }}>
+                        {currentSessionSources.map((source, index) => (
+                          <div key={index}>{source}</div>
+                        ))}
+                      </Typography>
+                    )}
                     <Typography variant="h2" component="h3" fontWeight="600" mb={2}>
-                      Questions in this Set ({questions.length})
+                      Questions in this {isQuizMode ? 'USMLE' : 'Flashcard'} Set ({questions.length})
                     </Typography>
                     <Stack spacing={2} mb={4}>
                       {questions.map((question, index) => (
@@ -1597,9 +1635,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                   </Typography>
                                 ) : (
                                   <Box sx={{ p: 3 }}>
-                                    <Typography variant="h4" color="success.main" gutterBottom>
-                                      Correct Answer:
-                                    </Typography>
                                     <Typography variant="h4" sx={{ mb: 3 }}>
                                       {cleanOptionText(questions[currentQuestion].options[questions[currentQuestion].correctAnswer])}
                                     </Typography>

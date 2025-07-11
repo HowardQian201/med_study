@@ -210,6 +210,7 @@ def generate_summary():
                 if pdf_data and pdf_data.get('text'):
                     text = pdf_data['text']
                     filename = pdf_data['filename'] # Get the filename
+                    print(f"Generate Summary with Filename: {filename}")
 
                     total_extracted_text += text
                     files_usertext_content.add(text) # Add text content for hash generation
@@ -621,6 +622,16 @@ def load_study_set():
     print(f"Loaded {len(session.get('quiz_questions', []))} question sets into session.")
     print(f"Summary loaded (first 100 chars): {summary_text[:100]}")
     return jsonify({'success': True, 'summary': summary_text})
+
+@app.route('/api/get-current-session-sources', methods=['GET'])
+def get_current_session_sources():
+    print("get_current_session_sources()")
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    # Retrieve the content_name_list from the session
+    content_names = session.get('content_name_list', [])
+    return jsonify({'success': True, 'content_names': content_names, 'short_summary': session.get('short_summary', '')})
 
 @app.route('/api/update-set-title', methods=['POST'])
 def update_set_title():

@@ -182,10 +182,22 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
                 multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
             
             For each question:
-            1. A clear, specific and challenging clinical vignette stem.
-            2. Be in the style of a USMLE clinical vignette (Example clinical vignette stem: "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
-            3. Include a thorough explanation (under 400 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
+            1. A clear, specific and challenging clinical vignette stem (about 400 characters).
+            2. Be in the style of a USMLE clinical vignette 
+            3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
             
+            Example question:
+            "id": 1,
+            "text": "A 34-year-old man presents to the emergency department with 5 days of worsening shortness of breath, orthopnea, and a nonproductive cough. He has no significant past medical history. Vitals show BP 110/70 mmHg, HR 105/min, and RR 22/min. Jugular venous distention is noted, and auscultation reveals bilateral crackles. ECG shows low-voltage QRS complexes. A chest x-ray demonstrates an enlarged cardiac silhouette. What is the most appropriate next step?",
+            "options": [
+                "A. Start loop diuretics",
+                "B. Order a transthoracic echocardiogram",
+                "C. Begin corticosteroid therapy",
+                "D. Perform emergent cardiac catheterization"
+            ],
+            "correctAnswer": 2,
+            "reason": "The patient presents with signs of acute heart failure and pericardial effusion (dyspnea, JVD, low-voltage ECG, enlarged cardiac silhouette). These findings raise concern for cardiac tamponade, which can be rapidly fatal. The most appropriate next step is a transthoracic echocardiogram to evaluate for pericardial fluid and assess for signs of tamponade physiology such as diastolic collapse of the right heart chambers."
+
             {previous_questions_text}
 
             Summary:
@@ -195,7 +207,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             system_prompt = """
             You are an expert medical professor that creates 
             accurate, challenging USMLE clinical vignette style multiple choice questions. 
-            Generate ONLY valid JSON matching the provided schema.
+            Output **only** valid JSON exactly matching the schema below.
             """
         else:
             max_completion_tokens = 4000
@@ -229,14 +241,22 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
                 }
             }
             prompt = f"""
-            Based on the following medical text summary, create {num_questions} VERY challenging
-                active recall flashcard questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
+            Based on the following medical text summary, create {num_questions}
+            active‑recall flashcards that cover every key concept.
 
             For each question:
-            1. A clear, specific, and concise question stem for active recall flashcards. Ideally under 200 characters. Do not include the answer in the question stem or suggest there are multiple answers.
+            1. A clear, specific, and concise question stem for active recall flashcards (about 100 characters). Do not include the answer in the question stem or suggest there are multiple answers.
             2. Simple, direct active recall flashcard questions based on the summary.
-            3. Include a thorough explanation (under 400 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
+            3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
             
+            Example flashcard:
+            "id": 1,
+            "text": "Which cytokine is most critical for Th1 differentiation?",
+            "options": ["IL-12"],
+            "correctAnswer": 0,
+            "reason": "IL-12 is essential for naïve CD4+ T cells to differentiate into Th1 cells. It activates STAT4, a transcription factor that upregulates T-bet, the master regulator of Th1 lineage commitment. T-bet then promotes the production of IFN-γ, the key Th1 cytokine, which amplifies the Th1 response. In contrast, IL-4 promotes Th2 differentiation, IL-6 supports Th17 development, and IL-10 suppresses inflammatory responses, including Th1 activity."
+
+
             {previous_questions_text}
 
             Summary:
@@ -246,7 +266,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             system_prompt = """
             You are an expert medical professor that creates 
             accurate, active recall flashcard questions. 
-            Generate ONLY valid JSON matching the provided schema.
+            Output **only** valid JSON exactly matching the schema below.
             """
         
         print(f"Using model: {model} for quiz generation USMLE mode: {is_quiz_mode} with max completion tokens: {max_completion_tokens}")

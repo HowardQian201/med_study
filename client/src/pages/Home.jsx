@@ -551,7 +551,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                                     textAlign: 'center',
                                                     mb: -0.5
                                                 }}>
-                                                    Sources: {set.metadata?.content_names?.join(', ') || 'N/A'}
+                                                    Sources ({set.metadata?.content_names?.length || 0}): {set.metadata?.content_names?.map(name => name.length > 5 ? name.substring(0, 5) + '...' : name).join(', ') || 'N/A'}
                                                 </Typography>
                                                 <Typography variant="body2" color="text.secondary" display="block" sx={{ 
                                                     textAlign: 'center',

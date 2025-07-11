@@ -559,7 +559,33 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
             <Typography variant="h3" color="text.primary" gutterBottom sx={{ mb: 0, ml: 4 }}>
               Your Uploaded PDFs ({userPdfs.length})
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}> {/* Added alignItems for vertical alignment */}
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
+                <Checkbox
+                  indeterminate={selectedPdfHashes.length > 0 && selectedPdfHashes.length < userPdfs.length}
+                  checked={userPdfs.length > 0 && selectedPdfHashes.length === userPdfs.length}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedPdfHashes(userPdfs.map(pdf => pdf.hash));
+                    } else {
+                      setSelectedPdfHashes([]);
+                    }
+                  }}
+                  disabled={userPdfs.length === 0}
+                  size="small"
+                  sx={{ p: 1 }}
+                />
+                <Typography variant="body2" color="text.secondary" sx={{ ml: -0.5 }}>Select All</Typography>
+              </Box>
+              <Button
+                variant="contained"
+                color="error"
+                size="small"
+                onClick={handleRemoveSelectedPdfs}
+                disabled={selectedPdfHashes.length === 0}
+              >
+                Remove PDFs ({selectedPdfHashes.length})
+              </Button>
               <Button
                 variant="contained"
                 startIcon={<Description />}
@@ -575,38 +601,9 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                   }
                 }}
               >
-                Start a New Study Session
+                New Study Session
               </Button>
             </Box>
-          </Box>
-          
-          {/* New row for Select All and Remove PDFs button */}
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mt: 1, mr: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}> {/* Added mr for spacing */}
-              <Checkbox
-                indeterminate={selectedPdfHashes.length > 0 && selectedPdfHashes.length < userPdfs.length}
-                checked={userPdfs.length > 0 && selectedPdfHashes.length === userPdfs.length}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedPdfHashes(userPdfs.map(pdf => pdf.hash));
-                  } else {
-                    setSelectedPdfHashes([]);
-                  }
-                }}
-                disabled={userPdfs.length === 0}
-                size="small"
-              />
-              <Typography variant="body2" color="text.secondary">Select All</Typography>
-            </Box>
-            <Button
-              variant="contained"
-              color="error"
-              size="small"
-              onClick={handleRemoveSelectedPdfs}
-              disabled={selectedPdfHashes.length === 0}
-            >
-              Remove PDFs ({selectedPdfHashes.length})
-            </Button>
           </Box>
           
           <List dense sx={{ width: '100%' }}>
@@ -639,15 +636,15 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                   <ListItemText 
                     primary={pdf.short_summary || pdf.filename} 
                     primaryTypographyProps={{
-                      variant: 'body2', 
+                      variant: 'body1', 
                       fontWeight: 'medium',
                       color: 'text.primary'
                     }}
                     secondary={
                       <>
                         {pdf.filename}
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.2 }}>
-                          Uploaded: {new Date(pdf.created_at).toLocaleString()}
+                        <Typography variant="body2" color="text.secondary" display="block" sx={{ mt: 0.2 }}>
+                          {new Date(pdf.created_at).toLocaleString()}
                         </Typography>
                       </>
                     } // Display filename and created_at as secondary
