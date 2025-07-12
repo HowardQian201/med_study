@@ -66,6 +66,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [isCardFlipped, setIsCardFlipped] = useState(false);
   const [currentSessionSources, setCurrentSessionSources] = useState([]); // New state for sources
   const [currentSessionShortSummary, setCurrentSessionShortSummary] = useState('');
+  const [contentHash, setContentHash] = useState('');
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -211,6 +212,9 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         
         if (response.data.success && response.data.questions) {
           setQuestions(response.data.questions);
+        } else if (response.data.error === "Quiz set already exists") {
+          setError("Quiz set for that material already exists. Here it is!");
+          setContentHash(response.data.content_hash);
         } else {
           setError('Failed to generate quiz questions');
         }
@@ -735,13 +739,51 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
               <Paper elevation={2} sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, width: 800 }}>
                 <CircularProgress size={48} sx={{ mb: 2 }} />
                 <Typography variant="h6" color="text.secondary">
-                  {isQuizMode ? 'Generating test questions (and flashcards) ...' : 'Generating flashcards (and test questions) ...'}
+                  {isQuizMode ? 'Generating USMLE questions ...' : 'Generating flashcards ...'}
                 </Typography>
               </Paper>
             ) : error ? (
-              <Alert severity="error" sx={{ borderRadius: 2 }}>
-                {error}
-              </Alert>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Alert 
+                  severity={error === "Quiz set for that material already exists. Here it is!" ? "info" : "error"} 
+                  sx={{ 
+                    borderRadius: 2,
+                    flexGrow: 1
+                  }}
+                >
+                  {error}
+                </Alert>
+                {error === "Quiz set for that material already exists. Here it is!" && contentHash && (
+                  <Button
+                    variant="contained"
+                    color={isQuizMode ? "primary" : "success"}
+                    onClick={async () => {
+                      try {
+                        setIsLoading(true);
+                        const response = await axios.post('/api/load-study-set', 
+                          { content_hash: contentHash }, 
+                          { withCredentials: true }
+                        );
+                        if (response.data.success) {
+                          setSummary(response.data.summary || '');
+                          const quizResponse = await axios.get('/api/get-quiz', { withCredentials: true });
+                          if (quizResponse.data.success) {
+                            setQuestions(quizResponse.data.questions);
+                            setError('');
+                          }
+                        }
+                      } catch (err) {
+                        setError(err.response?.data?.error || 'Failed to load existing set');
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    Load Existing Set
+                  </Button>
+                )}
+              </Box>
             ) : (
               <Box>
                 {/* Results Screen */}
