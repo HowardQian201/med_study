@@ -660,7 +660,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         <Container maxWidth="xl">
           <Box sx={{ maxWidth: '100%', mx: 'auto', textAlign: 'left' }}>
             <Toolbar>
-              <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1, mr: 4 }}>
                 <img src="/favicon.png" alt="MedStudyAI Logo" style={{ width: 28, height: 28 }} />
                 <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
                   MedStudyAI
@@ -693,7 +693,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                       color="primary"
                       sx={{ 
                         fontWeight: 600,
-                        bgcolor: 'primary.light',
+                        bgcolor: isQuizMode ? 'primary.light' : (theme => theme.palette.mode === 'dark' ? 'secondary.dark' : 'secondary.light'),
                         px: 1.5,
                         py: 0.5,
                         borderRadius: 1,
@@ -809,6 +809,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               variant="outlined"
                               startIcon={<Refresh />}
                               disabled={isGeneratingMoreQuestions}
+                              color={isQuizMode ? "primary" : "success"}
                             >
                               Try Again
                             </Button>
@@ -816,7 +817,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               onClick={generateFocusedQuestions}
                               disabled={isGeneratingMoreQuestions}
                               variant="contained"
-                              color="primary"
+                              color={isQuizMode ? "primary" : "success"}
                               startIcon={isGeneratingMoreQuestions ? <CircularProgress size={16} color="inherit" /> : <Add />}
                               sx={{ 
                                 display: 'flex',
@@ -874,6 +875,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               disabled={isLoadingPreviousQuestions}
                               variant="outlined"
                               startIcon={isLoadingPreviousQuestions ? <CircularProgress size={16} color="inherit" /> : <History />}
+                              color={isQuizMode ? "primary" : "success"}
                             >
                               {isLoadingPreviousQuestions 
                                 ? 'Loading...' 
@@ -928,7 +930,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                     />
                                   )}
                                   <Typography variant="body1" fontWeight="500" sx={{ flexGrow: 1 }}>
-                                    Question {index + 1}: {question.text}
+                                    #{index + 1}: {question.text}
                                   </Typography>
                                   <Button 
                                     onClick={() => handleToggleStar(question.id)}
@@ -1011,7 +1013,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                     </Box>
                                   ) : (
                                     <Box>
-                                      <Typography variant="h6" color="success.main" gutterBottom>
+                                      <Typography variant="h6" color="success" gutterBottom>
                                         Answer:
                                       </Typography>
                                       <Typography variant="body1" sx={{ mb: 2 }}>
@@ -1021,7 +1023,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                   )}
                                   
                                   <Box sx={{ mt: 3 }}>
-                                    <Typography variant="h6" color="primary.main" gutterBottom>
+                                    <Typography variant="h6" color={isQuizMode ? "primary" : "success"} gutterBottom>
                                       Explanation:
                                     </Typography>
                                     <Typography variant="body1" color="text.primary">
@@ -1211,8 +1213,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     <Box display="flex" justifyContent="center" gap={2} mb={2}>
                       <Button
                         onClick={generateAdditionalQuestions}
-                        variant="contained"
-                        color="primary"
+                        variant="outlined"
+                        color={isQuizMode ? "primary" : "success"}
                         size="large"
                         startIcon={isGeneratingMoreQuestions ? <CircularProgress size={24} color="inherit" /> : <Add />}
                         disabled={isGeneratingMoreQuestions}
@@ -1243,22 +1245,22 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                             width: '45px',
                             '& .MuiOutlinedInput-root': {
                               height: '24px',
-                              backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                              border: '1px solid rgba(255, 255, 255, 0.3)',
+                              backgroundColor: 'rgba(25, 118, 210, 0.15)',
+                              border: '1px solid rgba(25, 118, 210, 0.3)',
                               borderRadius: '4px',
                               '&:hover': {
-                                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                backgroundColor: 'rgba(25, 118, 210, 0.25)',
                               },
                               '&.Mui-focused': {
-                                backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                                border: '1px solid rgba(255, 255, 255, 0.5)',
+                                backgroundColor: 'rgba(25, 118, 210, 0.3)',
+                                border: '1px solid rgba(25, 118, 210, 0.5)',
                               }
                             },
                             '& .MuiInputBase-input': {
-                              color: 'white',
+                              color: (theme) => theme.palette.mode === 'dark' ? 'white' : 'primary.main',
                               padding: '2px 4px',
                               '&::placeholder': {
-                                color: 'rgba(255, 255, 255, 0.7)',
+                                color: 'rgba(25, 118, 210, 0.7)',
                               }
                             },
                             '& .MuiOutlinedInput-notchedOutline': {
@@ -1270,7 +1272,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                       <Button
                         onClick={handleStartQuiz}
                         variant="contained"
-                        color="primary"
+                        color={isQuizMode ? "primary" : "success"}
                         size="large"
                         startIcon={<ArrowForward />}
                         disabled={isGeneratingMoreQuestions}
@@ -1294,7 +1296,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                       <Button
                         onClick={shuffleQuestions}
                         variant="outlined"
-                        color="primary"
+                        color={isQuizMode ? "primary" : "success"}
                         size="large"
                         startIcon={<ShuffleIcon />}
                         disabled={questions.length < 2 || isGeneratingMoreQuestions}
@@ -1462,8 +1464,9 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         <LinearProgress 
                           variant="determinate" 
                           value={((currentQuestion + 1) / questions.length) * 100}
+                          color={isQuizMode ? "primary" : "success"}
                           sx={{ borderRadius: 1, height: 8 }}
-                          />
+                        />
                       </Box>
                     )}
 
@@ -1625,7 +1628,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                   transition: 'all 0.2s ease',
                                   '&:hover': {
                                     bgcolor: 'action.hover',
-                                    borderColor: 'primary.main'
+                                    borderColor: isQuizMode ? 'primary.main' : 'success.main'
                                   }
                                 }}
                               >
@@ -1638,8 +1641,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                     <Typography variant="h4" sx={{ mb: 3 }}>
                                       {cleanOptionText(questions[currentQuestion].options[questions[currentQuestion].correctAnswer])}
                                     </Typography>
-                                    <Typography variant="h6" color="primary.main" gutterBottom>
-                                      Explanation:
+                                    <Typography variant="h6" color="secondary.main" gutterBottom>
+                                      --------------------------------------
                                     </Typography>
                                     <Typography variant="body1">
                                       {questions[currentQuestion].reason}
@@ -1658,6 +1661,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                             disabled={currentQuestion === 0}
                             variant="outlined"
                             startIcon={<ArrowBack />}
+                            color={isQuizMode ? "primary" : "success"}
                           >
                             Previous
                           </Button>
@@ -1668,6 +1672,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                 onClick={moveToNextQuestion}
                                 variant="outlined"
                                 startIcon={<ArrowForward />}
+                                color={isQuizMode ? "primary" : "success"}
                               >
                                 {isQuizMode ? 'Skip' : 'Next'}
                               </Button>

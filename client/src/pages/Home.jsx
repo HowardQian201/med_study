@@ -241,7 +241,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                 color="primary"
                 sx={{ 
                   fontWeight: 600,
-                  bgcolor: 'primary.light',
+                  bgcolor: showQuizSets ? 'primary.light' : (theme => theme.palette.mode === 'dark' ? 'secondary.dark' : 'secondary.light'),
                   px: 1.5,
                   py: 0.5,
                   borderRadius: 1,
@@ -297,7 +297,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <Button
                                     variant="contained"
-                                    color="primary"
+                                    color={showQuizSets ? "primary" : "success"}
                                     size="large"
                                     startIcon={<CloudUpload />}
                                     onClick={() => navigate('/upload_pdfs')}
@@ -307,7 +307,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                 </Button>
                                 <Button
                                     variant="contained"
-                                    color="primary"
+                                    color={showQuizSets ? "primary" : "success"}
                                     size="large"
                                     startIcon={<Book />}
                                     onClick={handleStartNewSession}
@@ -348,7 +348,27 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                     checked={showQuizSets}
                                     onChange={(e) => setShowQuizSets(e.target.checked)}
                                     size="small"
-                                    color="primary"
+                                    color={showQuizSets ? "primary" : "success"}
+                                    sx={{
+                                        '& .MuiSwitch-switchBase.Mui-checked': {
+                                            color: 'primary.main',
+                                            '&:hover': {
+                                                backgroundColor: 'primary.light'
+                                            }
+                                        },
+                                        '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                            backgroundColor: 'primary.main'
+                                        },
+                                        '& .MuiSwitch-switchBase': {
+                                            color: 'success.main',
+                                            '&:hover': {
+                                                backgroundColor: 'success.light'
+                                            }
+                                        },
+                                        '& .MuiSwitch-track': {
+                                            backgroundColor: 'success.main'
+                                        }
+                                    }}
                                 />
                             }
                             label={
@@ -569,13 +589,14 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                                 ) : (
                                                     <Button
                                                         variant="contained"
+                                                        color={!showQuizSets ? "success" : undefined}
                                                         onClick={() => handleLoadSet(set.hash)}
                                                         disabled={loadingSet === set.hash || isDeleteMode}
                                                         endIcon={loadingSet === set.hash ? <CircularProgress size={16} /> : <ArrowForward />}
                                                         fullWidth
                                                         sx={{ maxWidth: '200px' }}
                                                     >
-                                                        {loadingSet === set.hash ? 'Loading' : 'Review'}
+                                                        {loadingSet === set.hash ? 'Loading' : 'Study'}
                                                     </Button>
                                                 )}
                                             </Box>

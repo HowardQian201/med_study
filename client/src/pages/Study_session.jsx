@@ -386,6 +386,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                   startIcon={<CloudUpload />}
                   size="small"
                   sx={{ ml: 0 }}
+                  color={(availablePdfs.length === 0 && !isQuizMode) ? "success" : "primary"}
                 >
                   Upload PDFs
                 </Button>
@@ -394,7 +395,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                   color="primary"
                   sx={{ 
                     fontWeight: 600,
-                    bgcolor: 'primary.light',
+                    bgcolor: isQuizMode ? 'primary.light' : (theme => theme.palette.mode === 'dark' ? 'secondary.dark' : 'secondary.light'),
                     px: 1.5,
                     py: 0.5,
                     borderRadius: 1,
@@ -567,6 +568,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       size="large"
                       startIcon={isUploading ? <CircularProgress size={24} color="inherit" /> : <CloudUpload />}
                       sx={{ px: 4, py: 1.5, width: 300, }}
+                      color={isQuizMode ? "primary" : "success"}
                     >
                       {isUploading ? 'Processing...' : 'Generate Summary'}
                     </Button>
@@ -749,14 +751,31 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                     <FormControlLabel
                         control={
                             <Switch
-                                checked={isQuizMode}
-                                onChange={(e) => {
-                                    setIsQuizMode(e.target.checked);
-                                    sessionStorage.setItem('isQuizMode', e.target.checked.toString());
-                                }}
-                                size="small"
-                                color="primary"
-                            />
+                              checked={isQuizMode}
+                              onChange={(e) => setIsQuizMode(e.target.checked)}
+                              size="small"
+                              color={isQuizMode ? "primary" : "success"}
+                              sx={{
+                                  '& .MuiSwitch-switchBase.Mui-checked': {
+                                      color: 'primary.main',
+                                      '&:hover': {
+                                          backgroundColor: 'primary.light'
+                                      }
+                                  },
+                                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                      backgroundColor: 'primary.main'
+                                  },
+                                  '& .MuiSwitch-switchBase': {
+                                      color: 'success.main',
+                                      '&:hover': {
+                                          backgroundColor: 'success.light'
+                                      }
+                                  },
+                                  '& .MuiSwitch-track': {
+                                      backgroundColor: 'success.main'
+                                  }
+                              }}
+                          />
                         }
                         label={
                             <Typography variant="body2" color="text.secondary">
@@ -770,7 +789,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       onClick={goToQuiz}
                       disabled={!summary || isUploading}
                       variant="contained"
-                      color="primary"
+                      color={isQuizMode ? "primary" : "success"}
                       size="small"
                       startIcon={<Quiz />}
                       sx={{ 

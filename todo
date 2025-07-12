@@ -2,16 +2,16 @@
 ###URGENT:
 
 quiz generation covers similar topics to previous questions
-
-Make UI better
-    - USMLE vs Flashcard sets need to be more distinct
+    - fix prompt prompt
 
 
 switch to redis for session storage
-realtime stats using posthog
 Switch to fastAPI for concurrency
 Stream quiz question generation
-
+realtime stats using posthog
+register new account
+    - Payment page on register new account with Stripe
+    - supabase auth
 
 ### LATER:
 
@@ -21,18 +21,11 @@ rate limit api calls
 supabase mcp with cursor
 Bug stats with Sentry.io
 
-register new account
-    - Payment page on register new account with Stripe
-    - supabase auth
-
 Database indexing on question_sets.user_id, pdfs.hash, and quiz_questions.hash so that db queries are fast when querying
 
 worker task retry logic
 
-
 Caching layer
-
-
 
 Combine quiz sets
 implement some progress memorization from previous sessions
