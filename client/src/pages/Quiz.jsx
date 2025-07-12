@@ -697,7 +697,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                       color="primary"
                       sx={{ 
                         fontWeight: 600,
-                        bgcolor: isQuizMode ? 'primary.light' : (theme => theme.palette.mode === 'dark' ? 'secondary.dark' : 'secondary.light'),
+                        bgcolor: isQuizMode ? 'primary.light' : 'success.main',
                         px: 1.5,
                         py: 0.5,
                         borderRadius: 1,
