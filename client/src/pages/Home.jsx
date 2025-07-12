@@ -241,7 +241,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                 color="primary"
                 sx={{ 
                   fontWeight: 600,
-                  bgcolor: showQuizSets ? 'primary.light' : (theme => theme.palette.mode === 'dark' ? 'secondary.dark' : 'secondary.light'),
+                  bgcolor: showQuizSets ? 'primary.light' : 'success.main',
                   px: 1.5,
                   py: 0.5,
                   borderRadius: 1,
