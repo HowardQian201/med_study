@@ -489,7 +489,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       correct: correctAnswers.length,
       total: totalQuestions,
       percentage: answeredQuestions.length > 0 
-        ? Math.round((correctAnswers.length / answeredQuestions.length) * 100) 
+        ? Math.round((correctAnswers.length / totalQuestions) * 100) 
         : 0,
       questionsWithStatus
     };
