@@ -227,10 +227,8 @@ def generate_summary():
             content_name_list.append("User Text") # Indicate user text was included
         
         content_hash = generate_content_hash(files_usertext_content, user_id, is_quiz_mode)
-        other_content_hash = generate_content_hash(files_usertext_content, user_id, not is_quiz_mode)
 
         session['content_hash'] = content_hash
-        session['other_content_hash'] = other_content_hash
         session['content_name_list'] = content_name_list
         session.modified = True
 
@@ -291,7 +289,6 @@ def generate_quiz():
             
         user_id = session['user_id']
         content_hash = session.get('content_hash')
-        other_content_hash = session.get('other_content_hash')
         content_name_list = session.get('content_name_list', [])
         
         # Check if there's a summary to work with
@@ -308,7 +305,6 @@ def generate_quiz():
         is_previewing = data.get('isPreviewing', False)
         num_questions = data.get('numQuestions', 5)  # Default to 5 if not specified
         is_quiz_mode = str(data.get('isQuizMode', 'false')).lower() == 'true' # Default to False (study mode)
-        other_quiz_exists = False
 
         # Validate number of questions is within reasonable bounds
         if not isinstance(num_questions, int) or num_questions < 1 or num_questions > 20:
@@ -316,7 +312,10 @@ def generate_quiz():
         
         # For initial generation, check if we already have questions to prevent duplicates
         if question_type == 'initial':
-            other_quiz_exists = check_question_set_exists(other_content_hash, user_id)['exists']
+            quiz_exists = check_question_set_exists(content_hash, user_id)['exists']
+            if quiz_exists:
+                print(f"Quiz set {content_hash} already exists for user {user_id}")
+                return jsonify({'error': 'Quiz set already exists', 'content_hash': content_hash}), 201
         
         # Generate questions (can be initial or focused based on parameters)
         questions, question_hashes = generate_quiz_questions(
@@ -332,13 +331,6 @@ def generate_quiz():
             short_summary = generate_short_title(summary)
             # Upsert the question set to the database
             upsert_question_set(content_hash, user_id, question_hashes, content_name_list, short_summary, summary, is_quiz_mode)
-            if not other_quiz_exists:
-                other_questions, other_question_hashes = generate_quiz_questions(
-                    summary, user_id, other_content_hash,
-                    num_questions=num_questions,
-                    is_quiz_mode=not is_quiz_mode
-                )
-                upsert_question_set(other_content_hash, user_id, other_question_hashes, content_name_list, short_summary, summary, not is_quiz_mode)
         else:
             # For focused/additional questions, just upsert the new questions
             upsert_question_set(content_hash, user_id, question_hashes, content_name_list, is_quiz=is_quiz_mode)
@@ -666,7 +658,6 @@ def clear_session_content():
         session.pop('summary', None)
         session.pop('quiz_questions', None)
         session.pop('content_hash', None)
-        session.pop('other_content_hash', None)
         session.pop('content_name_list', None)
         session.pop('short_summary', None)
         session.modified = True
@@ -875,7 +866,6 @@ def delete_question_set():
             session.pop('summary', None)
             session.pop('quiz_questions', None)
             session.pop('content_hash', None)
-            session.pop('other_content_hash', None)
             session.pop('content_name_list', None)
             session.pop('short_summary', None)
             session.modified = True

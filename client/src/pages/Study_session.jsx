@@ -487,6 +487,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                                     checked={selectedPdfHashes.includes(pdf.hash)}
                                     onChange={handlePdfCheckboxChange}
                                     disabled={isContentLocked || isUploading}
+                                    color={isQuizMode ? "primary" : "success"}
                                   />
                                 }
                                 label={
@@ -755,6 +756,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                               onChange={(e) => setIsQuizMode(e.target.checked)}
                               size="small"
                               color={isQuizMode ? "primary" : "success"}
+                              disabled={isUploading}
                               sx={{
                                   '& .MuiSwitch-switchBase.Mui-checked': {
                                       color: 'primary.main',
@@ -783,6 +785,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                             </Typography>
                         }
                         labelPlacement="bottom"
+                        disabled={isUploading}
                         sx={{ m: 0, mx: 1, flexShrink: 0 }}
                     />
                     <Button
@@ -895,6 +898,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       checked={selectedPdfHashes.includes(pdf.hash)}
                       onChange={handlePdfCheckboxChange}
                       disabled={isContentLocked || isUploading}
+                      color={isQuizMode ? "primary" : "success"}
                     />
                   }
                   label={
