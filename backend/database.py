@@ -189,11 +189,12 @@ def check_file_exists(file_hash: str) -> Dict[str, Any]:
         
         result = supabase.table('pdfs').select("*").eq('hash', file_hash).execute()
         
-        # Check if file exists and has a valid title (not "Untitled")
+        # Check if file exists and has a valid text (not empty)
         exists = len(result.data) > 0
-        if exists and result.data[0].get('short_summary') == "Untitled":
+        if exists and result.data[0].get('text') == "":
             exists = False
         
+        print(f"File exists: {exists}")
         return {
             "success": True,
             "exists": exists,

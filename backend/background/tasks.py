@@ -2,6 +2,7 @@ from io import BytesIO # Import BytesIO for in-memory binary streams
 from backend.database import download_file_from_storage, update_pdf_text_and_summary, append_pdf_hash_to_user_pdfs, update_user_task_status # Import new database functions
 from backend.logic import extract_text_from_pdf_memory # Import PDF extraction logic
 from backend.open_ai_calls import generate_short_title # Import short title generation
+from backend.database import check_file_exists
 from datetime import datetime, timezone # Import timezone
 
 # Import the main Celery app instance from worker.py
@@ -32,6 +33,17 @@ def process_pdf_task(self, file_hash, bucket_name, file_path, user_id, original_
     print(f"Starting process_pdf_task for file: {file_path}")
     
     try:
+
+        # Check if file content already exists in our 'pdfs' table
+        file_exists_result = check_file_exists(file_hash)
+
+        if file_exists_result['exists']:
+            print(f"File {file_hash} already exists in database")
+            append_result = append_pdf_hash_to_user_pdfs(user_id, file_hash)
+            if not append_result['success']:
+                raise ValueError(f"Failed to link PDF to user: {append_result.get('error', 'Unknown error')}")
+            _update_status('SUCCESS', 'PDF processing complete')
+            return {"status": "completed", "file_hash": file_hash, "extracted_text_length": 0}
 
         # 1. Retrieve the PDF file from Supabase Storage
         _update_status('IN PROGRESS', '[1/5] Downloading PDF')

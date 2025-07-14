@@ -13,6 +13,10 @@ register new account
     - Payment page on register new account with Stripe
     - supabase auth
 
+
+
+
+
 ### LATER:
 
 delete questions from quiz set
