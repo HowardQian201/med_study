@@ -85,7 +85,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   // Load quiz mode from sessionStorage
   useEffect(() => {
     const storedQuizMode = sessionStorage.getItem('isQuizMode');
-    if (storedQuizMode) {
+    if (storedQuizMode !== null) {
       setIsQuizMode(storedQuizMode === 'true');
     }
   }, []);
@@ -753,7 +753,11 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         control={
                             <Switch
                               checked={isQuizMode}
-                              onChange={(e) => setIsQuizMode(e.target.checked)}
+                              onChange={(e) => {
+                                const newValue = e.target.checked;
+                                setIsQuizMode(newValue);
+                                sessionStorage.setItem('isQuizMode', newValue.toString());
+                              }}
                               size="small"
                               color={isQuizMode ? "primary" : "success"}
                               disabled={isUploading}

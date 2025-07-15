@@ -58,7 +58,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
 
   useEffect(() => {
     const storedQuizMode = sessionStorage.getItem('isQuizMode');
-    if (storedQuizMode) {
+    if (storedQuizMode !== null) {
       setShowQuizSets(storedQuizMode === 'true');
     }
     
@@ -346,7 +346,11 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                             control={
                                 <Switch
                                     checked={showQuizSets}
-                                    onChange={(e) => setShowQuizSets(e.target.checked)}
+                                    onChange={(e) => {
+                                        const newValue = e.target.checked;
+                                        setShowQuizSets(newValue);
+                                        sessionStorage.setItem('isQuizMode', newValue.toString());
+                                    }}
                                     size="small"
                                     color={showQuizSets ? "primary" : "success"}
                                     sx={{
