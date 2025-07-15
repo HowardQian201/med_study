@@ -331,6 +331,8 @@ def generate_quiz():
             short_summary = generate_short_title(summary)
             # Upsert the question set to the database
             upsert_question_set(content_hash, user_id, question_hashes, content_name_list, short_summary, summary, is_quiz_mode)
+            session['short_summary'] = short_summary
+            session.modified = True
         else:
             # For focused/additional questions, just upsert the new questions
             upsert_question_set(content_hash, user_id, question_hashes, content_name_list, is_quiz=is_quiz_mode)
@@ -357,7 +359,8 @@ def generate_quiz():
         
         return jsonify({
             'success': True,
-            'questions': questions
+            'questions': questions,
+            'short_summary': session.get('short_summary', '')
         })
     except Exception as e:
         print(f"Error generating quiz questions: {str(e)}")
