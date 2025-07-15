@@ -1,9 +1,6 @@
 
 ###URGENT:
 
-quiz generation covers similar topics to previous questions
-    - fix prompt prompt
-
 
 switch to redis for session storage
 Switch to fastAPI for concurrency

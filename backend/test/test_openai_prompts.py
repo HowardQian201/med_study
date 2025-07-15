@@ -107,145 +107,6 @@ Rhabdomyolysis (RM) is a serious medical condition characterized by the breakdow
 Utilizing this guide will help solidify your understanding of rhabdomyolysis, providing a strong basis for clinical applications and enhancing readiness for examinations such as the USMLE and COMLEX. Always integrate knowledge with practical examples to facilitate recall and application in real-world scenarios.
     """
 
-def generate_quiz_questions(summary_text, is_quiz_mode=False):
-    """Generate quiz questions from a summary text using OpenAI's API"""
-    
-    quiz_schema = {
-        "type": "object",
-        "required": ["questions"],
-        "additionalProperties": False,
-        "properties": {
-            "questions": {
-                "type": "array",
-                "minItems": 5,
-                "maxItems": 5,
-                "items": {
-                    "type": "object",
-                    "required": ["id", "questionStem", "answerChoices", "correctAnswer", "reason"],
-                    "properties": {
-                        "id":           {"type": "integer", "minimum": 1, "maximum": 5},
-                        "questionStem":         {"type": "string"},
-                        "answerChoices": {
-                            "type": "array",
-                            "minItems": 4,
-                            "maxItems": 4,
-                            "items": {"type": "string"}
-                        },
-                        "correctAnswer": {"type": "integer", "minimum": 0, "maximum": 3},
-                        "reason":       {"type": "string"}
-                    },
-                    "additionalProperties": False
-                }
-            }
-        }
-    }
-
-    previous_questions = []
-    incorrect_question_ids = []
-
-    is_questions = previous_questions is not None and incorrect_question_ids is not None
-
-    incorrect_questions = []
-    correct_questions = []
-    if is_questions:
-        incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
-        correct_questions = [q['text'] for q in previous_questions if q['id'] not in incorrect_question_ids]
-
-    correct_questions = ["A 40-year-old female presents to the emergency department following an intense kickboxing class. She reports severe generalized muscle pain, weakness, and dark brown urine that began hours after the class. Laboratory tests reveal a significantly elevated creatine kinase level. Which of the following pathophysiological mechanisms is primarily responsible for this patient's symptoms?"]
-    incorrect_questions = ["A 28-year-old male marathon runner is admitted after experiencing debilitating muscle cramps and dark red urine during a long-distance race. His laboratory workup reveals very high creatine kinase levels and hyperkalemia. Given his clinical status, which of the following should be performed as the most critical first step in management?"]
-
-    previous_questions_text = ""
-    if len(incorrect_questions) > 0:
-        previous_questions_text += f"The user previously answered the following questions INCORRECTLY and should be tested on these topics as well as others mentioned in the summary:\n{json.dumps(incorrect_questions)}\n"
-    if len(correct_questions) > 0:
-        previous_questions_text += f"The user previously answered the following questions CORRECTLY and should be tested on different topics mentioned in the summary:\n{json.dumps(correct_questions)}\n"
-
-    is_quiz_mode = False
-    print(f"is_quiz_mode: {is_quiz_mode}")
-    if is_quiz_mode:
-        prompt = f"""
-        Based on the following medical text summary, create 5 VERY challenging USMLE clinical vignette style \
-            multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
-        
-        {previous_questions_text}
-
-        For each question:
-        1. A clear, specific and challenging clinical vignette stem.
-        2. Be in the style of a USMLE clinical vignette (Example clinical vignette stem: "A 62-year-old man presents to the emergency department with shortness of breath and chest discomfort that began two hours ago while he was watching television. He describes the discomfort as a vague pressure in the center of his chest, without radiation. He denies any nausea or diaphoresis. He has a history of hypertension, type 2 diabetes mellitus, and hyperlipidemia. He is a former smoker (40 pack-years, quit 5 years ago). On examination, his blood pressure is 146/88 mmHg, heart rate is 94/min, respiratory rate is 20/min, and oxygen saturation is 95% on room air. Cardiac auscultation reveals normal S1 and S2 without murmurs. Lungs are clear to auscultation bilaterally. There is no jugular venous distension or peripheral edema. ECG reveals normal sinus rhythm with 2 mm ST-segment depressions in leads V4–V6. Cardiac biomarkers are pending. Which of the following is the most appropriate next step in management?")
-        3. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
-        
-        Summary:
-        {summary_text}
-        """
-
-        system_prompt = """
-        You are an expert medical professor that creates 
-        accurate, challenging USMLE clinical vignette style multiple choice questions. 
-        Generate ONLY valid JSON matching the provided schema.
-        """
-    else:
-        prompt = f"""
-        Based on the following medical text summary, create 5 VERY challenging
-            multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
-        
-        {previous_questions_text}
-
-        For each question:
-        1. A clear, specific, and concise question stem for active recall flashcards. Do not include the answer in the question stem or suggest there are multiple answers.
-        2. Simple multiple choice questions based on the summary.
-        3. Include a thorough explanation for why the correct answer is right and why others are wrong (Dont include the answer index in the reason)
-        
-        Summary:
-        {summary_text}
-        """
-
-        system_prompt = """
-        You are an expert medical professor that creates 
-        accurate, challenging multiple choice questions. 
-        Generate ONLY valid JSON matching the provided schema.
-        """
-            
-    gpt_time_start = time.time()
-    response = openai_client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "quiz_questions",
-                "strict": True,
-                "schema": quiz_schema
-            }
-        },
-        temperature=0.9,
-        presence_penalty=0.6,
-        max_completion_tokens=1200,
-        top_p=0.9,
-        frequency_penalty=0.25,
-    )
-    gpt_time_end = time.time()
-    print(f"GPT time: {gpt_time_end - gpt_time_start} seconds")
-
-    response_text = response.choices[0].message.content.strip()
-    
-    response_json = json.loads(response_text)
-    questions = response_json["questions"]  # Extract the questions array from the response
-    print(f"Type of questions: {type(questions)}")
-    if not isinstance(questions, list) or not questions:
-      raise ValueError("Response is not a list or is empty.")
-    
-    print(f"Number of questions: {len(questions)}")
-    print(questions[0].keys())
-    for question in questions:
-        print("--------------------------------")
-        print(question["id"])
-        print(question["questionStem"])
-        print(question["answerChoices"])
-        print(question["correctAnswer"])
-        print(question["reason"])
 
 
 def gpt_summarize_transcript(text, stream=False):
@@ -298,8 +159,231 @@ def gpt_summarize_transcript(text, stream=False):
     text = completion.choices[0].message.content.strip()
     return text
 
+
+
+def generate_quiz_questions(summary_text, previous_questions=None, num_questions=5, is_quiz_mode=True, model="gpt-4o-mini"):
+    """Generate quiz questions from a summary text using OpenAI's API
+    
+    Args:
+        summary_text: The text to generate questions from
+        user_id: User ID for question hashing
+        content_hash: Content hash for question set
+        incorrect_question_ids: Optional list of IDs of questions answered incorrectly
+        previous_questions: Optional list of previous questions for focused generation
+        num_questions: Number of questions to generate (default: 5)
+    
+    Returns:
+        tuple: (questions, question_hashes)
+    """
+    
+    
+    try:
+
+        print(f"is_quiz_mode: {is_quiz_mode}")
+        
+        if is_quiz_mode:
+            max_completion_tokens = 10000
+            quiz_schema = {
+                "type": "object",
+                "required": ["questions"],
+                "additionalProperties": False,
+                "properties": {
+                    "questions": {
+                        "type": "array",
+                        "minItems": num_questions,
+                        "maxItems": num_questions,
+                        "items": {
+                            "type": "object",
+                            "required": ["id", "text", "options", "correctAnswer", "reason"],
+                            "properties": {
+                                "id":           {"type": "integer", "minimum": 1, "maximum": num_questions},
+                                "text":         {"type": "string"},
+                                "options": {
+                                    "type": "array",
+                                    "minItems": 4,
+                                    "maxItems": 4,
+                                    "items": {"type": "string"}
+                                },
+                                "correctAnswer": {"type": "integer", "minimum": 0, "maximum": 3},
+                                "reason":       {"type": "string"}
+                            },
+                            "additionalProperties": False
+                        }
+                    }
+                }
+            }
+            prompt = f'''
+            Based on the following medical text summary, create {num_questions} VERY challenging USMLE clinical vignette style \
+                multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
+            
+            Requirements:
+            1. Clear, specific and challenging clinical vignette stems (about 400 characters).
+            2. Question stems must be in the style of a USMLE clinical vignette 
+            3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
+            4. Aim for clarity, clinical relevance, and high-yield facts
+
+            Example question fromat:
+            [
+                {{
+                    "id": 1,
+                    "text": "A 34-year-old man presents to the emergency department with 5 days of worsening shortness of breath, orthopnea, and a nonproductive cough. He has no significant past medical history. Vitals show BP 110/70 mmHg, HR 105/min, and RR 22/min. Jugular venous distention is noted, and auscultation reveals bilateral crackles. ECG shows low-voltage QRS complexes. A chest x-ray demonstrates an enlarged cardiac silhouette. What is the most appropriate next step?",
+                    "options": [
+                        "A. Start loop diuretics",
+                        "B. Order a transthoracic echocardiogram",
+                        "C. Begin corticosteroid therapy",
+                        "D. Perform emergent cardiac catheterization"
+                    ],
+                    "correctAnswer": 2,
+                    "reason": "The patient presents with signs of acute heart failure and pericardial effusion (dyspnea, JVD, low-voltage ECG, enlarged cardiac silhouette). These findings raise concern for cardiac tamponade, which can be rapidly fatal. The most appropriate next step is a transthoracic echocardiogram to evaluate for pericardial fluid and assess for signs of tamponade physiology such as diastolic collapse of the right heart chambers."
+                }},
+                ...
+            ]
+
+            Summary:
+            {summary_text}
+            '''
+
+            system_prompt = """
+            You are an expert medical professor that creates 
+            accurate, challenging USMLE clinical vignette style multiple choice questions. 
+            Output **only** valid JSON exactly matching the schema below.
+            """
+        else:
+            max_completion_tokens = 10000
+            quiz_schema = {
+                "type": "object",
+                "required": ["questions"],
+                "additionalProperties": False,
+                "properties": {
+                    "questions": {
+                        "type": "array",
+                        "minItems": num_questions,
+                        "maxItems": num_questions,
+                        "items": {
+                            "type": "object",
+                            "required": ["id", "text", "options", "correctAnswer", "reason"],
+                            "properties": {
+                                "id":           {"type": "integer", "minimum": 1, "maximum": num_questions},
+                                "text":         {"type": "string"},
+                                "options": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 1,
+                                    "items": {"type": "string"}
+                                },
+                                "correctAnswer": {"type": "integer", "minimum": 0, "maximum": 0},
+                                "reason":       {"type": "string"}
+                            },
+                            "additionalProperties": False
+                        }
+                    }
+                }
+            }
+            prompt = f'''
+            Based on the following medical text summary, create {num_questions}
+            active‑recall flashcards that cover every key concept.
+
+            Requirements:
+            1. Clear, specific, and concise question stems for active recall flashcards (about 100 characters). Do not include the answer in the question stem or suggest there are multiple answers.
+            2. Simple, direct active recall flashcard questions based on the summary.
+            3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
+            4. Aim for clarity, clinical relevance, and high-yield facts
+            5. Each flashcard must contain one clear fact.
+
+            Example flashcard format:
+            [
+                {{
+                    "id": 1,
+                    "text": "Which cytokine is most critical for Th1 differentiation?",
+                    "options": ["IL-12"],
+                    "correctAnswer": 0,
+                    "reason": "IL-12 is essential for naïve CD4+ T cells to differentiate into Th1 cells. It activates STAT4, a transcription factor that upregulates T-bet, the master regulator of Th1 lineage commitment. T-bet then promotes the production of IFN-γ, the key Th1 cytokine, which amplifies the Th1 response. In contrast, IL-4 promotes Th2 differentiation, IL-6 supports Th17 development, and IL-10 suppresses inflammatory responses, including Th1 activity."
+                }},
+                ...
+            ]
+
+            Summary:
+            {summary_text}
+            '''
+
+            system_prompt = """
+            You are an expert medical professor that creates 
+            accurate, active recall flashcard questions. 
+            Output **only** valid JSON exactly matching the schema below.
+            """
+        
+        print(f"Using model: {model} for quiz generation USMLE mode: {is_quiz_mode} with max completion tokens: {max_completion_tokens}")
+        gpt_time_start = time.time()
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ]
+        if previous_questions and len(previous_questions) > 0:
+            messages.append({"role": "user", "content": f"Generate {num_questions} new questions that are cover entirely different topics from the questions below. \n\n{json.dumps(previous_questions)}"})
+
+        print("messages")
+        print(messages)
+
+        response = openai_client.chat.completions.create(
+            model=model,
+            messages=messages,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "quiz_questions",
+                    "strict": True,
+                    "schema": quiz_schema
+                }
+            },
+            temperature=0.2,
+            presence_penalty=0.0,
+            max_completion_tokens=max_completion_tokens,
+            top_p=0.9,
+            frequency_penalty=0.2,
+        )
+        print(f"Completion tokens used: {response.usage.completion_tokens}")
+        gpt_time_end = time.time()
+        print(f"GPT time: {gpt_time_end - gpt_time_start} seconds")
+
+        response_text = response.choices[0].message.content.strip()
+        # print("\n--- Raw OpenAI Response Text (Quiz Generation) ---")
+        # print(response_text)
+        # print("--------------------------------------------------\n")
+        
+        response_json = json.loads(response_text)
+        questions = response_json["questions"]
+        
+        print(f"Type of questions: {type(questions)}")
+        if not isinstance(questions, list) or not questions:
+            raise ValueError("Response is not a list or is empty.")
+    
+        print(f"Number of questions: {len(questions)}")
+        print(questions[0].keys())
+        question_texts = []
+        for question in questions:
+            # print(question["id"])
+            print(question["text"])
+            # print(question["options"])
+            # print(question["correctAnswer"])
+            # print(question["reason"])
+            print("--------------------------------")
+            question_texts.append(question["text"])
+            
+
+        # print(question_texts)
+        print(previous_questions)
+
+
+    except Exception as e:
+        print(f"Error generating quiz questions: {e}")
+
+
+
 if __name__ == "__main__":
     # print(gpt_summarize_transcript(summary_text))
-    generate_quiz_questions(summary_text)
+
+    previous_questions = ['What is the primary definition of rhabdomyolysis?', 'What are the three classic symptoms of rhabdomyolysis?', 'Which electrolyte imbalance is most concerning in rhabdomyolysis?', 'What is a common cause of rhabdomyolysis related to exercise?', 'What diagnostic test is primarily used to assess muscle injury in rhabdomyolysis?', 'What complication can arise from severe rhabdomyolysis affecting kidney function?', 'Which management strategy is crucial for treating rhabdomyolysis?', 'What urinary pH target helps prevent kidney damage in rhabdomyolysis?', 'What role does myoglobin play in rhabdomyolysis?', 'What type of syndrome can develop due to increased pressure from swelling in muscles affected by rhabdomyolysis?', 'Which demographic group is at higher risk for viral myositis related to rhabdomyolysis?', 'What substance use disorder could be linked with agitation leading to rhabdomyolysis?', 'What metabolic issue could contribute to muscle dysfunction in patients with rhabdomyolysis?', 'Which laboratory test would be used for screening blood presence indicative of muscle injury?', 'What should be done first when treating a patient with suspected rhabdomyolysis?', 'What condition could result from prolonged immobilization leading to muscle breakdown?', 'How does lactate dehydrogenase (LDH) relate to muscle injury assessment?', 'Which condition may trigger disseminated intravascular coagulation (DIC) linked with severe cases of rhabdomyolysis?', 'Why should an ECG be performed on patients suspected of having electrolyte imbalances due to rhabdomyolysis?', 'How do environmental factors contribute to the risk of developing rhabdomyolysis?']
+    generate_quiz_questions(summary_text, previous_questions=previous_questions, num_questions=20, is_quiz_mode=False, model="gpt-4o-mini")
     
 

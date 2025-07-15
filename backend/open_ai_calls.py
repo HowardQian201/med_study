@@ -136,18 +136,10 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
             correct_questions = [q['text'] for q in previous_questions if q['id'] not in incorrect_question_ids]
 
-        previous_questions_text = ""
-        if len(incorrect_questions) > 0:
-            previous_questions_text += f"The user previously answered the following questions INCORRECTLY and should be tested on these topics as well as others mentioned in the summary:\n{json.dumps(incorrect_questions)}\n"
-        if len(correct_questions) > 0:
-            previous_questions_text += f"The user previously answered the following questions CORRECTLY and should be tested on different topics mentioned in the summary:\n{json.dumps(correct_questions)}\n"
-
-        # print("previous_questions_text")
-        # print(previous_questions_text[:100])
         print(f"is_quiz_mode: {is_quiz_mode}")
         
         if is_quiz_mode:
-            max_completion_tokens = 5000
+            max_completion_tokens = 7000
             quiz_schema = {
                 "type": "object",
                 "required": ["questions"],
@@ -177,32 +169,36 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
                     }
                 }
             }
-            prompt = f"""
+            prompt = f'''
             Based on the following medical text summary, create {num_questions} VERY challenging USMLE clinical vignette style \
                 multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
             
-            For each question:
-            1. A clear, specific and challenging clinical vignette stem (about 400 characters).
-            2. Be in the style of a USMLE clinical vignette 
+            Requirements:
+            1. Clear, specific and challenging clinical vignette stems (about 400 characters).
+            2. Question stems must be in the style of a USMLE clinical vignette 
             3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
-            
-            Example question:
-            "id": 1,
-            "text": "A 34-year-old man presents to the emergency department with 5 days of worsening shortness of breath, orthopnea, and a nonproductive cough. He has no significant past medical history. Vitals show BP 110/70 mmHg, HR 105/min, and RR 22/min. Jugular venous distention is noted, and auscultation reveals bilateral crackles. ECG shows low-voltage QRS complexes. A chest x-ray demonstrates an enlarged cardiac silhouette. What is the most appropriate next step?",
-            "options": [
-                "A. Start loop diuretics",
-                "B. Order a transthoracic echocardiogram",
-                "C. Begin corticosteroid therapy",
-                "D. Perform emergent cardiac catheterization"
-            ],
-            "correctAnswer": 2,
-            "reason": "The patient presents with signs of acute heart failure and pericardial effusion (dyspnea, JVD, low-voltage ECG, enlarged cardiac silhouette). These findings raise concern for cardiac tamponade, which can be rapidly fatal. The most appropriate next step is a transthoracic echocardiogram to evaluate for pericardial fluid and assess for signs of tamponade physiology such as diastolic collapse of the right heart chambers."
+            4. Aim for clarity, clinical relevance, and high-yield facts
 
-            {previous_questions_text}
+            Example question fromat:
+            [
+                {{
+                    "id": 1,
+                    "text": "A 34-year-old man presents to the emergency department with 5 days of worsening shortness of breath, orthopnea, and a nonproductive cough. He has no significant past medical history. Vitals show BP 110/70 mmHg, HR 105/min, and RR 22/min. Jugular venous distention is noted, and auscultation reveals bilateral crackles. ECG shows low-voltage QRS complexes. A chest x-ray demonstrates an enlarged cardiac silhouette. What is the most appropriate next step?",
+                    "options": [
+                        "A. Start loop diuretics",
+                        "B. Order a transthoracic echocardiogram",
+                        "C. Begin corticosteroid therapy",
+                        "D. Perform emergent cardiac catheterization"
+                    ],
+                    "correctAnswer": 2,
+                    "reason": "The patient presents with signs of acute heart failure and pericardial effusion (dyspnea, JVD, low-voltage ECG, enlarged cardiac silhouette). These findings raise concern for cardiac tamponade, which can be rapidly fatal. The most appropriate next step is a transthoracic echocardiogram to evaluate for pericardial fluid and assess for signs of tamponade physiology such as diastolic collapse of the right heart chambers."
+                }},
+                ...
+            ]
 
             Summary:
             {summary_text}
-            """
+            '''
 
             system_prompt = """
             You are an expert medical professor that creates 
@@ -240,28 +236,32 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
                     }
                 }
             }
-            prompt = f"""
+            prompt = f'''
             Based on the following medical text summary, create {num_questions}
             active‑recall flashcards that cover every key concept.
 
-            For each question:
-            1. A clear, specific, and concise question stem for active recall flashcards (about 100 characters). Do not include the answer in the question stem or suggest there are multiple answers.
+            Requirements:
+            1. Clear, specific, and concise question stems for active recall flashcards (about 100 characters). Do not include the answer in the question stem or suggest there are multiple answers.
             2. Simple, direct active recall flashcard questions based on the summary.
             3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
-            
-            Example flashcard:
-            "id": 1,
-            "text": "Which cytokine is most critical for Th1 differentiation?",
-            "options": ["IL-12"],
-            "correctAnswer": 0,
-            "reason": "IL-12 is essential for naïve CD4+ T cells to differentiate into Th1 cells. It activates STAT4, a transcription factor that upregulates T-bet, the master regulator of Th1 lineage commitment. T-bet then promotes the production of IFN-γ, the key Th1 cytokine, which amplifies the Th1 response. In contrast, IL-4 promotes Th2 differentiation, IL-6 supports Th17 development, and IL-10 suppresses inflammatory responses, including Th1 activity."
+            4. Aim for clarity, clinical relevance, and high-yield facts
+            5. Each flashcard must contain one clear fact.
 
-
-            {previous_questions_text}
+            Example flashcard format:
+            [
+                {{
+                    "id": 1,
+                    "text": "Which cytokine is most critical for Th1 differentiation?",
+                    "options": ["IL-12"],
+                    "correctAnswer": 0,
+                    "reason": "IL-12 is essential for naïve CD4+ T cells to differentiate into Th1 cells. It activates STAT4, a transcription factor that upregulates T-bet, the master regulator of Th1 lineage commitment. T-bet then promotes the production of IFN-γ, the key Th1 cytokine, which amplifies the Th1 response. In contrast, IL-4 promotes Th2 differentiation, IL-6 supports Th17 development, and IL-10 suppresses inflammatory responses, including Th1 activity."
+                }},
+                ...
+            ]
 
             Summary:
             {summary_text}
-            """
+            '''
 
             system_prompt = """
             You are an expert medical professor that creates 
@@ -271,12 +271,17 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
         
         print(f"Using model: {model} for quiz generation USMLE mode: {is_quiz_mode} with max completion tokens: {max_completion_tokens}")
         gpt_time_start = time.time()
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ]
+        if correct_questions and len(correct_questions) > 0:
+            messages.append({"role": "user", "content": f"Generate {num_questions} new questions that are cover entirely different topics from the questions below. \n\n{json.dumps(correct_questions)}"})
+        
+
         response = openai_client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
+            messages=messages,
             response_format={
                 "type": "json_schema",
                 "json_schema": {
@@ -285,11 +290,11 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
                     "schema": quiz_schema
                 }
             },
-            temperature=0.5,
+            temperature=0.2,
             presence_penalty=0.0,
             max_completion_tokens=max_completion_tokens,
             top_p=0.9,
-            frequency_penalty=0.25,
+            frequency_penalty=0.2,
         )
         print(f"Completion tokens used: {response.usage.completion_tokens}")
         gpt_time_end = time.time()
