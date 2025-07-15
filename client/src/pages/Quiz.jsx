@@ -212,6 +212,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         
         if (response.data.success && response.data.questions) {
           setQuestions(response.data.questions);
+          setCurrentSessionShortSummary(response.data.short_summary || '');
         } else if (response.data.error === "Quiz set already exists") {
           setError("Quiz set for that material already exists. Here it is!");
           setContentHash(response.data.content_hash);
