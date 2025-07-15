@@ -249,7 +249,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
                 "success": True,
                 "authenticated": True,
                 "user": {
-                    "id": user_data.get("id"),
+                    "id": int(user_data["id"]) if user_data.get("id") is not None else None,
                     "name": user_data.get("name"),
                     "email": user_data.get("email")
                 }
@@ -1045,3 +1045,203 @@ def remove_pdf_hashes_from_user(user_id: int, pdf_hashes_to_remove: List[str]) -
     except Exception as e:
         print(f"Error removing PDF hashes from user {user_id} pdfs: {e}")
         return {"success": False, "error": str(e), "deleted_count": 0}
+
+# --- Redis Session Management Functions ---
+
+def get_session_key(session_id: str) -> str:
+    """Generate Redis key for session data."""
+    return f"session:{session_id}"
+
+def create_session(session_id: str, user_data: Dict[str, Any], ttl_hours: int = 1) -> Dict[str, Any]:
+    """
+    Create a new session in Redis with user data.
+    
+    Args:
+        session_id (str): Unique session identifier
+        user_data (Dict): User data to store in session
+        ttl_hours (int): Session expiration time in hours
+        
+    Returns:
+        Dict containing the result of the operation
+    """
+    if not redis_client:
+        return {"success": False, "error": "Redis client not available"}
+    
+    try:
+        session_key = get_session_key(session_id)
+        
+        # Initialize session with user data
+        session_data = {
+            "user_id": user_data.get("user_id"), # Changed from "id" to "user_id"
+            "name": user_data.get("name"),
+            "email": user_data.get("email"),
+            "summary": "",
+            "quiz_questions": [],
+            "content_hash": "",
+            "content_name_list": [],
+            "short_summary": "",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # Store session data in Redis with expiration
+        redis_client.setex(
+            session_key,
+            ttl_hours * 3600,  # Convert hours to seconds
+            json.dumps(session_data)
+        )
+        
+        return {"success": True, "session_id": session_id}
+        
+    except Exception as e:
+        print(f"Error creating session {session_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+def get_session_data(session_id: str) -> Dict[str, Any]:
+    """
+    Retrieve session data from Redis.
+    
+    Args:
+        session_id (str): Session identifier
+        
+    Returns:
+        Dict containing session data or error
+    """
+    if not redis_client:
+        return {"success": False, "error": "Redis client not available", "data": None}
+    
+    try:
+        session_key = get_session_key(session_id)
+        session_json = redis_client.get(session_key)
+        
+        if session_json:
+            session_data = json.loads(session_json)
+            return {"success": True, "data": session_data}
+        else:
+            return {"success": False, "error": "Session not found or expired", "data": None}
+            
+    except Exception as e:
+        print(f"Error getting session {session_id}: {e}")
+        return {"success": False, "error": str(e), "data": None}
+
+def update_session_data(session_id: str, updates: Dict[str, Any], ttl_hours: int = 1) -> Dict[str, Any]:
+    """
+    Update session data in Redis.
+    
+    Args:
+        session_id (str): Session identifier
+        updates (Dict): Fields to update
+        ttl_hours (int): Session expiration time in hours
+        
+    Returns:
+        Dict containing the result of the operation
+    """
+    if not redis_client:
+        return {"success": False, "error": "Redis client not available"}
+    
+    try:
+        session_key = get_session_key(session_id)
+        
+        # Get current session data
+        current_result = get_session_data(session_id)
+        if not current_result["success"]:
+            return current_result
+        
+        session_data = current_result["data"]
+        
+        # Update with new data
+        session_data.update(updates)
+        session_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # Store updated session data with renewed expiration
+        redis_client.setex(
+            session_key,
+            ttl_hours * 3600,
+            json.dumps(session_data)
+        )
+        
+        return {"success": True, "data": session_data}
+        
+    except Exception as e:
+        print(f"Error updating session {session_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+def delete_session(session_id: str) -> Dict[str, Any]:
+    """
+    Delete session from Redis.
+    
+    Args:
+        session_id (str): Session identifier
+        
+    Returns:
+        Dict containing the result of the operation
+    """
+    if not redis_client:
+        return {"success": False, "error": "Redis client not available"}
+    
+    try:
+        session_key = get_session_key(session_id)
+        deleted = redis_client.delete(session_key)
+        
+        return {"success": True, "deleted": bool(deleted)}
+        
+    except Exception as e:
+        print(f"Error deleting session {session_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+def extend_session_ttl(session_id: str, ttl_hours: int = 1) -> Dict[str, Any]:
+    """
+    Extend session TTL without modifying data.
+    
+    Args:
+        session_id (str): Session identifier
+        ttl_hours (int): New expiration time in hours
+        
+    Returns:
+        Dict containing the result of the operation
+    """
+    if not redis_client:
+        return {"success": False, "error": "Redis client not available"}
+    
+    try:
+        session_key = get_session_key(session_id)
+        extended = redis_client.expire(session_key, ttl_hours * 3600)
+        
+        return {"success": True, "extended": bool(extended)}
+        
+    except Exception as e:
+        print(f"Error extending session TTL {session_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+def clear_redis_session_content(session_id: str) -> Dict[str, Any]:
+    """
+    Clear session content data while keeping user authentication.
+    
+    Args:
+        session_id (str): Session identifier
+        
+    Returns:
+        Dict containing the result of the operation
+    """
+    if not redis_client:
+        return {"success": False, "error": "Redis client not available"}
+    
+    try:
+        # Get current session
+        current_result = get_session_data(session_id)
+        if not current_result["success"]:
+            return current_result
+                
+        # Clear content-related fields but keep user auth
+        updates = {
+            "summary": "",
+            "quiz_questions": [],
+            "content_hash": "",
+            "content_name_list": [],
+            "short_summary": ""
+        }
+        
+        return update_session_data(session_id, updates)
+        
+    except Exception as e:
+        print(f"Error clearing session content {session_id}: {e}")
+        return {"success": False, "error": str(e)}
