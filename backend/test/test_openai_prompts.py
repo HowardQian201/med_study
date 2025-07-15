@@ -161,7 +161,7 @@ def gpt_summarize_transcript(text, stream=False):
 
 
 
-def generate_quiz_questions(summary_text, previous_questions=None, num_questions=5, is_quiz_mode=True, model="gpt-4o-mini"):
+def generate_quiz_questions(summary_text, previous_questions=None, num_questions=5, is_quiz_mode=True, model="gpt-4o-mini", stream=False):
     """Generate quiz questions from a summary text using OpenAI's API
     
     Args:
@@ -171,14 +171,13 @@ def generate_quiz_questions(summary_text, previous_questions=None, num_questions
         incorrect_question_ids: Optional list of IDs of questions answered incorrectly
         previous_questions: Optional list of previous questions for focused generation
         num_questions: Number of questions to generate (default: 5)
+        stream: Whether to stream the response (default: False)
     
     Returns:
-        tuple: (questions, question_hashes)
+        tuple: (questions, question_hashes) or generator if streaming
     """
     
-    
     try:
-
         print(f"is_quiz_mode: {is_quiz_mode}")
         
         if is_quiz_mode:
@@ -249,7 +248,7 @@ def generate_quiz_questions(summary_text, previous_questions=None, num_questions
             Output **only** valid JSON exactly matching the schema below.
             """
         else:
-            max_completion_tokens = 10000
+            max_completion_tokens = 16000
             quiz_schema = {
                 "type": "object",
                 "required": ["questions"],
@@ -322,8 +321,8 @@ def generate_quiz_questions(summary_text, previous_questions=None, num_questions
         if previous_questions and len(previous_questions) > 0:
             messages.append({"role": "user", "content": f"Generate {num_questions} new questions that are cover entirely different topics from the questions below. \n\n{json.dumps(previous_questions)}"})
 
-        print("messages")
-        print(messages)
+        # print("messages")
+        # print(messages)
 
         response = openai_client.chat.completions.create(
             model=model,
@@ -341,16 +340,19 @@ def generate_quiz_questions(summary_text, previous_questions=None, num_questions
             max_completion_tokens=max_completion_tokens,
             top_p=0.9,
             frequency_penalty=0.2,
+            stream=stream
         )
+
+        if stream:
+            # For streaming, return the response object directly
+            return response
+        
+        # Non-streaming handling remains the same
         print(f"Completion tokens used: {response.usage.completion_tokens}")
         gpt_time_end = time.time()
         print(f"GPT time: {gpt_time_end - gpt_time_start} seconds")
 
         response_text = response.choices[0].message.content.strip()
-        # print("\n--- Raw OpenAI Response Text (Quiz Generation) ---")
-        # print(response_text)
-        # print("--------------------------------------------------\n")
-        
         response_json = json.loads(response_text)
         questions = response_json["questions"]
         
@@ -362,7 +364,7 @@ def generate_quiz_questions(summary_text, previous_questions=None, num_questions
         print(questions[0].keys())
         question_texts = []
         for question in questions:
-            # print(question["id"])
+            print(question["id"])
             print(question["text"])
             # print(question["options"])
             # print(question["correctAnswer"])
@@ -372,18 +374,131 @@ def generate_quiz_questions(summary_text, previous_questions=None, num_questions
             
 
         # print(question_texts)
-        print(previous_questions)
-
+        # print(previous_questions)
+        return questions
 
     except Exception as e:
         print(f"Error generating quiz questions: {e}")
+        if stream:
+            return None
+        return []
 
 
+def find_complete_object(text, start_pos=0):
+    """Find the next complete JSON object in the text starting from start_pos.
+    Returns (start_index, end_index) of the complete object, or None if no complete object is found."""
+    # Find the start of an object
+    bracket_stack = []
+    in_string = False
+    escape_next = False
+    object_start = None
+    
+    # Skip until we find a '{' that starts a question object
+    i = start_pos
+    while i < len(text) and not object_start:
+        if text[i:].startswith('{"id"'):
+            object_start = i
+            bracket_stack.append('{')
+        i += 1
+        
+    if not object_start:
+        return None
+        
+    # Parse from the start of the question object
+    for i in range(object_start + 1, len(text)):
+        char = text[i]
+        
+        # Handle string literals
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        
+        if in_string:
+            escape_next = char == '\\'
+            continue
+            
+        # Handle brackets outside strings
+        if char in '{[':
+            bracket_stack.append(char)
+        elif char in '}]':
+            if not bracket_stack:
+                continue  # Ignore closing brackets without matching open
+            
+            # Check matching brackets
+            open_char = bracket_stack[-1]
+            if (open_char == '{' and char == '}') or (open_char == '[' and char == ']'):
+                bracket_stack.pop()
+                if not bracket_stack:  # All brackets matched
+                    return (object_start, i + 1)
+        
+    return None
+
+def process_streaming_questions(stream):
+    """Process a streaming response from OpenAI and extract questions as they arrive.
+    
+    Args:
+        stream: OpenAI streaming response object
+        
+    Returns:
+        list: List of processed question objects
+    """
+    accumulated_json = ""
+    questions_found = set()
+    last_processed_pos = 0
+    array_started = False
+    processed_questions = []
+    
+    for chunk in stream:
+        if chunk.choices[0].delta.content:
+            accumulated_json += chunk.choices[0].delta.content
+            
+            # Look for the start of the questions array if we haven't found it yet
+            if not array_started and '"questions":' in accumulated_json:
+                array_start_pos = accumulated_json.index('"questions":') + len('"questions":')
+                # Skip any whitespace and the opening bracket
+                while array_start_pos < len(accumulated_json) and accumulated_json[array_start_pos] not in '[{':
+                    array_start_pos += 1
+                if array_start_pos < len(accumulated_json) and accumulated_json[array_start_pos] == '[':
+                    array_started = True
+                    last_processed_pos = array_start_pos + 1
+            
+            # Only look for objects if we've found the start of the array
+            if array_started:
+                # Process all complete objects in the accumulated text
+                while (result := find_complete_object(accumulated_json, last_processed_pos)):
+                    start_pos, end_pos = result
+                    object_text = accumulated_json[start_pos:end_pos]
+                    
+                    try:
+                        # Try to parse the object
+                        data = json.loads(object_text)
+                        
+                        # If it's a question object
+                        if isinstance(data, dict) and all(key in data for key in ["id", "text", "options", "correctAnswer", "reason"]):
+                            question_id = data["id"]
+                            if question_id not in questions_found:
+                                print(f"\nQuestion {question_id}:")
+                                print(f"Q: {data['text']}")
+                                print(f"A: {data['options'][data['correctAnswer']]}")
+                                print(f"Explanation: {data['reason']}")
+                                print("-" * 50)
+                                questions_found.add(question_id)
+                                processed_questions.append(data)
+                    except json.JSONDecodeError:
+                        pass
+                        
+                    last_processed_pos = end_pos + 1  # Skip the comma after the object
+    
+    return processed_questions
 
 if __name__ == "__main__":
     # print(gpt_summarize_transcript(summary_text))
-
-    previous_questions = ['What is the primary definition of rhabdomyolysis?', 'What are the three classic symptoms of rhabdomyolysis?', 'Which electrolyte imbalance is most concerning in rhabdomyolysis?', 'What is a common cause of rhabdomyolysis related to exercise?', 'What diagnostic test is primarily used to assess muscle injury in rhabdomyolysis?', 'What complication can arise from severe rhabdomyolysis affecting kidney function?', 'Which management strategy is crucial for treating rhabdomyolysis?', 'What urinary pH target helps prevent kidney damage in rhabdomyolysis?', 'What role does myoglobin play in rhabdomyolysis?', 'What type of syndrome can develop due to increased pressure from swelling in muscles affected by rhabdomyolysis?', 'Which demographic group is at higher risk for viral myositis related to rhabdomyolysis?', 'What substance use disorder could be linked with agitation leading to rhabdomyolysis?', 'What metabolic issue could contribute to muscle dysfunction in patients with rhabdomyolysis?', 'Which laboratory test would be used for screening blood presence indicative of muscle injury?', 'What should be done first when treating a patient with suspected rhabdomyolysis?', 'What condition could result from prolonged immobilization leading to muscle breakdown?', 'How does lactate dehydrogenase (LDH) relate to muscle injury assessment?', 'Which condition may trigger disseminated intravascular coagulation (DIC) linked with severe cases of rhabdomyolysis?', 'Why should an ECG be performed on patients suspected of having electrolyte imbalances due to rhabdomyolysis?', 'How do environmental factors contribute to the risk of developing rhabdomyolysis?']
-    generate_quiz_questions(summary_text, previous_questions=previous_questions, num_questions=20, is_quiz_mode=False, model="gpt-4o-mini")
+    previous_questions = None
+    # previous_questions = ['What is the primary definition of rhabdomyolysis?', 'What are the three classic symptoms of rhabdomyolysis?', 'Which electrolyte imbalance is most concerning in rhabdomyolysis?', 'What is a common cause of rhabdomyolysis related to exercise?', 'What diagnostic test is primarily used to assess muscle injury in rhabdomyolysis?', 'What complication can arise from severe rhabdomyolysis affecting kidney function?', 'Which management strategy is crucial for treating rhabdomyolysis?', 'What urinary pH target helps prevent kidney damage in rhabdomyolysis?', 'What role does myoglobin play in rhabdomyolysis?', 'What type of syndrome can develop due to increased pressure from swelling in muscles affected by rhabdomyolysis?', 'Which demographic group is at higher risk for viral myositis related to rhabdomyolysis?', 'What substance use disorder could be linked with agitation leading to rhabdomyolysis?', 'What metabolic issue could contribute to muscle dysfunction in patients with rhabdomyolysis?', 'Which laboratory test would be used for screening blood presence indicative of muscle injury?', 'What should be done first when treating a patient with suspected rhabdomyolysis?', 'What condition could result from prolonged immobilization leading to muscle breakdown?', 'How does lactate dehydrogenase (LDH) relate to muscle injury assessment?', 'Which condition may trigger disseminated intravascular coagulation (DIC) linked with severe cases of rhabdomyolysis?', 'Why should an ECG be performed on patients suspected of having electrolyte imbalances due to rhabdomyolysis?', 'How do environmental factors contribute to the risk of developing rhabdomyolysis?']
+    # questions = generate_quiz_questions(summary_text, previous_questions=previous_questions, num_questions=20, is_quiz_mode=False, model="gpt-4o-mini")
+    # print(questions)
+    stream = generate_quiz_questions(summary_text, previous_questions=previous_questions, num_questions=20, is_quiz_mode=False, model="gpt-4o-mini", stream=True)
+    if stream:
+        questions = process_streaming_questions(stream)
     
 

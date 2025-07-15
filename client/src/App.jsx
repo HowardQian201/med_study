@@ -16,6 +16,30 @@ function App() {
   const [summary, setSummary] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
+  // Global 401 error handler
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          console.log('401 Unauthorized detected, clearing authentication state');
+          setIsAuthenticated(false);
+          setUser(null);
+          setSummary('');
+          // Clear any stored session data
+          sessionStorage.clear();
+          // The route protection will handle redirecting to login
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    // Cleanup interceptor on unmount
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, []);
+
   const checkAuth = async () => {
     setIsLoading(true);
     try {
