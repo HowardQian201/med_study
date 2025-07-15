@@ -24,7 +24,6 @@ import random
 from celery.result import AsyncResult # Import this to interact with task results
 import tempfile # Import tempfile for creating temporary files
 from datetime import datetime, timezone # Import timezone for UTC
-import uuid
 import secrets
 
 # Custom Redis Session Management

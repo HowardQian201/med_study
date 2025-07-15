@@ -2,7 +2,6 @@
 ###URGENT:
 
 
-switch to redis for session storage
 Switch to fastAPI for concurrency
 Stream quiz question generation
 realtime stats using posthog

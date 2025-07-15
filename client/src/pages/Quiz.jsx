@@ -67,9 +67,46 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [currentSessionSources, setCurrentSessionSources] = useState([]); // New state for sources
   const [currentSessionShortSummary, setCurrentSessionShortSummary] = useState('');
   const [contentHash, setContentHash] = useState('');
+  const [generationTimer, setGenerationTimer] = useState(0);
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
+  const timerRef = useRef(null);
+
+  // Timer effect for question generation
+  useEffect(() => {
+    const shouldShowTimer = isGeneratingMoreQuestions || isLoading;
+    
+    if (shouldShowTimer) {
+      // Always reset timer when starting a new generation
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      setGenerationTimer(0);
+      timerRef.current = setInterval(() => {
+        setGenerationTimer(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isGeneratingMoreQuestions, isLoading]);
+
+  // Helper function to format timer display
+  const formatTimer = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Hotkey handlers
   const handleKeyboardAnswer = (optionIndex) => {
@@ -742,6 +779,9 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                 <Typography variant="h6" color="text.secondary">
                   {isQuizMode ? 'Generating USMLE questions ...' : 'Generating flashcards ...'}
                 </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                  {formatTimer(generationTimer)}
+                </Typography>
               </Paper>
             ) : error ? (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -869,7 +909,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                 px: 2
                               }}
                             >
-                              {isGeneratingMoreQuestions ? 'Generating...' : 'Generate New Questions'}
+                              {isGeneratingMoreQuestions ? (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <span>Generating...</span>
+                                  <Typography variant="body2" color="inherit" sx={{ opacity: 0.8 }}>
+                                    {formatTimer(generationTimer)}
+                                  </Typography>
+                                </Box>
+                              ) : 'Generate New Questions'}
                               <TextField
                                 type="number"
                                 value={numFocusedQuestions}
@@ -1268,7 +1315,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                           px: 2
                         }}
                       >
-                        {isGeneratingMoreQuestions ? 'Generating...' : 'Generate More'}
+                        {isGeneratingMoreQuestions ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span>Generating...</span>
+                            <Typography variant="body2" color="text.secondary">
+                              {formatTimer(generationTimer)}
+                            </Typography>
+                          </Box>
+                        ) : 'Generate More'}
                         <TextField
                           type="number"
                           value={numAdditionalQuestions}
