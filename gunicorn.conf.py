@@ -2,13 +2,15 @@ import os
 
 # gunicorn.conf.py
 bind = f"0.0.0.0:{os.environ.get('PORT', '5000')}"  # Use the PORT env var
-workers = 2
+workers = 1 
 timeout = 180  # 3 minutes for AI processing
 keepalive = 2
 max_requests = 100  # Restart worker after 100 requests to prevent memory buildup
 max_requests_jitter = 20
 preload_app = True
-worker_class = "sync"
+
+# Use Uvicorn worker class for better performance
+worker_class = "uvicorn.workers.UvicornWorker"
 
 # Memory optimizations
 worker_tmp_dir = "/dev/shm"  # Use tmpfs for faster worker communication

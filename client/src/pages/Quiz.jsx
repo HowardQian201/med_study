@@ -238,11 +238,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         } else {
         // If no existing questions, generate new ones
         const numQuestions = parseInt(sessionStorage.getItem('numQuestions')) || 5;
-        const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
+        const isQuizModeBoolean = sessionStorage.getItem('isQuizMode') === 'true';
         const response = await axios.post('/api/generate-quiz', {
           type: 'initial',
           numQuestions: numQuestions,
-          isQuizMode: isQuizMode
+          isQuizMode: String(isQuizModeBoolean), // Ensure it's a string "true" or "false"
+          incorrectQuestionIds: [],
+          previousQuestions: [],
+          isPreviewing: false,
         }, {
           withCredentials: true
         });
@@ -402,14 +405,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       setIsGeneratingMoreQuestions(true);
       setError('');
 
-      const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
+      const isQuizModeBoolean = sessionStorage.getItem('isQuizMode') === 'true';
       const response = await axios.post('/api/generate-quiz', {
         type: 'additional',
         incorrectQuestionIds: [],
         previousQuestions: questions,
         isPreviewing: true,
         numQuestions: numAdditionalQuestions,
-        isQuizMode: isQuizMode
+        isQuizMode: String(isQuizModeBoolean)
       }, {
         withCredentials: true
       });
@@ -440,14 +443,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         .filter(q => selectedAnswers[q.id] !== undefined && selectedAnswers[q.id] !== q.correctAnswer)
         .map(q => q.id);
       
-      const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
+      const isQuizModeBoolean = sessionStorage.getItem('isQuizMode') === 'true';
       const response = await axios.post('/api/generate-quiz', {
         type: 'focused',
         incorrectQuestionIds: incorrectQuestionIds,
         previousQuestions: questions,
         isPreviewing: false,
         numQuestions: numFocusedQuestions,
-        isQuizMode: isQuizMode
+        isQuizMode: String(isQuizModeBoolean)
       }, {
         withCredentials: true
       });

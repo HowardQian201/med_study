@@ -7,7 +7,6 @@ import uuid
 import random
 import traceback
 import hashlib
-from .logic import log_memory_usage, check_memory, analyze_memory_usage
 from .database import upsert_quiz_questions_batch
 
 load_dotenv()
@@ -103,8 +102,6 @@ def gpt_summarize_transcript(text, temperature=1.0, stream=False):
     gpt_time_end = time.time()
     print(f"GPT time: {gpt_time_end - gpt_time_start} seconds")
     
-    analyze_memory_usage("gpt_summarize_transcript completion")
-
     # Parse the response into lines
     text = completion.choices[0].message.content.strip()
     return text
@@ -123,8 +120,6 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
     Returns:
         tuple: (questions, question_hashes)
     """
-    
-    log_memory_usage("quiz generation start")
     
     try:
 
@@ -351,7 +346,6 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
         else:
             print(f"Failed to store quiz questions: {db_result.get('error', 'Unknown error')}")
 
-        log_memory_usage("quiz generation complete")
         return questions, question_hashes
 
     except (json.JSONDecodeError, ValueError) as e:
