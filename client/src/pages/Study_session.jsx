@@ -807,7 +807,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         px: 2
                       }}
                     >
-                      Quiz Me
+                      Create Quiz
                       <TextField
                         type="number"
                         value={numQuestions}

@@ -3,6 +3,8 @@
 
 
 Switch to fastAPI for concurrency
+
+remove the generate new focused set of questions - just reroute back to the preview set page to generate more questions
 Stream quiz question generation
 realtime stats using posthog
 register new account
