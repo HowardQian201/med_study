@@ -2,7 +2,7 @@
 ###URGENT:
 
 
-realtime stats using posthog
+
 register new account
     - Payment page on register new account with Stripe
     - supabase auth
@@ -28,6 +28,7 @@ delete questions from quiz set
 rate limit api calls
 
 supabase mcp with cursor
+manual realtime stats using posthog
 Bug stats with Sentry.io
 
 Database indexing on question_sets.user_id, pdfs.hash, and quiz_questions.hash so that db queries are fast when querying
