@@ -1,12 +1,14 @@
 
 ###URGENT:
 
+study sessions view pdfs should have same width as additional text no matter what
+remove the generate new focused set of questions 
+    - just reroute back to the preview set page to generate more questions
+
 fastapi
     - use async clients for supabase
     - make cpu bound work like hashing offloaded to thread pool executor
 
-remove the generate new focused set of questions 
-    - just reroute back to the preview set page to generate more questions
 
 realtime stats using posthog
 register new account

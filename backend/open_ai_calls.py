@@ -53,7 +53,10 @@ def randomize_answer_choices(question):
     return question
 
 async def gpt_summarize_transcript(text, temperature=1.0, stream=False): # Changed to async def
-    print(f"gpt_summarize_transcript called with stream={stream}")
+    # Generate random number between 1-50 for question ID
+    random_id = random.randint(1, 50)
+    print(f"gpt_summarize_transcript called random_id: {random_id}, stream: {stream}")
+
     gpt_time_start = time.time()
     prompt = f"""Create a comprehensive, detailed study guide/summary from this transcript that covers ALL content thoroughly.
 
@@ -94,6 +97,7 @@ async def gpt_summarize_transcript(text, temperature=1.0, stream=False): # Chang
         frequency_penalty=0.25,
         stream=stream,
     )
+    print(f"gpt_summarize_transcript returning random_id: {random_id}")
 
     if stream:
         return completion
@@ -101,7 +105,7 @@ async def gpt_summarize_transcript(text, temperature=1.0, stream=False): # Chang
     print("gpt_summarize_transcript completion")
     gpt_time_end = time.time()
     print(f"GPT time: {gpt_time_end - gpt_time_start} seconds")
-    
+
     # Parse the response into lines
     text = completion.choices[0].message.content.strip()
     return text
