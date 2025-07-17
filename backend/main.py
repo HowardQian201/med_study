@@ -246,14 +246,14 @@ async def generate_summary(
         print(f"Text length being sent to AI: {len(total_extracted_text)} characters")
                 
         if not STREAMING_ENABLED:
-            summary = gpt_summarize_transcript(total_extracted_text, stream=STREAMING_ENABLED)
+            summary = await gpt_summarize_transcript(total_extracted_text, stream=STREAMING_ENABLED) # Await the async function
             session['summary'] = summary
             return JSONResponse(content={'success': True, 'results': summary})
             
         # --- Streaming Response ---
-        def stream_generator(text_to_summarize):
-            stream_gen = gpt_summarize_transcript(text_to_summarize, stream=STREAMING_ENABLED)
-            for chunk in stream_gen:
+        async def stream_generator(text_to_summarize): # Change to async def
+            stream_gen = await gpt_summarize_transcript(text_to_summarize, stream=STREAMING_ENABLED) # Await the async function
+            async for chunk in stream_gen: # Await for chunks in streaming
                 content = chunk.choices[0].delta.content
                 if content:
                     yield content
@@ -319,7 +319,7 @@ async def generate_quiz(
                 )
         
         # Generate questions (can be initial or focused based on parameters)
-        questions, question_hashes = generate_quiz_questions(
+        questions, question_hashes = await generate_quiz_questions(
             summary, user_id, content_hash, 
             incorrect_question_ids=incorrect_question_ids, 
             previous_questions=previous_questions,
@@ -329,7 +329,7 @@ async def generate_quiz(
         
         # Only generate short title and upsert question set for initial generation
         if question_type == 'initial':
-            short_summary = generate_short_title(summary)
+            short_summary = await generate_short_title(summary) # Await the async function
             # Upsert the question set to the database
             upsert_question_set(content_hash, user_id, question_hashes, content_name_list, short_summary, summary, is_quiz_mode)
             session['short_summary'] = short_summary
@@ -499,15 +499,15 @@ async def regenerate_summary(
         
         # Generate new summary
         if not STREAMING_ENABLED:
-            summary = gpt_summarize_transcript(total_extracted_text, temperature=1.2, stream=STREAMING_ENABLED)
+            summary = await gpt_summarize_transcript(total_extracted_text, temperature=1.2, stream=STREAMING_ENABLED)
             session['summary'] = summary
             session['quiz_questions'] = []
             return JSONResponse(content={'success': True, 'summary': summary})
 
         # --- Streaming Response ---
-        def stream_generator(text_to_summarize):
-            stream_gen = gpt_summarize_transcript(text_to_summarize, temperature=1.2, stream=STREAMING_ENABLED)
-            for chunk in stream_gen:
+        async def stream_generator(text_to_summarize):
+            stream_gen = await gpt_summarize_transcript(text_to_summarize, temperature=1.2, stream=STREAMING_ENABLED)
+            async for chunk in stream_gen:
                 content = chunk.choices[0].delta.content
                 if content:
                     yield content

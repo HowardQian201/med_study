@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI # Changed to AsyncOpenAI
 import os
 import json
 import time
@@ -10,7 +10,7 @@ import hashlib
 from .database import upsert_quiz_questions_batch
 
 load_dotenv()
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), timeout=600.0)
+openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"), timeout=600.0) # Changed to AsyncOpenAI
 
 def randomize_answer_choices(question):
     """
@@ -52,7 +52,7 @@ def randomize_answer_choices(question):
     
     return question
 
-def gpt_summarize_transcript(text, temperature=1.0, stream=False):
+async def gpt_summarize_transcript(text, temperature=1.0, stream=False): # Changed to async def
     print(f"gpt_summarize_transcript called with stream={stream}")
     gpt_time_start = time.time()
     prompt = f"""Create a comprehensive, detailed study guide/summary from this transcript that covers ALL content thoroughly.
@@ -84,7 +84,7 @@ def gpt_summarize_transcript(text, temperature=1.0, stream=False):
     {text}
     """
 
-    completion = openai_client.chat.completions.create(
+    completion = await openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are an expert medical educator and USMLE/COMLEX tutor with extensive experience creating comprehensive study materials. Your goal is to create the most thorough, detailed, and well-organized study guides possible. You excel at identifying high-yield content, explaining complex concepts clearly, and structuring information in ways that maximize learning and retention. Always double-check your responses for accuracy and completeness."},
@@ -106,7 +106,7 @@ def gpt_summarize_transcript(text, temperature=1.0, stream=False):
     text = completion.choices[0].message.content.strip()
     return text
 
-def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_question_ids=None, previous_questions=None, num_questions=5, is_quiz_mode=True, model="gpt-4o-mini"):
+async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_question_ids=None, previous_questions=None, num_questions=5, is_quiz_mode=True, model="gpt-4o-mini"): # Changed to async def
     """Generate quiz questions from a summary text using OpenAI's API
     
     Args:
@@ -274,7 +274,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
             messages.append({"role": "user", "content": f"Generate {num_questions} new questions that are cover entirely different topics from the questions below. \n\n{json.dumps(correct_questions)}"})
         
 
-        response = openai_client.chat.completions.create(
+        response = await openai_client.chat.completions.create(
             model=model,
             messages=messages,
             response_format={
@@ -357,7 +357,7 @@ def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_quest
         traceback.print_exc()
         raise e
 
-def generate_short_title(text_to_summarize: str) -> str:
+async def generate_short_title(text_to_summarize: str) -> str: # Changed to async def
     """
     Generates a short, max 8-word title for a given text.
 
@@ -380,7 +380,7 @@ def generate_short_title(text_to_summarize: str) -> str:
         {text_to_summarize}
         """
 
-        completion = openai_client.chat.completions.create(
+        completion = await openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an expert at creating short, descriptive titles from text. You always follow length constraints and instructions precisely."},
