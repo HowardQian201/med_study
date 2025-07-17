@@ -384,6 +384,29 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                       await axios.post('/api/clear-session-content', {}, { withCredentials: true });
                       // Clear summary in App.js state
                       setSummary('');
+                      // Navigate to upload_pdfs
+                      navigate('/upload_pdfs');
+                    } catch (err) {
+                      console.error('Failed to clear session and navigate:', err);
+                      // Still attempt to navigate even if clearing fails
+                      navigate('/upload_pdfs');
+                    }
+                  }}
+                  variant="outlined"
+                  startIcon={<CloudUpload />}
+                  size="small"
+                  sx={{ py: 1 }}
+                  color={!isQuizMode ? "success" : "primary"}
+                >
+                  Upload PDFs
+                </Button>
+                <Button
+                  onClick={async () => {
+                    try {
+                      // Clear session content on the server
+                      await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+                      // Clear summary in App.js state
+                      setSummary('');
                       // Navigate to study_session
                       navigate('/study_session');
                     } catch (err) {

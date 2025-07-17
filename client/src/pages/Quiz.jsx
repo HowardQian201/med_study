@@ -65,6 +65,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [currentSessionShortSummary, setCurrentSessionShortSummary] = useState('');
   const [contentHash, setContentHash] = useState('');
   const [generationTimer, setGenerationTimer] = useState(0);
+  const [showAnswersInPreview, setShowAnswersInPreview] = useState(false); // Changed to false to hide answers by default
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -560,7 +561,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* App Bar */}
-      <AppBar position="static" color="default" elevation={1}>
+      <AppBar position="static" color="default" elevation={1} sx={{ minWidth: 1100 }}>
         <Container maxWidth="xl">
           <Box>
             <Toolbar sx={{ pb: 0, minHeight: '48px' }}>
@@ -587,7 +588,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                 </Button>
               </Stack>
             </Toolbar>
-            <Toolbar sx={{ pt: 0, mt: -2.5, mb: 0.5, minHeight: '48px', width: 1000 }}>
+            <Toolbar sx={{ pt: 0, mt: -2.5, mb: 0.5, minHeight: '48px', width: '100%' }}>
               <Box sx={{ display: 'flex', gap: 1, flexGrow: 1 }}>
                 <Button
                   onClick={handleBack}
@@ -1053,6 +1054,15 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     {/* Second Row of Buttons */}
                     <Box display="flex" justifyContent="center" gap={2} mb={4}>
                       <Button
+                        onClick={() => setShowAnswersInPreview(prev => !prev)}
+                        variant="outlined"
+                        color={isQuizMode ? "primary" : "success"}
+                        size="large"
+                        startIcon={showAnswersInPreview ? <HelpOutline /> : <CheckCircle />}
+                      >
+                        {showAnswersInPreview ? 'Hide Answers' : 'Show Answers'}
+                      </Button>
+                      <Button
                         onClick={shuffleQuestions}
                         variant="outlined"
                         color={isQuizMode ? "primary" : "success"}
@@ -1118,9 +1128,16 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                             <Typography variant="body1" fontWeight="bold" sx={{ flexShrink: 0 }}>
                               {index + 1}.
                             </Typography>
-                            <Typography variant="body1" sx={{ textAlign: 'left' }}>
-                              {question.text}
-                            </Typography>
+                            <Box sx={{ flexGrow: 1 }}>
+                              <Typography variant="body1" sx={{ textAlign: 'left' }}>
+                                {question.text}
+                              </Typography>
+                              {showAnswersInPreview && ( // Conditionally render the answer
+                                <Typography variant="body2" color="warning" sx={{ textAlign: 'left', mt: 1 }}>
+                                  {cleanOptionText(question.options[question.correctAnswer])}
+                                </Typography>
+                              )}
+                            </Box>
                           </Box>
                           <Button 
                             onClick={() => handleToggleStar(question.id)}

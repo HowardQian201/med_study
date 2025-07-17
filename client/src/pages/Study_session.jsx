@@ -28,6 +28,7 @@ import {
 } from '@mui/material';
 import {
   CloudUpload,
+  Description,
   Quiz,
   Refresh,
   Clear,
@@ -35,7 +36,8 @@ import {
   ContentCopy,
   Home as HomeIcon,
   Close as CloseIcon,
-  OpenInNew as OpenInNewIcon
+  OpenInNew as OpenInNewIcon,
+  Notes, // Added Notes icon
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import ReactMarkdown from 'react-markdown';
@@ -58,6 +60,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const [availablePdfs, setAvailablePdfs] = useState([]); // Stores { hash, filename, text } from backend
   const [selectedPdfHashes, setSelectedPdfHashes] = useState([]); // Stores only the hashes of selected PDFs
   const [showExpandedPdfList, setShowExpandedPdfList] = useState(false); // New state for expanded view
+  const [showUserTextDialog, setShowUserTextDialog] = useState(false); // New state for user text dialog
 
   // Clear existing results when component mounts, ensuring a fresh start
   useEffect(() => {
@@ -411,6 +414,29 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                 >
                   Upload PDFs
                 </Button>
+                <Button
+                  onClick={async () => {
+                    try {
+                      // Clear session content on the server
+                      await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+                      // Clear summary in App.js state
+                      setSummary('');
+                      // Navigate to study_session
+                      navigate('/study_session');
+                    } catch (err) {
+                      console.error('Failed to clear session and navigate:', err);
+                      // Still attempt to navigate even if clearing fails
+                      navigate('/study_session');
+                    }
+                  }}
+                  variant="outlined"
+                  startIcon={<Description />} 
+                  size="small"
+                  sx={{ py: 1 }}
+                  color={!isQuizMode ? "success" : "primary"}
+                >
+                  Study Session
+                </Button>
               </Box>
               <Typography 
                 variant="body2" 
@@ -450,7 +476,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       p: 4,
                       bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
                       width: 470,
-                      height: 200,
+                      height: 500,
                       overflowY: 'auto',
                       transition: 'all 0.2s ease',
                     }}
@@ -530,52 +556,27 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       )}
                     </Stack>
                   </Paper>
-
-                  {/* Text Input Area */}
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      border: '2px solid',
-                      borderColor: 'divider',
-                      borderRadius: 2,
-                      p: 3,
-                      width: '100%',
-                      bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper')
-                    }}
-                  >
-                    <Typography variant="h6" fontWeight="600" gutterBottom>
-                      Additional Text
-                    </Typography>
-                    <TextField
-                      multiline
-                      rows={6}
-                      fullWidth
-                      placeholder="Enter any additional text or notes that you want to include with the PDF content for summary and quiz generation..."
-                      value={userText}
-                      onChange={(e) => setUserText(e.target.value)}
-                      variant="outlined"
-                      disabled={isContentLocked || isUploading}
-                      sx={{
-                        '& .MuiOutlinedInput-root': {
-                          '& fieldset': {
-                            borderColor: 'divider',
-                          },
-                        },
-                        width: '100%',
-                        height: 160,
-                      }}
-                    />
-                  </Paper>
-
+                  
                   {/* Generate Button */}
-                  <Box display="flex" justifyContent="center">
+                  <Box display="flex" justifyContent="center" gap={2}> {/* Added gap for spacing */}
+                    <Button
+                      onClick={() => setShowUserTextDialog(true)} // Open the dialog
+                      variant="outlined"
+                      startIcon={<Notes />}
+                      size="large" // Adjusted size for consistency with Generate Summary
+                      sx={{ px: 4, py: 1.25, width: 175 }} // Adjusted width for consistency
+                      disabled={isContentLocked || isUploading}
+                      color={isQuizMode ? "primary" : "success"} // Added color prop
+                    >
+                      Add Text
+                    </Button>
                     <Button
                       onClick={generateSummary}
                       disabled={isContentLocked || (selectedPdfHashes.length === 0 && !userText.trim()) || isUploading}
                       variant="contained"
                       size="large"
                       startIcon={isUploading ? <CircularProgress size={24} color="inherit" /> : <CloudUpload />}
-                      sx={{ px: 4, py: 1.5, width: 300, }}
+                      sx={{ px: 4, py: 1.25, width: 250, }}
                       color={isQuizMode ? "primary" : "success"}
                     >
                       {isUploading ? 'Processing...' : 'Generate Summary'}
@@ -943,6 +944,38 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
               </Typography>
             )}
           </List>
+        </DialogContent>
+      </Dialog>
+
+      {/* Additional Text Dialog */}
+      <Dialog open={showUserTextDialog} onClose={() => setShowUserTextDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Typography variant="h5">Additional Text</Typography>
+            <IconButton onClick={() => setShowUserTextDialog(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <TextField
+            multiline
+            rows={10} // Increased rows for better usability in dialog
+            fullWidth
+            placeholder="Enter any additional text or notes that you want to include with the PDF content for summary and quiz generation..."
+            value={userText}
+            onChange={(e) => setUserText(e.target.value)}
+            variant="outlined"
+            disabled={isContentLocked || isUploading}
+            sx={{
+              width: '100%',
+              '& .MuiOutlinedInput-root': {
+                '& fieldset': {
+                  borderColor: 'divider',
+                },
+              },
+            }}
+          />
         </DialogContent>
       </Dialog>
     </Box>

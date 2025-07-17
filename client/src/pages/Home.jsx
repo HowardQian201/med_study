@@ -26,6 +26,7 @@ import {
   ArrowForward,
   Book,
   History,
+  Home as HomeIcon,
   Edit as EditIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
@@ -257,6 +258,29 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
             </Toolbar>
             <Toolbar sx={{ pt: 0, mt: -2.5, mb: 0.5, minHeight: '48px' }}>
               <Box sx={{ display: 'flex', gap: 1, flexGrow: 1 }}>
+              <Button
+                  onClick={async () => {
+                    try {
+                      // Clear session content on the server
+                      await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+                      // Clear summary in App.js state
+                      setSummary('');
+                      // Navigate to home
+                      navigate('/');
+                    } catch (err) {
+                      console.error('Failed to clear session and navigate:', err);
+                      // Still attempt to navigate even if clearing fails
+                      navigate('/');
+                    }
+                  }}
+                  variant="outlined"
+                  startIcon={<HomeIcon />}
+                  size="small"
+                  sx={{ py: 1 }}
+                  color={showQuizSets ? "primary" : "success"}
+                >
+                  Home
+                </Button>
                 <Button
                   variant="outlined"
                   color={showQuizSets ? "primary" : "success"}

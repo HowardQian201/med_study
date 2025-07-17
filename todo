@@ -2,10 +2,6 @@
 ###URGENT:
 
 
-quiz preview show answer/show answer button?
-additional text in study session should be hidden behind a button
-
-
 fastapi
     - use async clients for supabase
     - make cpu bound work like hashing offloaded to thread pool executor
