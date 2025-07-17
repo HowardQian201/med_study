@@ -1,7 +1,22 @@
-from flask import Flask, request, jsonify, send_from_directory, Response
-from flask_cors import CORS
+from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Depends, File, UploadFile
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List
 import traceback
-from .logic import log_memory_usage
+from .utils.redis import RedisSessionMiddleware, get_session, SessionManager
+from .utils.dependencies import require_auth 
+from .utils.pydantic_models import (
+    LoginRequest, LoginResponse, AuthCheckResponse, GenerateSummaryRequest,
+    RegenerateSummaryRequest, SaveSummaryRequest, GenerateQuizRequest,
+    SaveQuizAnswersRequest, ToggleStarQuestionRequest, StarAllQuestionsRequest,
+    LoadStudySetRequest, UpdateSetTitleRequest, DeleteQuestionSetRequest,
+    RemoveUserPdfsRequest, SubmitFeedbackRequest, SuccessResponse,
+    UserPdfsResponse, QuestionSetsResponse, QuizResponse, CurrentSessionSourcesResponse,
+    UserTasksResponse, UploadResponse, TaskStatusResponse, UpdateSetTitleResponse,
+    QuestionResponse, ShuffleQuizResponse, StarredQuizResponse, StarAllQuestionsResponse,
+    LoadStudySetResponse
+)
 from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_short_title
 from .database import (
     upsert_pdf_results, check_question_set_exists,
@@ -10,8 +25,7 @@ from .database import (
     upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title,
     touch_question_set, update_question_starred_status, delete_question_set_and_questions, insert_feedback, 
     append_pdf_hash_to_user_pdfs, get_user_associated_pdf_metadata, get_pdf_text_by_hashes,
-    update_user_task_status, get_user_tasks, delete_user_tasks_by_status, remove_pdf_hashes_from_user,
-    create_session, get_session_data, update_session_data, delete_session, extend_session_ttl, clear_redis_session_content
+    update_user_task_status, get_user_tasks, delete_user_tasks_by_status, remove_pdf_hashes_from_user
 )
 # Import the main Celery app instance from worker.py
 from .background.worker import app as celery_app
@@ -24,269 +38,169 @@ import random
 from celery.result import AsyncResult # Import this to interact with task results
 import tempfile # Import tempfile for creating temporary files
 from datetime import datetime, timezone # Import timezone for UTC
-import secrets
 
-# Custom Redis Session Management
-class RedisSessionManager:
-    """Custom session manager using Redis for session storage."""
-    
-    def __init__(self, app=None):
-        self.app = app
-        self.session_data = {}
-        self.session_id = None
-        self.modified = False
-        
-    def init_app(self, app):
-        self.app = app
-        app.before_request(self._load_session)
-        app.after_request(self._save_session)
-        
-    def _load_session(self):
-        """Load session data from Redis before each request."""
-        self.session_id = request.cookies.get('session_id')
-        self.modified = False # Reset modification flag on each request
-        
-        if self.session_id:
-            result = get_session_data(self.session_id)
-            if result["success"]:
-                self.session_data = result["data"]
-                # Extend session TTL on access
-                extend_session_ttl(self.session_id, 1)  # 1 hour
-            else:
-                # Session expired or doesn't exist
-                self.session_data = {}
-                self.session_id = None
-        else:
-            self.session_data = {}
-            
-    def _save_session(self, response):
-        """Save session data to Redis after each request if modified."""
-        
-        # Only save to Redis if the session has been modified
-        if not self.modified and self.session_id:
-            return response
-        
-        if self.session_id and self.session_data:
-            # Update session data in Redis
-            update_session_data(self.session_id, self.session_data, 1)  # 1 hour TTL
-            
-            # Set session cookie
-            response.set_cookie(
-                'session_id',
-                self.session_id,
-                max_age=3600,  # 1 hour
-                secure=True,
-                httponly=True,
-                samesite='Lax'
-            )
-        elif not self.session_id and self.session_data:
-            # Create new session
-            self.session_id = secrets.token_urlsafe(32)
-            create_result = create_session(self.session_id, self.session_data, 1)
-            if create_result["success"]:
-                response.set_cookie(
-                    'session_id',
-                    self.session_id,
-                    max_age=3600,
-                    secure=True,
-                    httponly=True,
-                    samesite='Lax'
-                )
-        
-        return response
-        
-    def get(self, key, default=None):
-        """Get session value."""
-        return self.session_data.get(key, default)
-        
-    def __getitem__(self, key):
-        """Get session value with bracket notation."""
-        return self.session_data[key]
-        
-    def __setitem__(self, key, value):
-        """Set session value with bracket notation."""
-        self.session_data[key] = value
-        self.modified = True
-        
-    def __contains__(self, key):
-        """Check if key exists in session."""
-        return key in self.session_data
-        
-    def pop(self, key, default=None):
-        """Remove and return session value."""
-        self.modified = True
-        return self.session_data.pop(key, default)
-        
-    def clear(self):
-        """Clear all session data."""
-        if self.session_id:
-            delete_session(self.session_id)
-            self.session_id = None
-        self.session_data = {}
-        self.modified = True
-        
-    def update(self, data):
-        """Update session data with dict."""
-        self.session_data.update(data)
-        self.modified = True
-        
-    def clear_content(self):
-        """Clear session content while preserving user auth."""
-        if self.session_id:
-            result = clear_redis_session_content(self.session_id)
-            if result.get("success"):
-                # Reload local session data to reflect the change
-                self.session_data = result.get("data", {})
-                # self.modified = True # REMOVED: Redis DB update is handled by clear_redis_session_content already
-                return True
-        return False
-
-# Custom session object
-redis_session = RedisSessionManager()
+# FastAPI Redis Session Management is now handled by middleware in redis.py
 
 # Streaming flag
 STREAMING_ENABLED = True
 
 # Try absolute path resolution
 static_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'client', 'dist')
-app = Flask(__name__, static_folder=static_folder, static_url_path='/static')
-CORS(app)
 
-# Configure session - keep minimal Flask session config for fallback
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-dev-key')
+# Create FastAPI app
+app = FastAPI(
+    title="Med Study API",
+    description="Medical study application with AI-powered quiz generation",
+    version="1.0.0"
+)
 
-# Initialize Redis session manager
-redis_session.init_app(app)
+# Custom exception handler to maintain Flask error format compatibility
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": exc.detail}  # Use "error" instead of "detail" for Flask compatibility
+    )
+
+# Configure CORS
+# Get allowed origins from environment variable, fallback to localhost for development
+ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5000').split(',')
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,  # Specific origins only
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Specific methods only
+    allow_headers=[
+        "Accept",
+        "Accept-Language", 
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "X-CSRF-Token"
+    ],
+)
+
+# Add Redis session middleware
+app.add_middleware(RedisSessionMiddleware, session_cookie_name="session_id", session_ttl_hours=1)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory=static_folder), name="static")
 
 # Email validation regex
 EMAIL_REGEX = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
-@app.route('/api/auth/login', methods=['POST'])
-def login():
+@app.post('/api/auth/login', response_model=LoginResponse)
+async def login(request: LoginRequest, session: SessionManager = Depends(get_session)):
     print("login()")
     try:
-        data = request.get_json()
-        email = data.get('email')
-        password = data.get('password')
-
-        if not email or not password:
-            return jsonify({'message': 'Email and password are required'}), 400
-
         # Validate email format
-        if not re.match(EMAIL_REGEX, email):
-            return jsonify({'message': 'Invalid email format'}), 400
+        if not re.match(EMAIL_REGEX, request.email):
+            raise HTTPException(status_code=400, detail='Invalid email format')
 
         # Authenticate user against database
-        auth_result = authenticate_user(email, password)
+        auth_result = authenticate_user(request.email, request.password)
         
         if not auth_result["success"]:
             print(f"Database error during authentication: {auth_result.get('error', 'Unknown error')}")
-            return jsonify({'message': 'Authentication service unavailable'}), 500
+            raise HTTPException(status_code=500, detail='Authentication service unavailable')
             
         if not auth_result["authenticated"]:
-            print(f"Invalid credentials for email: {email}")
-            return jsonify({'message': 'Invalid credentials'}), 401
+            print(f"Invalid credentials for email: {request.email}")
+            raise HTTPException(status_code=401, detail='Invalid credentials')
 
         print(f"User authenticated: {auth_result['user']}")
         user = auth_result["user"]
         
         # Clear any existing session data
-        redis_session.clear()
+        session.clear()
         print(f"User ID: {user['id']}")
         
         # Set new session data
-        redis_session['user_id'] = user['id']
-        redis_session['name'] = user['name']
-        redis_session['email'] = user['email']
+        session['user_id'] = user['id']
+        session['name'] = user['name']
+        session['email'] = user['email']
         
         # Ensure PDF results are empty on fresh login
-        redis_session['summary'] = ""
-        redis_session['quiz_questions'] = []
+        session['summary'] = ""
+        session['quiz_questions'] = []
         
-        return jsonify({'success': True})
+        return LoginResponse(success=True)
 
+    except HTTPException:
+        raise
     except Exception as e:
-        return jsonify({'message': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/auth/logout', methods=['POST'])
-def logout():
+@app.post('/api/auth/logout', response_model=SuccessResponse)
+async def logout(session: SessionManager = Depends(get_session)):
     print("logout()")
     try:
-        
         # Explicitly clear PDF results and all session data
-        redis_session.clear()
+        session.clear()
         
-        return jsonify({'success': True})
+        return SuccessResponse(success=True)
     except Exception as e:
-        return jsonify({'message': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/auth/check', methods=['GET'])
-def check_auth():
+@app.get('/api/auth/check', response_model=AuthCheckResponse)
+async def check_auth(session: SessionManager = Depends(get_session)):
     print("check_auth()")
     try:
-        if 'user_id' in redis_session:
+        if 'user_id' in session:
             # Get user email from session
-            email = redis_session.get('email')
+            email = session.get('email')
             # In a real app, you might want to fetch more user details from a database
-            return jsonify({
-                'authenticated': True,
-                'user': {
-                    'name': redis_session.get('name'),
+            return AuthCheckResponse(
+                authenticated=True,
+                user={
+                    'name': session.get('name'),
                     'email': email,
-                    'id': redis_session.get('user_id')
+                    'id': session.get('user_id')
                 },
-                'summary': redis_session.get('summary', '')
-            })
-        return jsonify({'authenticated': False})
+                summary=session.get('summary', '')
+            )
+        return AuthCheckResponse(authenticated=False)
     except Exception as e:
-        return jsonify({'message': str(e)}), 500
+        print(f"Error checking authentication status: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # New endpoint to get user's associated PDFs
-@app.route('/api/get-user-pdfs', methods=['GET'])
-def get_user_pdfs():
+@app.get('/api/get-user-pdfs', response_model=UserPdfsResponse)
+async def get_user_pdfs(user_id: int = Depends(require_auth)):
     print("get_user_pdfs()")
     try:
-        user_id = redis_session.get('user_id')
-        
-        # Validate user_id to ensure it's an integer before passing to DB
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for get_user_pdfs: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-
         result = get_user_associated_pdf_metadata(user_id)
         
         if not result['success']:
-            return jsonify({'error': result.get('error', 'Failed to retrieve user PDFs')}), 500
+            raise HTTPException(status_code=500, detail=result.get('error', 'Failed to retrieve user PDFs'))
             
-        return jsonify({'success': True, 'pdfs': result['data']})
+        return UserPdfsResponse(success=True, pdfs=result['data'])
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error getting user PDFs: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/generate-summary', methods=['POST'])
-def generate_summary():
+@app.post('/api/generate-summary')
+async def generate_summary(
+    request: GenerateSummaryRequest,
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     print("generate_summary()")
     try:
-        user_id = redis_session.get('user_id')
-
-        # Validate user_id to ensure it's an integer before passing to DB
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for generate_summary: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}) , 401
-
         # Get additional user text if provided
-        data = request.get_json()
-        user_text = data.get('userText', '').strip()
-        selected_pdf_hashes = data.get('selectedPdfHashes', [])
-        is_quiz_mode = str(data.get('isQuizMode', 'false')).lower() == 'true'
+        user_text = request.userText.strip() if request.userText else ""
+        selected_pdf_hashes = request.selectedPdfHashes
+        is_quiz_mode = str(request.isQuizMode).lower() == 'true'
         
         # Must have either selected PDFs or user text
         if not selected_pdf_hashes and not user_text:
-            raise Exception("No files or text provided")
-        
-        log_memory_usage("before content processing")
-        
+            raise HTTPException(status_code=400, detail="No files or text provided")
+                
         total_extracted_text = ""
         files_usertext_content = set()
         content_name_list = []
@@ -295,7 +209,7 @@ def generate_summary():
         if selected_pdf_hashes:
             pdf_texts_result = get_pdf_text_by_hashes(selected_pdf_hashes)
             if not pdf_texts_result['success']:
-                raise Exception(f"Failed to retrieve PDF texts: {pdf_texts_result.get('error')}")
+                raise HTTPException(status_code=500, detail=f"Failed to retrieve PDF texts: {pdf_texts_result.get('error')}")
             
             pdf_texts_map = pdf_texts_result['data']
             for pdf_hash in selected_pdf_hashes:
@@ -322,29 +236,24 @@ def generate_summary():
         
         content_hash = generate_content_hash(files_usertext_content, user_id, is_quiz_mode)
 
-        redis_session['content_hash'] = content_hash
-        redis_session['content_name_list'] = content_name_list
-        # redis_session auto-saves
+        session['content_hash'] = content_hash
+        session['content_name_list'] = content_name_list
 
         if not total_extracted_text:
-            raise Exception("No text could be extracted from selected PDFs and no additional text provided")
-        
-        log_memory_usage("before summarization")
+            raise HTTPException(status_code=400, detail="No text could be extracted from selected PDFs and no additional text provided")
         
         
         print(f"Text length being sent to AI: {len(total_extracted_text)} characters")
                 
         if not STREAMING_ENABLED:
-            summary = gpt_summarize_transcript(total_extracted_text, stream=STREAMING_ENABLED)
-            redis_session['summary'] = summary
-            # redis_session auto-saves
-            log_memory_usage("upload complete")
-            return jsonify({'success': True, 'results': summary})
+            summary = await gpt_summarize_transcript(total_extracted_text, stream=STREAMING_ENABLED) # Await the async function
+            session['summary'] = summary
+            return JSONResponse(content={'success': True, 'results': summary})
             
         # --- Streaming Response ---
-        def stream_generator(text_to_summarize):
-            stream_gen = gpt_summarize_transcript(text_to_summarize, stream=STREAMING_ENABLED)
-            for chunk in stream_gen:
+        async def stream_generator(text_to_summarize): # Change to async def
+            stream_gen = await gpt_summarize_transcript(text_to_summarize, stream=STREAMING_ENABLED) # Await the async function
+            async for chunk in stream_gen: # Await for chunks in streaming
                 content = chunk.choices[0].delta.content
                 if content:
                     yield content
@@ -352,54 +261,48 @@ def generate_summary():
             # The session cannot be modified here. The client will send the final summary
             # to a different endpoint to be saved.
             gc.collect()
-            log_memory_usage("streaming complete")
 
         # Before streaming, save file-related info to the session. This is okay
         # because it happens within the initial request context.
-        # redis_session auto-saves
 
-        return Response(stream_generator(total_extracted_text), mimetype='text/plain')
+        return StreamingResponse(stream_generator(total_extracted_text), media_type='text/plain')
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error: {str(e)}")
         traceback.print_exc()
-        log_memory_usage("upload error")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         # Force garbage collection to clean up memory
-        log_memory_usage("final cleanup")
         gc.collect()
 
 
-@app.route('/api/generate-quiz', methods=['POST'])
-def generate_quiz():
+@app.post('/api/generate-quiz', response_model=QuizResponse)
+async def generate_quiz(
+    request: GenerateQuizRequest,
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     """Endpoint to generate quiz questions from the stored summary"""
     print("generate_quiz()")
     try:
-        user_id = redis_session.get('user_id')
-        
-        # Validate user_id to ensure it's an integer before passing to DB
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for generate_quiz: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-
-        content_hash = redis_session.get('content_hash')
-        content_name_list = redis_session.get('content_name_list', [])
+        content_hash = session.get('content_hash')
+        content_name_list = session.get('content_name_list', [])
         
         # Check if there's a summary to work with
-        summary = redis_session.get('summary', '')
+        summary = session.get('summary', '')
         if not summary or not content_hash:
             print(f"No summary or content_hash available - returning 400")
-            return jsonify({'error': 'No summary available. Please upload content first.'}), 400
+            raise HTTPException(status_code=400, detail='No summary available. Please upload content first.')
         
         # Get request data and determine question type
-        data = request.json or {}
-        question_type = data.get('type', 'initial')  # 'initial', 'focused', or 'additional'
-        incorrect_question_ids = data.get('incorrectQuestionIds', [])
-        previous_questions = data.get('previousQuestions', [])
-        is_previewing = data.get('isPreviewing', False)
-        num_questions = data.get('numQuestions', 5)  # Default to 5 if not specified
-        is_quiz_mode = str(data.get('isQuizMode', 'false')).lower() == 'true' # Default to False (study mode)
+        question_type = request.type  # 'initial', 'focused', or 'additional'
+        incorrect_question_ids = request.incorrectQuestionIds
+        previous_questions = request.previousQuestions
+        is_previewing = request.isPreviewing
+        num_questions = request.numQuestions  # Default to 5 if not specified
+        is_quiz_mode = str(request.isQuizMode).lower() == 'true' # Default to False (study mode)
 
         # Validate number of questions is within reasonable bounds
         if not isinstance(num_questions, int) or num_questions < 1 or num_questions > 20:
@@ -410,10 +313,13 @@ def generate_quiz():
             quiz_exists = check_question_set_exists(content_hash, user_id)['exists']
             if quiz_exists:
                 print(f"Quiz set {content_hash} already exists for user {user_id}")
-                return jsonify({'error': 'Quiz set already exists', 'content_hash': content_hash}), 201
+                return JSONResponse(
+                    status_code=201,
+                    content={'error': 'Quiz set already exists', 'content_hash': content_hash}
+                )
         
         # Generate questions (can be initial or focused based on parameters)
-        questions, question_hashes = generate_quiz_questions(
+        questions, question_hashes = await generate_quiz_questions(
             summary, user_id, content_hash, 
             incorrect_question_ids=incorrect_question_ids, 
             previous_questions=previous_questions,
@@ -423,11 +329,10 @@ def generate_quiz():
         
         # Only generate short title and upsert question set for initial generation
         if question_type == 'initial':
-            short_summary = generate_short_title(summary)
+            short_summary = await generate_short_title(summary) # Await the async function
             # Upsert the question set to the database
             upsert_question_set(content_hash, user_id, question_hashes, content_name_list, short_summary, summary, is_quiz_mode)
-            redis_session['short_summary'] = short_summary
-            # redis_session auto-saves
+            session['short_summary'] = short_summary
         else:
             # For focused/additional questions, just upsert the new questions
             upsert_question_set(content_hash, user_id, question_hashes, content_name_list, is_quiz=is_quiz_mode)
@@ -435,7 +340,7 @@ def generate_quiz():
         # Store questions in session
         if is_previewing:
             # Store new questions in session, appending to the last set
-            quiz_questions_sets = redis_session.get('quiz_questions', [])
+            quiz_questions_sets = session.get('quiz_questions', [])
             if not quiz_questions_sets:
                 # If there are no sets for some reason, create a new one.
                 quiz_questions_sets.append(questions)
@@ -443,97 +348,85 @@ def generate_quiz():
                 # Get the last question set and extend it with the new questions.
                 quiz_questions_sets[-1].extend(questions)
 
-            redis_session['quiz_questions'] = quiz_questions_sets
+            session['quiz_questions'] = quiz_questions_sets
         else:
             # Store new questions in session
-            quiz_questions = redis_session.get('quiz_questions', [])
+            quiz_questions = session.get('quiz_questions', [])
             quiz_questions.append(questions)
-            redis_session['quiz_questions'] = quiz_questions
+            session['quiz_questions'] = quiz_questions
         
-        # redis_session auto-saves
-        
-        return jsonify({
-            'success': True,
-            'questions': questions,
-            'short_summary': redis_session.get('short_summary', '')
-        })
+        return QuizResponse(
+            success=True,
+            questions=questions,
+            short_summary=session.get('short_summary', '')
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error generating quiz questions: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
-@app.route('/api/get-quiz', methods=['GET'])
-def get_quiz():
+@app.get('/api/get-quiz', response_model=QuizResponse)
+async def get_quiz(
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     """Endpoint to retrieve stored quiz questions"""
     print("get_quiz()")
     try:
-        user_id = redis_session.get('user_id')
-
-        # Validate user_id to ensure it's an integer before proceeding
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for get_quiz: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-            
         # Get stored questions
-        questions = redis_session.get('quiz_questions', [])
+        questions = session.get('quiz_questions', [])
         latest_questions = questions[-1] if questions else []
         
-        return jsonify({
-            'success': True,
-            'questions': latest_questions
-        })
+        return QuizResponse(
+            success=True,
+            questions=latest_questions
+        )
     except Exception as e:
         print(f"Error retrieving quiz questions: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/get-all-quiz-questions', methods=['GET'])
-def get_all_quiz_questions():
+@app.get('/api/get-all-quiz-questions', response_model=QuizResponse)
+async def get_all_quiz_questions(
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     """Endpoint to retrieve all stored quiz questions from previous sessions"""
     print("get_all_quiz_questions()")
     try:
-        user_id = redis_session.get('user_id')
-
-        # Validate user_id to ensure it's an integer before proceeding
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for get_all_quiz_questions: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-            
         # Get all stored questions
-        all_questions = redis_session.get('quiz_questions', [])
+        all_questions = session.get('quiz_questions', [])
         
-        return jsonify({
-            'success': True,
-            'questions': all_questions
-        })
+        return QuizResponse(
+            success=True,
+            questions=all_questions
+        )
     except Exception as e:
         print(f"Error retrieving all quiz questions: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/save-quiz-answers', methods=['POST'])
-def save_quiz_answers():
+@app.post('/api/save-quiz-answers', response_model=SuccessResponse)
+async def save_quiz_answers(
+    request: SaveQuizAnswersRequest,
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     """Endpoint to save user answers for the current quiz set"""
     print("save_quiz_answers()")
     try:
-        user_id = redis_session.get('user_id')
-
-        # Validate user_id to ensure it's an integer before proceeding
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for save_quiz_answers: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-            
         # Get the request data
-        data = request.json
-        user_answers = data.get('userAnswers', {})
-        submitted_answers = data.get('submittedAnswers', {})
+        user_answers = request.userAnswers
+        submitted_answers = request.submittedAnswers
         
         # Get current quiz questions
-        quiz_questions = redis_session.get('quiz_questions', [])
+        quiz_questions = session.get('quiz_questions', [])
         if not quiz_questions:
-            return jsonify({'error': 'No quiz questions found'}), 400
+            raise HTTPException(status_code=400, detail='No quiz questions found')
             
         # Update the latest question set with user answers
         latest_question_set = quiz_questions[-1]
@@ -550,42 +443,39 @@ def save_quiz_answers():
                 question['isAnswered'] = False
         
         # Save back to session
-        redis_session['quiz_questions'] = quiz_questions
-        # redis_session auto-saves
+        session['quiz_questions'] = quiz_questions
         
-        return jsonify({'success': True})
+        return SuccessResponse(success=True)
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error saving quiz answers: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/regenerate-summary', methods=['POST'])
-def regenerate_summary():
+@app.post('/api/regenerate-summary')
+async def regenerate_summary(
+    request: RegenerateSummaryRequest,
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     """Endpoint to regenerate the summary from stored text"""
     print("regenerate_summary()")
     try:
-        user_id = redis_session.get('user_id')
-
-        # Validate user_id to ensure it's an integer before proceeding
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for regenerate_summary: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-        
         # Get additional user text if provided
-        data = request.get_json()
-        user_text = data.get('userText', '').strip()
-        selected_pdf_hashes = data.get('selectedPdfHashes', [])
+        user_text = request.userText.strip() if request.userText else ""
+        selected_pdf_hashes = request.selectedPdfHashes
         
         # Must have either selected PDFs or user text
         if not selected_pdf_hashes and not user_text:
-            raise Exception("No files or text provided")
+            raise HTTPException(status_code=400, detail="No files or text provided")
         
         total_extracted_text = ""
         # Process selected PDFs from database
         if selected_pdf_hashes:
             pdf_texts_result = get_pdf_text_by_hashes(selected_pdf_hashes)
             if not pdf_texts_result['success']:
-                raise Exception(f"Failed to retrieve PDF texts: {pdf_texts_result.get('error')}")
+                raise HTTPException(status_code=500, detail=f"Failed to retrieve PDF texts: {pdf_texts_result.get('error')}")
             
             pdf_texts_map = pdf_texts_result['data']
             for pdf_hash in selected_pdf_hashes:
@@ -605,20 +495,19 @@ def regenerate_summary():
 
         # Must have text to regenerate from
         if not total_extracted_text:
-            return jsonify({'error': 'No text available to regenerate summary from. Please upload content first.'}), 400
+            raise HTTPException(status_code=400, detail='No text available to regenerate summary from. Please upload content first.')
         
         # Generate new summary
         if not STREAMING_ENABLED:
-            summary = gpt_summarize_transcript(total_extracted_text, temperature=1.2, stream=STREAMING_ENABLED)
-            redis_session['summary'] = summary
-            redis_session['quiz_questions'] = []
-            # redis_session auto-saves
-            return jsonify({'success': True, 'summary': summary})
+            summary = await gpt_summarize_transcript(total_extracted_text, temperature=1.2, stream=STREAMING_ENABLED)
+            session['summary'] = summary
+            session['quiz_questions'] = []
+            return JSONResponse(content={'success': True, 'summary': summary})
 
         # --- Streaming Response ---
-        def stream_generator(text_to_summarize):
-            stream_gen = gpt_summarize_transcript(text_to_summarize, temperature=1.2, stream=STREAMING_ENABLED)
-            for chunk in stream_gen:
+        async def stream_generator(text_to_summarize):
+            stream_gen = await gpt_summarize_transcript(text_to_summarize, temperature=1.2, stream=STREAMING_ENABLED)
+            async for chunk in stream_gen:
                 content = chunk.choices[0].delta.content
                 if content:
                     yield content
@@ -627,192 +516,179 @@ def regenerate_summary():
             print("Redis session not modified, streaming complete (regenerate).")
 
         # Clear old questions
-        redis_session['quiz_questions'] = []
-        # redis_session auto-saves
+        session['quiz_questions'] = []
 
-        return Response(stream_generator(total_extracted_text), mimetype='text/plain')
+        return StreamingResponse(stream_generator(total_extracted_text), media_type='text/plain')
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error regenerating summary: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/save-summary', methods=['POST'])
-def save_summary():
+@app.post('/api/save-summary', response_model=SuccessResponse)
+async def save_summary(
+    request: SaveSummaryRequest,
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     """Endpoint to save the completed summary to the session."""
     print("save_summary()")
     try:
-        user_id = redis_session.get('user_id')
+        summary = request.summary
 
-        # Validate user_id to ensure it's an integer before proceeding
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for save_summary: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-        
-        data = request.json
-        summary = data.get('summary')
+        if not summary:
+            raise HTTPException(status_code=400, detail='No summary provided')
 
-        if summary is None:
-            return jsonify({'error': 'No summary provided'}), 400
-
-        redis_session['summary'] = summary
+        session['summary'] = summary
         # Clear any old quiz questions, as they are now outdated
-        redis_session['quiz_questions'] = []
-        # redis_session auto-saves
+        session['quiz_questions'] = []
         
         print("Summary successfully saved to session.")
-        return jsonify({'success': True})
+        return SuccessResponse(success=True)
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error saving summary: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/get-question-sets', methods=['GET'])
-def get_question_sets():
+@app.get('/api/get-question-sets', response_model=QuestionSetsResponse)
+async def get_question_sets(user_id: int = Depends(require_auth)):
     """Endpoint to retrieve all study sets for the logged-in user."""
     print("get_question_sets()")
-    if 'user_id' not in redis_session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    user_id = redis_session.get('user_id')
-    
-    # Validate user_id to ensure it's an integer before passing to DB
-    if not isinstance(user_id, int):
-        print(f"Invalid user_id type or missing in session for get_question_sets: {user_id}")
-        return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-
-    result = get_question_sets_for_user(user_id)
-    
-    if not result['success']:
-        return jsonify({'error': result.get('error', 'Failed to get question sets')}), 500
+    try:
+        result = get_question_sets_for_user(user_id)
         
-    return jsonify({'success': True, 'sets': result['data']})
+        if not result['success']:
+            raise HTTPException(status_code=500, detail=result.get('error', 'Failed to get question sets'))
+            
+        return QuestionSetsResponse(success=True, sets=result['data'])
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting question sets: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/load-study-set', methods=['POST'])
-def load_study_set():
+@app.post('/api/load-study-set', response_model=LoadStudySetResponse)
+async def load_study_set(
+    request: LoadStudySetRequest,
+    background_tasks: BackgroundTasks,
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     """Endpoint to load a full study set into the user's session."""
     print("load_study_set()")
-    user_id = redis_session.get('user_id')
-    
-    # Validate user_id to ensure it's an integer before passing to DB
-    if not isinstance(user_id, int):
-        print(f"Invalid user_id type or missing in session for load_study_set: {user_id}")
-        return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-
-    data = request.json
-    content_hash = data.get('content_hash')
-    
-    if not content_hash:
-        return jsonify({'error': 'content_hash is required'}), 400
+    try:
+        content_hash = request.content_hash
         
-    # Update the 'modified_at' timestamp (via created_at field)
-    touch_result = touch_question_set(content_hash, user_id)
-    if not touch_result['success']:
-        # This is not a fatal error for loading, so we just log a warning.
-        print(f"Warning: could not update timestamp for set {content_hash}. Reason: {touch_result.get('error')}")
+        if not content_hash:
+            raise HTTPException(status_code=400, detail='content_hash is required')
+            
+        # Run the timestamp update in the background as it's not critical for the response
+        background_tasks.add_task(touch_question_set, content_hash, user_id)
 
-    result = get_full_study_set_data(content_hash, user_id)
-    print(f"get_full_study_set_data() result:")
-    for i, q_set in enumerate(result['data']['quiz_questions']):
-        for j, question in enumerate(q_set):
-            print(f"{i}.{j}: {question['text'][:50]}")
-    
-    if not result['success']:
-        print(f"Failed to get study set data: {result.get('error')}")
-        return jsonify({'error': result.get('error', 'Failed to load study set')}), 500
-    
-    # Load data into session
-    set_data = result['data']
-    # Ensure summary is a string, not None, to prevent crashes.
-    summary_text = set_data.get('summary', '')
-    redis_session['summary'] = summary_text
-    redis_session['short_summary'] = set_data.get('short_summary', '')
-    redis_session['quiz_questions'] = set_data.get('quiz_questions', [])
-    redis_session['content_hash'] = set_data.get('content_hash', '')
-    redis_session['content_name_list'] = set_data.get('content_name_list', [])
-    # redis_session auto-saves
-    
-    print(f"Loaded {len(redis_session.get('quiz_questions', []))} question sets into session.")
-    print(f"Summary loaded (first 100 chars): {summary_text[:100]}")
-    return jsonify({'success': True, 'summary': summary_text})
+        result = get_full_study_set_data(content_hash, user_id)
+        print(f"get_full_study_set_data() result: {len(result['data']['quiz_questions'])}")
+        
+        if not result['success']:
+            print(f"Failed to get study set data: {result.get('error')}")
+            raise HTTPException(status_code=500, detail=result.get('error', 'Failed to load study set'))
+        
+        # Load data into session
+        set_data = result['data']
+        # Ensure summary is a string, not None, to prevent crashes.
+        summary_text = set_data.get('summary', '')
+        session['summary'] = summary_text
+        session['short_summary'] = set_data.get('short_summary', '')
+        session['quiz_questions'] = set_data.get('quiz_questions', [])
+        session['content_hash'] = set_data.get('content_hash', '')
+        session['content_name_list'] = set_data.get('content_name_list', [])
+        
+        print(f"Loaded {len(session.get('quiz_questions', []))} question sets into session.")
+        return LoadStudySetResponse(success=True, summary=summary_text)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error loading study set: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/get-current-session-sources', methods=['GET'])
-def get_current_session_sources():
+@app.get('/api/get-current-session-sources', response_model=CurrentSessionSourcesResponse)
+async def get_current_session_sources(
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     print("get_current_session_sources()")
-    user_id = redis_session.get('user_id')
-    
-    # Validate user_id to ensure it's an integer before proceeding
-    if not isinstance(user_id, int):
-        print(f"Invalid user_id type or missing in session for get_current_session_sources: {user_id}")
-        return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
+    try:
+        # Retrieve the content_name_list from the session
+        content_names = session.get('content_name_list', [])
+        return CurrentSessionSourcesResponse(
+            success=True, 
+            content_names=content_names, 
+            short_summary=session.get('short_summary', '')
+        )
+    except Exception as e:
+        print(f"Error getting current session sources: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # Retrieve the content_name_list from the session
-    content_names = redis_session.get('content_name_list', [])
-    return jsonify({'success': True, 'content_names': content_names, 'short_summary': redis_session.get('short_summary', '')})
-
-@app.route('/api/update-set-title', methods=['POST'])
-def update_set_title():
+@app.post('/api/update-set-title', response_model=UpdateSetTitleResponse)
+async def update_set_title(
+    request: UpdateSetTitleRequest,
+    user_id: int = Depends(require_auth)
+):
     """Endpoint to update the title of a study set."""
     print("update_set_title()")
-    user_id = redis_session.get('user_id')
-
-    # Validate user_id to ensure it's an integer before passing to DB
-    if not isinstance(user_id, int):
-        print(f"Invalid user_id type or missing in session for update_set_title: {user_id}")
-        return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-
-    data = request.json
-    content_hash = data.get('content_hash')
-    new_title = data.get('new_title')
-    
-    if not content_hash or not new_title:
-        return jsonify({'error': 'content_hash and new_title are required'}), 400
+    try:
+        if not request.content_hash or not request.new_title:
+            raise HTTPException(status_code=400, detail='content_hash and new_title are required')
+            
+        result = update_question_set_title(request.content_hash, user_id, request.new_title)
         
-    result = update_question_set_title(content_hash, user_id, new_title)
-    
-    if not result['success']:
-        return jsonify({'error': result.get('error', 'Failed to update title')}), 500
-        
-    return jsonify({'success': True, 'data': result['data']})
+        if not result['success']:
+            raise HTTPException(status_code=500, detail=result.get('error', 'Failed to update title'))
+            
+        return UpdateSetTitleResponse(success=True, data=result['data'])
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error updating set title: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/clear-session-content', methods=['POST'])
-def clear_session_content():
+@app.post('/api/clear-session-content', response_model=SuccessResponse)
+async def clear_session_content(
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     """Endpoint to clear session data related to a study set."""
     print("clear_session_content()")
     try:
-        user_id = redis_session.get('user_id')
-
-        # Validate user_id to ensure it's an integer before proceeding
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for clear_session_content: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
+        session.clear_content()
         
-        redis_session.clear_content()
-        
-        return jsonify({'success': True, 'message': 'Session content cleared.'})
+        return SuccessResponse(success=True, message='Session content cleared.')
     except Exception as e:
         print(f"Error clearing session content: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/toggle-star-question', methods=['POST'])
-def toggle_star_question():
+@app.post('/api/toggle-star-question', response_model=QuestionResponse)
+async def toggle_star_question(
+    request: ToggleStarQuestionRequest,
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     print("toggle_star_question()")
     try:
-        user_id = redis_session.get('user_id')
-
-        # Validate user_id to ensure it's an integer before proceeding
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for toggle_star_question: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-
-        data = request.json
-        question_id = data.get('questionId')
+        question_id = request.questionId
 
         if not question_id:
-            return jsonify({'error': 'Question ID is required'}), 400
+            raise HTTPException(status_code=400, detail='Question ID is required')
             
-        quiz_questions_sets = redis_session.get('quiz_questions', [])
+        quiz_questions_sets = session.get('quiz_questions', [])
         updated_question = None
 
         # Iterate through all question sets and questions to find and update the question
@@ -840,34 +716,31 @@ def toggle_star_question():
                 break
         
         if updated_question:
-            redis_session['quiz_questions'] = quiz_questions_sets
-            # redis_session auto-saves
+            session['quiz_questions'] = quiz_questions_sets
             print(f"Toggled star for question ID {question_id}. New status: {updated_question.get('starred')}")
-            return jsonify({'success': True, 'question': updated_question})
+            return QuestionResponse(success=True, question=updated_question)
         else:
             print(f"Question with ID {question_id} not found.")
-            return jsonify({'error': 'Question not found'}), 404
+            raise HTTPException(status_code=404, detail='Question not found')
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error toggling star status: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/shuffle-quiz', methods=['POST'])
-def shuffle_quiz():
+@app.post('/api/shuffle-quiz', response_model=ShuffleQuizResponse)
+async def shuffle_quiz(
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     print("shuffle_quiz()")
     try:
-        user_id = redis_session.get('user_id')
-
-        # Validate user_id to ensure it's an integer before proceeding
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for shuffle_quiz: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-        
-        quiz_questions_sets = redis_session.get('quiz_questions', [])
+        quiz_questions_sets = session.get('quiz_questions', [])
         
         if not quiz_questions_sets:
-            return jsonify({'success': True, 'questions': []})
+            return ShuffleQuizResponse(success=True, questions=[])
             
         # Get the latest set of questions
         latest_questions = quiz_questions_sets[-1]
@@ -878,31 +751,26 @@ def shuffle_quiz():
         
         # Update the latest set in session with shuffled questions
         quiz_questions_sets[-1] = shuffled_questions
-        redis_session['quiz_questions'] = quiz_questions_sets
-        # redis_session auto-saves
+        session['quiz_questions'] = quiz_questions_sets
         
         print(f"Shuffled {len(shuffled_questions)} questions in session.")
-        return jsonify({'success': True, 'questions': shuffled_questions})
+        return ShuffleQuizResponse(success=True, questions=shuffled_questions)
     except Exception as e:
         print(f"Error shuffling quiz questions: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/start-starred-quiz', methods=['POST'])
-def start_starred_quiz():
+@app.post('/api/start-starred-quiz', response_model=StarredQuizResponse)
+async def start_starred_quiz(
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     print("start_starred_quiz()")
     try:
-        user_id = redis_session.get('user_id')
-
-        # Validate user_id to ensure it's an integer before proceeding
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for start_starred_quiz: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-        
-        quiz_questions_sets = redis_session.get('quiz_questions', [])
+        quiz_questions_sets = session.get('quiz_questions', [])
         
         if not quiz_questions_sets:
-            return jsonify({'success': True, 'questions': []})
+            return StarredQuizResponse(success=True, questions=[])
 
         # Get the latest set of questions from the session
         latest_questions = quiz_questions_sets[-1]
@@ -911,42 +779,37 @@ def start_starred_quiz():
         starred_questions = [q for q in latest_questions if q.get('starred', False)]
 
         if not starred_questions:
-            return jsonify({'success': False, 'error': 'No starred questions found to start a quiz.'}), 400
+            return StarredQuizResponse(success=False, error='No starred questions found to start a quiz.', questions=[])
             
         # Replace the current (latest) quiz set in the session with only the starred questions
         # This effectively creates a new quiz from existing starred questions
         quiz_questions_sets[-1] = starred_questions
-        redis_session['quiz_questions'] = quiz_questions_sets
-        # redis_session auto-saves
+        session['quiz_questions'] = quiz_questions_sets
         
         print(f"Started quiz with {len(starred_questions)} starred questions.")
-        return jsonify({'success': True, 'questions': starred_questions})
+        return StarredQuizResponse(success=True, questions=starred_questions)
     except Exception as e:
         print(f"Error starting starred quiz: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/star-all-questions', methods=['POST'])
-def star_all_questions():
+@app.post('/api/star-all-questions', response_model=StarAllQuestionsResponse)
+async def star_all_questions(
+    request: StarAllQuestionsRequest,
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     print("star_all_questions()")
     try:
-        user_id = redis_session.get('user_id')
-
-        # Validate user_id to ensure it's an integer before proceeding
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for star_all_questions: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-        
-        data = request.json or {}
-        action = data.get('action', 'star')  # 'star' or 'unstar'
+        action = request.action  # 'star' or 'unstar'
         
         if action not in ['star', 'unstar']:
-            return jsonify({'error': 'Invalid action. Must be "star" or "unstar"'}), 400
+            raise HTTPException(status_code=400, detail='Invalid action. Must be "star" or "unstar"')
         
-        quiz_questions_sets = redis_session.get('quiz_questions', [])
+        quiz_questions_sets = session.get('quiz_questions', [])
         
         if not quiz_questions_sets:
-            return jsonify({'success': True, 'questions': []})
+            return StarAllQuestionsResponse(success=True, questions=[])
 
         # Get the latest set of questions from the session
         latest_questions = quiz_questions_sets[-1]
@@ -973,168 +836,157 @@ def star_all_questions():
         
         # Update session
         quiz_questions_sets[-1] = updated_questions
-        redis_session['quiz_questions'] = quiz_questions_sets
-        # redis_session auto-saves
+        session['quiz_questions'] = quiz_questions_sets
         
         action_verb = "Starred" if starred_status else "Unstarred"
         print(f"{action_verb} all {len(updated_questions)} questions.")
-        return jsonify({'success': True, 'questions': updated_questions})
+        return StarAllQuestionsResponse(success=True, questions=updated_questions)
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Error {action}ring all questions: {str(e)}")
+        print(f"Error {request.action}ring all questions: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/delete-question-set', methods=['POST'])
-def delete_question_set():
+@app.post('/api/delete-question-set', response_model=SuccessResponse)
+async def delete_question_set(
+    request: DeleteQuestionSetRequest,
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     print("delete_question_set()")
     try:
-        user_id = redis_session.get('user_id')
-
-        # Validate user_id to ensure it's an integer before passing to DB
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for delete_question_set: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-
-        data = request.json
-        content_hash = data.get('content_hash')
+        content_hash = request.content_hash
         
         if not content_hash:
-            return jsonify({'error': 'content_hash is required'}), 400
+            raise HTTPException(status_code=400, detail='content_hash is required')
         
         # Delete the question set and associated questions from database
         delete_result = delete_question_set_and_questions(content_hash, user_id)
         
         if not delete_result['success']:
-            return jsonify({'error': delete_result.get('error', 'Failed to delete question set')}), 500
+            raise HTTPException(status_code=500, detail=delete_result.get('error', 'Failed to delete question set'))
         
         # Clear session data if the deleted set is currently loaded
-        current_content_hash = redis_session.get('content_hash')
+        current_content_hash = session.get('content_hash')
         if current_content_hash == content_hash:
-            redis_session.clear_content()
+            session.clear_content()
             print(f"Cleared session data for deleted set: {content_hash}")
         
-        return jsonify({'success': True, 'message': 'Question set deleted successfully'})
+        return SuccessResponse(success=True, message='Question set deleted successfully')
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error deleting question set: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/submit-feedback', methods=['POST'])
-def submit_feedback():
+@app.post('/api/submit-feedback', response_model=SuccessResponse)
+async def submit_feedback(
+    request: SubmitFeedbackRequest,
+    user_id: int = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
     print("submit_feedback()")
     try:
-        data = request.json
-        feedback_text = data.get('feedback')
-        user_id = redis_session.get('user_id')
-        user_name = redis_session.get('name')
-        user_email = redis_session.get('email')
-
-        # Validate user_id to ensure it's an integer before proceeding
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type or missing in session for submit_feedback: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
+        feedback_text = request.feedback
+        user_name = session.get('name')
+        user_email = session.get('email')
 
         if not feedback_text or not feedback_text.strip():
-            return jsonify({'error': 'Feedback text cannot be empty'}), 400
+            raise HTTPException(status_code=400, detail='Feedback text cannot be empty')
 
         result = insert_feedback(user_id, user_email, user_name, feedback_text)
         
         if result['success']:
-            return jsonify({'success': True, 'message': 'Feedback submitted successfully.'})
+            return SuccessResponse(success=True, message='Feedback submitted successfully.')
         else:
-            return jsonify({'success': False, 'error': result.get('error', 'Failed to submit feedback.')}), 500
+            raise HTTPException(status_code=500, detail=result.get('error', 'Failed to submit feedback.'))
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error submitting feedback: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/clear-completed-tasks', methods=['POST'])
-def clear_completed_tasks_endpoint():
+@app.post('/api/clear-completed-tasks', response_model=SuccessResponse)
+async def clear_completed_tasks_endpoint(user_id: int = Depends(require_auth)):
     print("clear_completed_tasks_endpoint()")
-    user_id = redis_session.get('user_id')
-
-    # Validate user_id to ensure it's an integer before proceeding
-    if not isinstance(user_id, int):
-        print(f"Invalid user_id type or missing in session for clear_completed_tasks_endpoint: {user_id}")
-        return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-
-    # Define statuses to clear: SUCCESS and FAILURE
-    statuses_to_clear = ['SUCCESS', 'FAILURE']
-    
-    result = delete_user_tasks_by_status(user_id, statuses_to_clear)
-    
-    if not result['success']:
-        return jsonify({'error': result.get('error', 'Failed to clear tasks')}), 500
+    try:
+        # Define statuses to clear: SUCCESS and FAILURE
+        statuses_to_clear = ['SUCCESS', 'FAILURE']
         
-    return jsonify({'success': True, 'message': f"Cleared {result.get('deleted_count', 0)} completed tasks."})
-
-@app.route('/api/remove-user-pdfs', methods=['POST'])
-def remove_user_pdfs_endpoint():
-    print("remove_user_pdfs_endpoint()")
-    user_id = redis_session.get('user_id')
-
-    # Validate user_id to ensure it's an integer before proceeding
-    if not isinstance(user_id, int):
-        print(f"Invalid user_id type or missing in session for remove_user_pdfs_endpoint: {user_id}")
-        return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-
-    data = request.get_json()
-    pdf_hashes = data.get('pdf_hashes', [])
-
-    if not pdf_hashes:
-        return jsonify({'success': False, 'message': 'No PDF hashes provided for removal.'}), 400
-
-    result = remove_pdf_hashes_from_user(user_id, pdf_hashes)
-    
-    if not result['success']:
-        return jsonify({'error': result.get('error', 'Failed to remove PDFs')}), 500
+        result = delete_user_tasks_by_status(user_id, statuses_to_clear)
         
-    return jsonify({'success': True, 'message': f"Removed {result.get('deleted_count', 0)} PDFs from your account."})
-
-@app.route('/api/get-user-tasks', methods=['GET'])
-def get_user_tasks_endpoint():
-    print("get_user_tasks()")
-    user_id = redis_session.get('user_id')
-
-    # Validate user_id to ensure it's an integer before proceeding
-    if not isinstance(user_id, int):
-        print(f"Invalid user_id type or missing in session for get_user_tasks_endpoint: {user_id}")
-        return jsonify({'error': 'Unauthorized: Invalid or missing user ID in session'}), 401
-
-    result = get_user_tasks(user_id)
-    
-    if not result['success']:
-        print(f"Error retrieving tasks from Redis for user {user_id}: {result.get('error', 'Unknown error')}")
-        return jsonify({'error': result.get('error', 'Failed to get tasks')}), 500
-    
-    print(f"Tasks retrieved from Redis for user {user_id}:")
-    for task in result['data']:
-        print(f"  Task ID: {task.get('task_id', '')}, Filename: {task.get('filename', '')}, Status: {task.get('status', '')}, Message: {task.get('message', '')}")
+        if not result['success']:
+            raise HTTPException(status_code=500, detail=result.get('error', 'Failed to clear tasks'))
             
-    return jsonify({'success': True, 'tasks': result['data']})
+        return SuccessResponse(success=True, message=f"Cleared {result.get('deleted_count', 0)} completed tasks.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error clearing completed tasks: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/upload-pdfs', methods=['POST'])
-def upload_pdfs():
+@app.post('/api/remove-user-pdfs', response_model=SuccessResponse)
+async def remove_user_pdfs_endpoint(
+    request: RemoveUserPdfsRequest,
+    user_id: int = Depends(require_auth)
+):
+    print("remove_user_pdfs_endpoint()")
+    try:
+        pdf_hashes = request.pdf_hashes
+
+        if not pdf_hashes:
+            raise HTTPException(status_code=400, detail='No PDF hashes provided for removal.')
+
+        result = remove_pdf_hashes_from_user(user_id, pdf_hashes)
+        
+        if not result['success']:
+            raise HTTPException(status_code=500, detail=result.get('error', 'Failed to remove PDFs'))
+            
+        return SuccessResponse(success=True, message=f"Removed {result.get('deleted_count', 0)} PDFs from your account.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error removing user PDFs: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get('/api/get-user-tasks', response_model=UserTasksResponse)
+async def get_user_tasks_endpoint(user_id: int = Depends(require_auth)):
+    print("get_user_tasks()")
+    try:
+        result = get_user_tasks(user_id)
+        
+        if not result['success']:
+            print(f"Error retrieving tasks from Redis for user {user_id}: {result.get('error', 'Unknown error')}")
+            raise HTTPException(status_code=500, detail=result.get('error', 'Failed to get tasks'))
+        
+        print(f"Tasks retrieved from Redis for user {user_id}:")
+        for task in result['data']:
+            print(f"  Task ID: {task.get('task_id', '')}, Filename: {task.get('filename', '')}, Status: {task.get('status', '')}, Message: {task.get('message', '')}")
+                
+        return UserTasksResponse(success=True, tasks=result['data'])
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in get_user_tasks_endpoint: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post('/api/upload-pdfs', response_model=UploadResponse)
+async def upload_pdfs(
+    files: List[UploadFile] = File(...),
+    user_id: int = Depends(require_auth)
+):
     print("upload_pdfs()")
     try:
-        if 'user_id' not in redis_session:
-            return jsonify({'error': 'Unauthorized'}), 401
-
-        if 'files' not in request.files:
-            return jsonify({'error': 'No files part in the request'}), 400
-
-        files = request.files.getlist('files')
         if not files:
-            return jsonify({'error': 'No selected files'}), 400
-
-        user_id = redis_session['user_id']
-        
-        # Validate user_id to ensure it's an integer before passing to DB
-        if not isinstance(user_id, int):
-            print(f"Invalid user_id type in session for upload_pdfs: {user_id}")
-            return jsonify({'error': 'Unauthorized: Invalid user ID in session'}), 401
+            raise HTTPException(status_code=400, detail='No selected files')
 
         bucket_name = "pdfs"
         uploaded_task_details = []
@@ -1152,8 +1004,8 @@ def upload_pdfs():
                 # Create a temporary file to store the incoming PDF stream
                 # delete=True ensures the file is automatically deleted when closed
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-                    file.stream.seek(0) # Ensure stream is at the beginning
-                    temp_file.write(file.stream.read())
+                    content = await file.read() # Read the file content
+                    temp_file.write(content)
                     temp_file_path = temp_file.name # Get the path to the temporary file
                 
                 original_filename = file.filename
@@ -1229,29 +1081,33 @@ def upload_pdfs():
                         print(f"Error cleaning up temporary file {temp_file_path}: {str(e_clean)}")
         
         if not uploaded_task_details and not failed_files_details and not uploaded_files_details:
-            return jsonify({'success': False, 'message': 'No valid PDF files were provided or processed.'}), 200
+            return UploadResponse(
+                success=False,
+                message='No valid PDF files were provided or processed.',
+                uploaded_files=[],
+                failed_files=[],
+                task_details=[]
+            )
 
-        return jsonify({
-            'success': True,
-            'message': f'{len(uploaded_files_details)} files uploaded, {len(failed_files_details)} files failed.',
-            'uploaded_files': uploaded_files_details,
-            'failed_files': failed_files_details,
-            'task_details': uploaded_task_details # Still include for debugging if needed
-        })
+        return UploadResponse(
+            success=True,
+            message=f'{len(uploaded_files_details)} files uploaded, {len(failed_files_details)} files failed.',
+            uploaded_files=uploaded_files_details,
+            failed_files=failed_files_details,
+            task_details=uploaded_task_details
+        )
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error uploading PDFs: {str(e)}")
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route("/api/pdf-processing-status/<task_id>")
-def get_pdf_processing_status(task_id):
+@app.get("/api/pdf-processing-status/{task_id}", response_model=TaskStatusResponse)
+async def get_pdf_processing_status(task_id: str, user_id: int = Depends(require_auth)):
     print(f"Checking status for task_id: {task_id}")
     try:
-        # Check if user is authenticated (optional, but good practice if task results are user-specific)
-        if 'user_id' not in redis_session:
-            return jsonify({'error': 'Unauthorized'}), 401
-        
         task_result = AsyncResult(task_id, app=celery_app)
         
         status = task_result.status
@@ -1283,40 +1139,52 @@ def get_pdf_processing_status(task_id):
         if isinstance(result, Exception):
             json_safe_result = str(result)
 
-        return jsonify({
-            'success': True,
-            'task_id': task_id,
-            'status': status,
-            'result': json_safe_result,
-            'message': message
-        })
+        return TaskStatusResponse(
+            success=True,
+            task_id=task_id,
+            status=status,
+            result=json_safe_result,
+            message=message
+        )
 
     except Exception as e:
         print(f"Error checking task status: {str(e)}")
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Serve the React frontend
-@app.route("/")
-def serve():
+@app.get("/")
+async def serve():
     """Serve the main React app"""
-    print(f"Serving main React app from: {app.static_folder}")
-    return send_from_directory(app.static_folder, 'index.html')
+    print(f"Serving main React app from: {static_folder}")
+    try:
+        return FileResponse(os.path.join(static_folder, 'index.html'))
+    except Exception as e:
+        print(f"Error serving index.html: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to serve index.html: {str(e)}")
 
-@app.route('/favicon.png')
-def favicon():
+@app.get('/favicon.png')
+async def favicon():
     # Serve the favicon from the React build output
-    return send_from_directory(app.static_folder, 'favicon.png', mimetype='image/png')
+    try:
+        return FileResponse(os.path.join(static_folder, 'favicon.png'), media_type='image/png')
+    except Exception as e:
+        print(f"Error serving favicon.png: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to serve favicon.png: {str(e)}")
 
 # Catch-all route for client-side routing (React Router)
-@app.route("/<path:path>")
-def serve_static(path):
+@app.get("/{path:path}")
+async def serve_static(path: str):
     print(f"Serving static file: {path}")
-    # If it's an asset file (CSS, JS), serve it
-    if path.startswith('assets/'):
-        return send_from_directory(app.static_folder, path)
-    # For all other routes, serve index.html (let React Router handle it)
-    else:
-        return send_from_directory(app.static_folder, 'index.html')
+    try:
+        # If it's an asset file (CSS, JS), serve it
+        if path.startswith('assets/'):
+            return FileResponse(os.path.join(static_folder, path))
+        # For all other routes, serve index.html (let React Router handle it)
+        else:
+            return FileResponse(os.path.join(static_folder, 'index.html'))
+    except Exception as e:
+        print(f"Error serving static file {path}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to serve static file {path}: {str(e)}")
     
     
