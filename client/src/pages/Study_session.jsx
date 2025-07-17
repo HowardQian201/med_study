@@ -339,13 +339,33 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
       {/* App Bar */}
       <AppBar position="static" color="default" elevation={1}>
         <Container maxWidth="false">
-          <Box sx={{ maxWidth: '100%', mx: 'auto' }}>
-            <Toolbar>
+          <Box>
+            <Toolbar sx={{ pb: 0, minHeight: '48px' }}>
               <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <img src="/favicon.png" alt="MedStudyAI Logo" style={{ width: 28, height: 28 }} />
                 <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
                   MedStudyAI
                 </Typography>
+              </Box>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Typography variant="body2" color="text.secondary">
+                  Welcome, {user?.name}
+                </Typography>
+                <ThemeToggle size="small" />
+                <Button
+                  onClick={handleLogout}
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<Logout />}
+                  size="small"
+                  sx={{ py: 0.5 }}
+                >
+                  Logout
+                </Button>
+              </Stack>
+            </Toolbar>
+            <Toolbar sx={{ pt: 0, mt: -2.5, mb: 0.5, minHeight: '48px' }}>
+              <Box sx={{ display: 'flex', gap: 1, flexGrow: 1 }}>
                 <Button
                   onClick={async () => {
                     try {
@@ -364,7 +384,8 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                   variant="outlined"
                   startIcon={<HomeIcon />}
                   size="small"
-                  sx={{ ml: 1 }}
+                  sx={{ py: 1 }}
+                  color={!isQuizMode ? "success" : "primary"}
                 >
                   Home
                 </Button>
@@ -382,44 +403,29 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       navigate('/upload_pdfs');
                     }
                   }}
-                  variant={availablePdfs.length === 0 ? 'contained' : 'outlined'}
+                  variant="outlined"
                   startIcon={<CloudUpload />}
                   size="small"
-                  sx={{ ml: 0 }}
-                  color={(availablePdfs.length === 0 && !isQuizMode) ? "success" : "primary"}
+                  sx={{ py: 1 }}
+                  color={!isQuizMode ? "success" : "primary"}
                 >
                   Upload PDFs
                 </Button>
-                <Typography 
-                  variant="body2" 
-                  color="primary"
-                  sx={{ 
-                    fontWeight: 600,
-                    bgcolor: isQuizMode ? 'primary.light' : 'success.main',
-                    px: 1.5,
-                    py: 0.5,
-                    borderRadius: 1,
-                    color: 'text.primary'
-                  }}
-                >
-                  {isQuizMode ? 'USMLE Mode' : 'Flashcard Mode'}
-                </Typography>
               </Box>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Typography variant="body2" color="text.secondary">
-                  Welcome, {user?.name}
-                </Typography>
-                <ThemeToggle size="small" />
-                <Button
-                onClick={handleLogout}
-                  variant="outlined"
-                  color="primary"
-                  startIcon={<Logout />}
-                  size="small"
+              <Typography 
+                variant="body2" 
+                color="primary"
+                sx={{ 
+                  fontWeight: 600,
+                  bgcolor: isQuizMode ? 'primary.light' : 'success.main',
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 1,
+                  color: 'text.primary'
+                }}
               >
-                Logout
-                </Button>
-              </Stack>
+                {isQuizMode ? 'USMLE Mode' : 'Flashcard Mode'}
+              </Typography>
             </Toolbar>
           </Box>
         </Container>
@@ -443,7 +449,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       borderRadius: 2,
                       p: 4,
                       bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
-                      width: 400,
+                      width: 470,
                       height: 200,
                       overflowY: 'auto',
                       transition: 'all 0.2s ease',
@@ -533,6 +539,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       borderColor: 'divider',
                       borderRadius: 2,
                       p: 3,
+                      width: '100%',
                       bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper')
                     }}
                   >
@@ -807,7 +814,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         px: 2
                       }}
                     >
-                      Create Quiz
+                      {isQuizMode ? "Create Quiz" : "Create Cards"}
                       <TextField
                         type="number"
                         value={numQuestions}

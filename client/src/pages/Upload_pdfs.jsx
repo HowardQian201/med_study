@@ -18,6 +18,7 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
   const [processingJobs, setProcessingJobs] = useState([]);
   const [userPdfs, setUserPdfs] = useState([]);
   const [selectedPdfHashes, setSelectedPdfHashes] = useState([]);
+  const [isQuizMode, setIsQuizMode] = useState(false); // Add isQuizMode state
 
   // Fetch initial processing tasks from the backend on component mount
   useEffect(() => {
@@ -73,14 +74,21 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
         console.error("Error fetching user PDFs:", err);
         if (err.response?.status === 401) {
           // Session expired, redirect to login
+          setError('Session expired. Please log in again.'); // Add this line
           setIsAuthenticated(false);
           navigate('/login');
         } else {
           // Handle other errors, e.g., display a generic error message
-          // setError('Failed to load your PDFs.');
+          setError(err.response?.data?.error || 'An error occurred while fetching user PDFs.'); // Modified this line
         }
       }
     };
+
+    // Load quiz mode from sessionStorage on component mount
+    const storedQuizMode = sessionStorage.getItem('isQuizMode');
+    if (storedQuizMode !== null) {
+      setIsQuizMode(storedQuizMode === 'true');
+    }
 
     fetchUserPdfs();
   }, [setIsAuthenticated, navigate]); // Dependencies to re-run effect if auth/navigation changes
@@ -319,13 +327,33 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
       {/* App Bar */}
       <AppBar position="static" color="default" elevation={1}>
         <Container maxWidth="false">
-          <Box sx={{ maxWidth: '100%', mx: 'auto' }}>
-            <Toolbar>
+          <Box>
+            <Toolbar sx={{ pb: 0, minHeight: '48px' }}>
               <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <img src="/favicon.png" alt="MedStudyAI Logo" style={{ width: 28, height: 28 }} />
                 <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
                   MedStudyAI
                 </Typography>
+              </Box>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Typography variant="body2" color="text.secondary">
+                  Welcome, {user?.name}
+                </Typography>
+                <ThemeToggle size="small" />
+                <Button
+                  onClick={handleLogout}
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<Logout />}
+                  size="small"
+                  sx={{ py: 0.5 }}
+                >
+                  Logout
+                </Button>
+              </Stack>
+            </Toolbar>
+            <Toolbar sx={{ pt: 0, mt: -2.5, mb: 0.5, minHeight: '48px' }}>
+              <Box sx={{ display: 'flex', gap: 1, flexGrow: 1 }}>
                 <Button
                   onClick={async () => {
                     try {
@@ -344,7 +372,8 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                   variant="outlined"
                   startIcon={<HomeIcon />}
                   size="small"
-                  sx={{ ml: 1 }}
+                  sx={{ py: 1 }}
+                  color={!isQuizMode ? "success" : "primary"}
                 >
                   Home
                 </Button>
@@ -364,28 +393,14 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                     }
                   }}
                   variant="outlined"
-                  startIcon={<Description />}
+                  startIcon={<Description />} 
                   size="small"
-                  sx={{ ml: 0 }}
+                  sx={{ py: 1 }}
+                  color={!isQuizMode ? "success" : "primary"}
                 >
                   Study Session
                 </Button>
               </Box>
-              <Stack direction="row" spacing={2} alignItems="center" sx={{ ml: 6 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Welcome, {user?.name}
-                </Typography>
-                <ThemeToggle size="small" />
-                <Button
-                  onClick={handleLogout}
-                  variant="outlined"
-                  color="primary"
-                  startIcon={<Logout />}
-                  size="small"
-                >
-                  Logout
-                </Button>
-              </Stack>
             </Toolbar>
           </Box>
         </Container>
@@ -497,7 +512,7 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                   </Typography>
                   <Button
                     variant="outlined"
-                    color="primary"
+                    color={!isQuizMode ? "success" : "primary"}
                     size="small"
                     onClick={handleClearCompletedTasks}
                     disabled={processingJobs.filter(job => job.status === 'SUCCESS' || job.status === 'FAILURE').length === 0}
@@ -590,6 +605,7 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                 variant="contained"
                 startIcon={<Description />}
                 size="small"
+                color={!isQuizMode ? "success" : "primary"}
                 onClick={async () => {
                   try {
                     await axios.post('/api/clear-session-content', {}, { withCredentials: true });

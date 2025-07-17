@@ -30,7 +30,6 @@ import {
   Close,
   Refresh,
   Add,
-  History,
   Home as HomeIcon,
   Logout,
   CheckCircle,
@@ -38,7 +37,9 @@ import {
   HelpOutline,
   Shuffle as ShuffleIcon,
   Star,
-  StarBorder
+  StarBorder,
+  Description as DescriptionIcon,
+  CloudUpload
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { alpha } from '@mui/material/styles';
@@ -56,12 +57,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [showResults, setShowResults] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(true);
   const [isGeneratingMoreQuestions, setIsGeneratingMoreQuestions] = useState(false);
-  const [showAllPreviousQuestions, setShowAllPreviousQuestions] = useState(false);
-  const [allPreviousQuestions, setAllPreviousQuestions] = useState([]);
-  const [isLoadingPreviousQuestions, setIsLoadingPreviousQuestions] = useState(false);
   const [visibleExplanation, setVisibleExplanation] = useState(null);
   const [numAdditionalQuestions, setNumAdditionalQuestions] = useState(5);
-  const [numFocusedQuestions, setNumFocusedQuestions] = useState(5);
   const [isQuizMode, setIsQuizMode] = useState(false);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
   const [currentSessionSources, setCurrentSessionSources] = useState([]); // New state for sources
@@ -176,15 +173,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
           )
         );
 
-        // Also update the allPreviousQuestions state if the question exists there
-        setAllPreviousQuestions(prevAllQuestionsSets =>
-          prevAllQuestionsSets.map(questionSet =>
-            questionSet.map(q =>
-              q.id === questionId ? { ...q, starred: response.data.question.starred } : q
-            )
-          )
-        );
-
       } else {
         setError('Failed to toggle star status');
       }
@@ -192,7 +180,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       console.error('Error toggling star status:', err);
       setError(err.response?.data?.error || 'Failed to toggle star status');
     }
-  }, [setQuestions, setAllPreviousQuestions, setError]);
+  }, [setQuestions, setError]);
 
   useHotkeys('s', (e) => {
     e.preventDefault();
@@ -431,55 +419,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     }
   };
 
-  const generateFocusedQuestions = async () => {
-    try {
-      setIsGeneratingMoreQuestions(true);
-      
-      // Save current answers before generating new questions
-      await saveUserAnswers();
-      
-      // Get the IDs of incorrectly answered questions
-      const incorrectQuestionIds = questions
-        .filter(q => selectedAnswers[q.id] !== undefined && selectedAnswers[q.id] !== q.correctAnswer)
-        .map(q => q.id);
-      
-      const isQuizModeBoolean = sessionStorage.getItem('isQuizMode') === 'true';
-      const response = await axios.post('/api/generate-quiz', {
-        type: 'focused',
-        incorrectQuestionIds: incorrectQuestionIds,
-        previousQuestions: questions,
-        isPreviewing: false,
-        numQuestions: numFocusedQuestions,
-        isQuizMode: String(isQuizModeBoolean)
-      }, {
-        withCredentials: true
-      });
-      
-      if (response.data.success && response.data.questions) {
-        setQuestions(response.data.questions);
-        // Clear cached previous questions so they get refetched
-        setAllPreviousQuestions([]);
-        // Always show current quiz after generating new questions
-        setShowAllPreviousQuestions(false);
-        
-        // Reset state for the new quiz and go to the preview screen
-        setSelectedAnswers({});
-        setSubmittedAnswers({});
-        setVisibleExplanation(null);
-        setCurrentQuestion(0);
-        setShowResults(false);
-        setIsPreviewing(true);
-      } else {
-        setError('Failed to generate more questions');
-      }
-    } catch (err) {
-      console.error('Error generating more questions:', err);
-      setError(err.response?.data?.error || 'Failed to generate more questions');
-    } finally {
-      setIsGeneratingMoreQuestions(false);
-    }
-  };
-
   const handleBack = async () => {
     try {
       // Clear session content on the server
@@ -553,31 +492,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         withCredentials: true
       });
 
-      // If we have previous questions loaded, update them with new answers
-      if (allPreviousQuestions.length > 0) {
-        // Get the current quiz questions
-        const currentQuestions = questions.map(q => ({
-          ...q,
-          userAnswer: selectedAnswers[q.id],
-          isAnswered: submittedAnswers[q.id] === true,
-          isCorrect: selectedAnswers[q.id] === q.correctAnswer
-        }));
-
-        // Update the most recent set in allPreviousQuestions
-        setAllPreviousQuestions(prevSets => {
-          const updatedSets = [...prevSets];
-          // Find the index of the current set (matching by question IDs)
-          const currentSetIndex = updatedSets.findIndex(set => 
-            set.some(q => currentQuestions.some(cq => cq.id === q.id))
-          );
-          
-          if (currentSetIndex !== -1) {
-            // Update the existing set
-            updatedSets[currentSetIndex] = currentQuestions;
-          }
-          return updatedSets;
-        });
-      }
     } catch (err) {
       console.error('Error saving quiz answers:', err);
       // Don't show error to user as this is background functionality
@@ -589,53 +503,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     // Save answers before showing results
     await saveUserAnswers();
     
-    // If we're showing all previous questions, refresh them to get the latest data
-    if (showAllPreviousQuestions) {
-      await fetchAllPreviousQuestions();
-    }
-    
     setShowResults(true);
-    setShowAllPreviousQuestions(false);
-  };
-
-  // Function to fetch all previous questions
-  const fetchAllPreviousQuestions = async () => {
-    try {
-      setIsLoadingPreviousQuestions(true);
-      setError('');
-      
-      const response = await axios.get('/api/get-all-quiz-questions', {
-        withCredentials: true
-      });
-      
-      if (response.data.success && response.data.questions) {
-        setAllPreviousQuestions(response.data.questions);
-        setShowAllPreviousQuestions(true);
-      } else {
-        setError('Failed to retrieve previous questions');
-      }
-    } catch (err) {
-      console.error('Error fetching previous questions:', err);
-      setError(err.response?.data?.error || 'Failed to retrieve previous questions');
-    } finally {
-      setIsLoadingPreviousQuestions(false);
-    }
-  };
-
-  // Function to toggle view between results and all previous questions
-  const togglePreviousQuestions = async () => {
-    if (!showAllPreviousQuestions) {
-      // Save current answers before switching to previous questions view
-      await saveUserAnswers();
-      
-      if (allPreviousQuestions.length === 0) {
-      await fetchAllPreviousQuestions();
-    } else {
-        setShowAllPreviousQuestions(true);
-      }
-    } else {
-      setShowAllPreviousQuestions(false);
-    }
   };
 
   const handleStartStarredQuiz = async () => {
@@ -670,15 +538,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       if (response.data.success && response.data.questions) {
         setQuestions(response.data.questions);
         
-        // Also update the allPreviousQuestions state if current questions are part of it
-        setAllPreviousQuestions(prevAllQuestionsSets =>
-          prevAllQuestionsSets.map(questionSet =>
-            questionSet.map(q => {
-              const updatedQuestion = response.data.questions.find(uq => uq.id === q.id);
-              return updatedQuestion ? { ...q, starred: updatedQuestion.starred } : q;
-            })
-          )
-        );
       } else {
         const actionText = action === 'star' ? 'star' : 'unstar';
         setError(`Failed to ${actionText} all questions`);
@@ -703,52 +562,13 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       {/* App Bar */}
       <AppBar position="static" color="default" elevation={1}>
         <Container maxWidth="xl">
-          <Box sx={{ maxWidth: '100%', mx: 'auto', textAlign: 'left' }}>
-            <Toolbar>
-              <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1, mr: 4 }}>
+          <Box>
+            <Toolbar sx={{ pb: 0, minHeight: '48px' }}>
+              <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <img src="/favicon.png" alt="MedStudyAI Logo" style={{ width: 28, height: 28 }} />
                 <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
                   MedStudyAI
                 </Typography>
-                <Button
-                  onClick={handleBack}
-                  variant="outlined"
-                  startIcon={<HomeIcon />}
-                  size="small"
-                  sx={{ ml: 1 }}
-                >
-                  Home
-                </Button>
-                {(showResults || !isPreviewing) && (
-                  <Button
-                    onClick={handleBackToPreview}
-                    variant="outlined"
-                    startIcon={<ArrowBack />}
-                    size="small"
-                    sx={{ ml: 0.25 }}
-                  >
-                    Preview
-                  </Button>
-                )}
-                {(() => {
-                  const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
-                  return (
-                    <Typography 
-                      variant="body2" 
-                      color="primary"
-                      sx={{ 
-                        fontWeight: 600,
-                        bgcolor: isQuizMode ? 'primary.light' : 'success.main',
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: 1,
-                        color: 'text.primary'
-                      }}
-                    >
-                      {isQuizMode ? 'USMLE Mode' : 'Flashcard Mode'}
-                    </Typography>
-                  );
-                })()}
               </Box>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Typography variant="body2" color="text.secondary">
@@ -756,15 +576,111 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                 </Typography>
                 <ThemeToggle size="small" />
                 <Button
-                onClick={handleLogout}
+                  onClick={handleLogout}
                   variant="outlined"
                   color="primary"
                   startIcon={<Logout />}
                   size="small"
-              >
-                Logout
+                  sx={{ py: 0.5 }}
+                >
+                  Logout
                 </Button>
               </Stack>
+            </Toolbar>
+            <Toolbar sx={{ pt: 0, mt: -2.5, mb: 0.5, minHeight: '48px', width: 1000 }}>
+              <Box sx={{ display: 'flex', gap: 1, flexGrow: 1 }}>
+                <Button
+                  onClick={handleBack}
+                  variant="outlined"
+                  startIcon={<HomeIcon />}
+                  size="small"
+                  sx={{ py: 1 }}
+                  color={!isQuizMode ? "success" : "primary"}
+                >
+                  Home
+                </Button>
+                <Button
+                  onClick={async () => {
+                    try {
+                      // Clear session content on the server
+                      await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+                      // Clear summary in App.js state
+                      if (setSummary) {
+                        setSummary('');
+                      }
+                      // Navigate to upload_pdfs
+                      navigate('/upload_pdfs');
+                    } catch (err) {
+                      console.error('Failed to clear session and navigate:', err);
+                      // Still attempt to navigate even if clearing fails
+                      navigate('/upload_pdfs');
+                    }
+                  }}
+                  variant="outlined"
+                  startIcon={<CloudUpload />}
+                  size="small"
+                  sx={{ py: 1 }}
+                  color={!isQuizMode ? "success" : "primary"}
+                >
+                  Upload PDFs
+                </Button>
+                <Button
+                  onClick={async () => {
+                    try {
+                      // Clear session content on the server
+                      await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+                      // Clear summary in App.js state
+                      if (setSummary) {
+                        setSummary('');
+                      }
+                      // Navigate to study_session
+                      navigate('/study_session');
+                    } catch (err) {
+                      console.error('Failed to clear session and navigate:', err);
+                      // Still attempt to navigate even if clearing fails
+                      navigate('/study_session');
+                    }
+                  }}
+                  variant="outlined"
+                  startIcon={<DescriptionIcon />}
+                  size="small"
+                  sx={{ py: 1 }}
+                  color={!isQuizMode ? "success" : "primary"}
+                >
+                  Study Session
+                </Button>
+                {(showResults || !isPreviewing) && (
+                  <Button
+                    onClick={handleBackToPreview}
+                    variant="outlined"
+                    startIcon={<ArrowBack />}
+                    size="small"
+                    sx={{ py: 1 }}
+                    color={isQuizMode ? "success" : "primary"}
+                  >
+                    Preview
+                  </Button>
+                )}
+              </Box>
+              {(() => {
+                const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
+                return (
+                  <Typography 
+                    variant="body2" 
+                    color="primary"
+                    sx={{ 
+                      fontWeight: 600,
+                      bgcolor: isQuizMode ? 'primary.light' : 'success.main',
+                      px: 1.5,
+                      py: 0.5,
+                      borderRadius: 1,
+                      color: 'text.primary'
+                    }}
+                  >
+                    {isQuizMode ? 'USMLE Mode' : 'Flashcard Mode'}
+                  </Typography>
+                );
+              })()}
             </Toolbar>
           </Box>
         </Container>
@@ -835,23 +751,16 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                   <Box sx={{ py: 3 }}>
                     {/* Quiz Statistics */}
                     {(() => {
-                      const cumulativeStats = {
-                        correct: allPreviousQuestions.flat().filter(q => q.isAnswered && q.userAnswer === q.correctAnswer).length,
-                        total: allPreviousQuestions.flat().length,
-                        get percentage() { return this.total > 0 ? Math.round((this.correct / this.total) * 100) : 0; }
-                      };
-                      const displayStats = showAllPreviousQuestions ? cumulativeStats : stats;
-                      const showStatsCircle = showAllPreviousQuestions ? displayStats.total > 0 : allQuestionsAnswered;
 
                       return (
                         <Box textAlign="center" mb={4}>
                           {isQuizMode && (
                             <>
-                              <Typography variant="h5" fontWeight="600" gutterBottom>
-                                {showAllPreviousQuestions ? 'Cumulative Performance' : 'Quiz Performance'}
+                              <Typography variant="h5" fontWeight="600" gutterBottom sx={{ mb: 2 }}>
+                                Quiz Performance
                               </Typography>
                               
-                              {!showStatsCircle && !showAllPreviousQuestions && !isQuizMode ? (
+                              {!allQuestionsAnswered && !isQuizMode ? (
                                 <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
                                   You haven't answered all questions yet. Your current score is based on the questions you've completed.
                                 </Alert>
@@ -862,26 +771,25 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                       <CircularProgress variant="determinate" value={100} size={120} thickness={4} sx={{ color: 'grey.300' }} />
                                       <CircularProgress
                                         variant="determinate"
-                                        value={displayStats.percentage}
+                                        value={stats.percentage}
                                         size={120}
                                         thickness={4}
                                         sx={{
-                                          color: displayStats.percentage >= 70 ? 'success.main' :
-                                                displayStats.percentage >= 40 ? 'warning.main' : 'error.main',
+                                          color: stats.percentage >= 70 ? 'success.main' :
+                                                stats.percentage >= 40 ? 'warning.main' : 'error.main',
                                           position: 'absolute',
                                           left: 0,
                                         }}
                                       />
                                       <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         <Typography variant="h4" component="div" fontWeight="bold">
-                                          {displayStats.percentage}%
+                                          {stats.percentage}%
                                         </Typography>
                                       </Box>
                                     </Box>
                                   </Box>
                                   <Typography variant="body1" color="text.secondary" mt={2}>
-                                    {displayStats.correct} correct out of {displayStats.total} questions
-                                    {showAllPreviousQuestions && allPreviousQuestions.length > 0 && ` across ${allPreviousQuestions.length} set${allPreviousQuestions.length !== 1 ? 's' : ''}`}
+                                    {stats.correct} correct out of {stats.total} questions
                                   </Typography>
                                 </Paper>
                               )}
@@ -892,90 +800,12 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                           <Stack direction="row" spacing={2} justifyContent="center">
                             <Button
                               onClick={resetQuiz}
-                              variant="outlined"
+                              variant="contained"
                               startIcon={<Refresh />}
                               disabled={isGeneratingMoreQuestions}
                               color={isQuizMode ? "primary" : "success"}
                             >
-                              Try Again
-                            </Button>
-                            <Button
-                              onClick={generateFocusedQuestions}
-                              disabled={isGeneratingMoreQuestions}
-                              variant="contained"
-                              color={isQuizMode ? "primary" : "success"}
-                              startIcon={isGeneratingMoreQuestions ? <CircularProgress size={16} color="inherit" /> : <Add />}
-                              sx={{ 
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 1,
-                                px: 2
-                              }}
-                            >
-                              {isGeneratingMoreQuestions ? (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <span>Generating...</span>
-                                  <Typography variant="body2" color="inherit" sx={{ opacity: 0.8 }}>
-                                    {formatTimer(generationTimer)}
-                                  </Typography>
-                                </Box>
-                              ) : 'Generate New Questions'}
-                              <TextField
-                                type="number"
-                                value={numFocusedQuestions}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  setNumFocusedQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)));
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                                disabled={isGeneratingMoreQuestions}
-                                inputProps={{ 
-                                  min: 1, 
-                                  max: 20,
-                                  style: { textAlign: 'center', width: '40px', fontSize: '14px' }
-                                }}
-                                size="small"
-                                sx={{ 
-                                  width: '45px',
-                                  '& .MuiOutlinedInput-root': {
-                                    height: '24px',
-                                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                                    borderRadius: '4px',
-                                    '&:hover': {
-                                      backgroundColor: 'rgba(255, 255, 255, 0.25)',
-                                    },
-                                    '&.Mui-focused': {
-                                      backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                                      border: '1px solid rgba(255, 255, 255, 0.5)',
-                                    }
-                                  },
-                                  '& .MuiInputBase-input': {
-                                    color: 'white',
-                                    padding: '2px 4px',
-                                    '&::placeholder': {
-                                      color: 'rgba(255, 255, 255, 0.7)',
-                                    }
-                                  },
-                                  '& .MuiOutlinedInput-notchedOutline': {
-                                    border: 'none'
-                                  }
-                                }}
-                              />
-                            </Button>
-                            <Button
-                              onClick={togglePreviousQuestions}
-                              disabled={isLoadingPreviousQuestions}
-                              variant="outlined"
-                              startIcon={isLoadingPreviousQuestions ? <CircularProgress size={16} color="inherit" /> : <History />}
-                              color={isQuizMode ? "primary" : "success"}
-                            >
-                              {isLoadingPreviousQuestions 
-                                ? 'Loading...' 
-                                : showAllPreviousQuestions 
-                                  ? 'Show Current Quiz' 
-                                  : 'View All Previous Questions'
-                              }
+                              Try Again / Generate More
                             </Button>
                           </Stack>
                         </Box>
@@ -983,7 +813,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     })()}
                     
                     {/* Current Quiz Results */}
-                    {!showAllPreviousQuestions && (
                       <Box>
                         <Typography variant="h3" fontWeight="600" gutterBottom>
                           {isQuizMode ? 'USMLE Set Review' : 'Flashcard Set Review'}
@@ -1129,176 +958,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                           ))}
                         </Stack>
                       </Box>
-                    )}
-                    
-                    {/* All Previous Questions View */}
-                    {showAllPreviousQuestions && (
-                      <Box>
-                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-                          <Typography variant="h6" fontWeight="600">
-                            All Previous Questions
-                          </Typography>
-                          <Typography variant="h6" color="text.secondary">
-                            Showing {allPreviousQuestions.length} {isQuizMode ? 'test set' : 'learning set'}{allPreviousQuestions.length !== 1 ? 's' : ''} from previous sessions
-                          </Typography>
-                        </Box>
-                        
-                        {allPreviousQuestions.length === 0 ? (
-                          <Box textAlign="center" py={4}>
-                            {isLoadingPreviousQuestions ? (
-                              <Box display="flex" justifyContent="center" alignItems="center">
-                                <CircularProgress size={32} sx={{ mr: 2 }} />
-                                <Typography color="text.secondary">Loading previous questions...</Typography>
-                              </Box>
-                            ) : (
-                              <Typography color="text.secondary">No previous questions found</Typography>
-                            )}
-                          </Box>
-                        ) : (
-                          <Stack spacing={4}>
-                            {allPreviousQuestions.map((questionSet, setIndex) => (
-                              <Card key={setIndex} elevation={2}>
-                                <CardContent>
-                                  <Typography variant="h2" fontWeight="600" gutterBottom>
-                                    {isQuizMode ? 'Test Set' : 'Learning Set'} #{setIndex + 1}
-                                  </Typography>
-                                  <Stack spacing={3}>
-                                    {questionSet.map((question, qIndex) => {
-                                      const wasAnsweredCorrectly = question.isAnswered && question.userAnswer === question.correctAnswer;
-                                      
-                                      return (
-                                        <Paper 
-                                          key={`${setIndex}-${qIndex}`} 
-                                          elevation={0} 
-                                          sx={{ 
-                                            p: 3, 
-                                            bgcolor: 'background.paper',
-                                            border: '2px solid',
-                                            borderColor: isQuizMode
-                                              ? (question.isAnswered 
-                                                  ? (wasAnsweredCorrectly ? 'success.main' : 'error.main')
-                                                  : 'divider')
-                                              : 'divider'
-                                          }}
-                                        >
-                                          <Box display="flex" alignItems="flex-start" mb={2}>
-                                            {isQuizMode && (
-                                              <Chip
-                                                icon={question.isAnswered
-                                                  ? (wasAnsweredCorrectly ? <CheckCircle /> : <Cancel />)
-                                                  : <HelpOutline />
-                                                }
-                                                label={question.isAnswered
-                                                  ? (wasAnsweredCorrectly ? 'Correct' : 'Incorrect')
-                                                  : 'Unanswered'
-                                                }
-                                                color={question.isAnswered
-                                                  ? (wasAnsweredCorrectly ? 'success' : 'error')
-                                                  : 'default'
-                                                }
-                                                size="small"
-                                                sx={{ mr: 2 }}
-                                              />
-                                            )}
-                                            <Typography variant="body1" fontWeight="500" sx={{ flexGrow: 1 }}>
-                                              Question {qIndex + 1}: {question.text}
-                                            </Typography>
-                                            <Button 
-                                              onClick={() => handleToggleStar(question.id)}
-                                              sx={{
-                                                minWidth: 'auto', 
-                                                p: 0, 
-                                                '&:hover': { bgcolor: 'transparent' }
-                                              }}
-                                            >
-                                              {question.starred ? <Star color="warning" /> : <StarBorder color="warning" />}
-                                            </Button>
-                                          </Box>
-                                          <Box ml={2}>
-                                            {isQuizMode ? (
-                                              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
-                                                {question.options.map((option, optIndex) => {
-                                                  const isCorrectAnswer = optIndex === question.correctAnswer;
-                                                  const isUserAnswer = question.userAnswer === optIndex;
-                                                  const wasAnswered = question.isAnswered;
-                                                  
-                                                  return (
-                                                    <Paper
-                                                      key={optIndex}
-                                                      elevation={0}
-                                                      sx={{
-                                                        p: 2,
-                                                        minHeight: '40px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        border: '2px solid',
-                                                        borderColor: wasAnswered
-                                                          ? (isCorrectAnswer
-                                                              ? 'success.main'
-                                                              : isUserAnswer && !isCorrectAnswer
-                                                                ? 'error.main'
-                                                                : 'divider')
-                                                          : 'divider',
-                                                        bgcolor: wasAnswered
-                                                          ? (isCorrectAnswer 
-                                                              ? alpha('#4caf50', 0.1)
-                                                              : isUserAnswer && !isCorrectAnswer
-                                                                ? alpha('#f44336', 0.1)
-                                                                : 'transparent')
-                                                          : 'transparent'
-                                                      }}
-                                                    >
-                                                      <Stack direction="column" spacing={1}>
-                                                        {isCorrectAnswer && (
-                                                          <Chip label="Correct answer" color="success" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
-                                                        )}
-                                                        {wasAnswered && isUserAnswer && !isCorrectAnswer && (
-                                                          <Chip label="Your answer" color="error" size="small" sx={{ minWidth: 120, maxWidth: 120 }} />
-                                                        )}
-                                                        <Box display="flex" alignItems="flex-start" gap={1}>
-                                                          <Box component="span" fontWeight="600">
-                                                            {String.fromCharCode(65 + optIndex)}.
-                                                          </Box>
-                                                          <Typography variant="body2" sx={{ textAlign: 'left' }}>
-                                                            {cleanOptionText(option)}
-                                                          </Typography>
-                                                        </Box>
-                                                      </Stack>
-                                                    </Paper>
-                                                  );
-                                                })}
-                                              </Box>
-                                            ) : (
-                                              <Box>
-                                                <Typography variant="h6" color="success.main" gutterBottom>
-                                                  Answer:
-                                                </Typography>
-                                                <Typography variant="body1" sx={{ mb: 2 }}>
-                                                  {cleanOptionText(question.options[question.correctAnswer])}
-                                                </Typography>
-                                              </Box>
-                                            )}
-                                            
-                                            <Box sx={{ mt: 3 }}>
-                                              <Typography variant="h6" color="primary.main" gutterBottom>
-                                                Explanation:
-                                              </Typography>
-                                              <Typography variant="body1" color="text.primary">
-                                                {question.reason}
-                                              </Typography>
-                                            </Box>
-                                          </Box>
-                                        </Paper>
-                                      );
-                                    })}
-                                  </Stack>
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </Stack>
-                        )}
-                      </Box>
-                    )}
                   </Box>
                 ) : isPreviewing ? (
                   <Box>

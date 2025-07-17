@@ -1,9 +1,10 @@
 
 ###URGENT:
 
-study sessions view pdfs should have same width as additional text no matter what
-remove the generate new focused set of questions 
-    - just reroute back to the preview set page to generate more questions
+
+quiz preview show answer/show answer button?
+additional text in study session should be hidden behind a button
+
 
 fastapi
     - use async clients for supabase
@@ -21,6 +22,7 @@ Stream quiz question generation
 
 
 ### LATER:
+Upload anki decks to get questions
 
 delete questions from quiz set
 

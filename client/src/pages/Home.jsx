@@ -230,12 +230,54 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
       {/* App Bar */}
       <AppBar position="static" color="default" elevation={1}>
         <Container maxWidth="xl">
-          <Toolbar>
-            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <img src="/favicon.png" alt="MedStudyAI Logo" style={{ width: 28, height: 28 }} />
-              <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
-                MedStudyAI
-              </Typography>
+          <Box>
+            <Toolbar sx={{ pb: 0, minHeight: '48px' }}>
+              <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <img src="/favicon.png" alt="MedStudyAI Logo" style={{ width: 28, height: 28 }} />
+                <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
+                  MedStudyAI
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Typography variant="body2" color="text.secondary">
+                  Welcome, {user?.name}
+                </Typography>
+                <ThemeToggle size="small" />
+                <Button
+                  onClick={handleLogout}
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<Logout />}
+                  size="small"
+                  sx={{ py: 0.5 }}
+                >
+                  Logout
+                </Button>
+              </Stack>
+            </Toolbar>
+            <Toolbar sx={{ pt: 0, mt: -2.5, mb: 0.5, minHeight: '48px' }}>
+              <Box sx={{ display: 'flex', gap: 1, flexGrow: 1 }}>
+                <Button
+                  variant="outlined"
+                  color={showQuizSets ? "primary" : "success"}
+                  size="small"
+                  startIcon={<CloudUpload />}
+                  onClick={() => navigate('/upload_pdfs')}
+                  sx={{ py: 1 }}
+                >
+                  Upload PDFs
+                </Button>
+                <Button
+                  variant="outlined"
+                  color={showQuizSets ? "primary" : "success"}
+                  size="small" 
+                  startIcon={<Book />}
+                  onClick={handleStartNewSession}
+                  sx={{ py: 1 }}
+                >
+                  Study Session
+                </Button>
+              </Box>
               <Typography 
                 variant="body2" 
                 color="primary"
@@ -250,23 +292,8 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
               >
                 {showQuizSets ? 'USMLE Mode' : 'Flashcard Mode'}
               </Typography>
-            </Box>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Typography variant="body2" color="text.secondary">
-                Welcome, {user?.name}
-              </Typography>
-              <ThemeToggle size="small" />
-              <Button
-                onClick={handleLogout}
-                variant="outlined"
-                color="primary"
-                startIcon={<Logout />}
-                size="small"
-              >
-                Logout
-              </Button>
-            </Stack>
-          </Toolbar>
+            </Toolbar>
+          </Box>
         </Container>
       </AppBar>
 
@@ -293,30 +320,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                 Transform your medical PDFs and notes into interactive study materials with AI-generated summaries, active recall flashcards, and USMLE clinical vignette style questions.
                             </Typography>
                         </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                <Button
-                                    variant="contained"
-                                    color={showQuizSets ? "primary" : "success"}
-                                    size="large"
-                                    startIcon={<CloudUpload />}
-                                    onClick={() => navigate('/upload_pdfs')}
-                                    sx={{ width: '100%' }}
-                                >
-                                    Upload PDFs
-                                </Button>
-                                <Button
-                                    variant="contained"
-                                    color={showQuizSets ? "primary" : "success"}
-                                    size="large"
-                                    startIcon={<Book />}
-                                    onClick={handleStartNewSession}
-                                    sx={{ width: '100%' }}
-                                >
-                                    Start New Study Session
-                                </Button>
-                            </Box>
-                        </Box>
+                        
                     </Box>
                 </CardContent>
             </Card>
