@@ -1,0 +1,18 @@
+### Start frontend
+cd client
+npm run dev
+
+### Start backend
+.venv\Scripts\activate
+python devapp.py
+
+### Start background worker
+.venv\Scripts\activate
+
+celery -A backend.background.worker worker --loglevel=debug --pool=solo
+
+### dev redis
+docker run --name medstudy-redis -p 6379:6379 -d redis
+docker ps # check if running
+docker exec -it medstudy-redis redis-cli
+FLUSHALL

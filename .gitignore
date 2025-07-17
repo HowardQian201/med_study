@@ -1,4 +1,1 @@
-backend/.env
-instructions.txt
 .venv/
-flask_session/

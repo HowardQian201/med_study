@@ -16,6 +16,7 @@
     "@mui/material": "^7.1.2",
     "axios": "^1.9.0",
     "date-fns": "^4.1.0",
+    "posthog-js": "^1.257.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hotkeys": "^2.0.0",

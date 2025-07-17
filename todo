@@ -2,16 +2,17 @@
 ###URGENT:
 
 
+realtime stats using posthog
+register new account
+    - Payment page on register new account with Stripe
+    - supabase auth
+
 fastapi
     - use async clients for supabase
     - make cpu bound work like hashing offloaded to thread pool executor
 
 
-realtime stats using posthog
-register new account
-    - Payment page on register new account with Stripe
-    - supabase auth
-Stream quiz question generation
+
 
 
 
@@ -19,6 +20,8 @@ Stream quiz question generation
 
 ### LATER:
 Upload anki decks to get questions
+
+Stream quiz question generation
 
 delete questions from quiz set
 
