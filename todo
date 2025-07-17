@@ -1,15 +1,18 @@
 
 ###URGENT:
 
+fastapi
+    - use async clients for supabase
+    - make cpu bound work like hashing offloaded to thread pool executor
 
-Switch to fastAPI for concurrency
+remove the generate new focused set of questions 
+    - just reroute back to the preview set page to generate more questions
 
-remove the generate new focused set of questions - just reroute back to the preview set page to generate more questions
-Stream quiz question generation
 realtime stats using posthog
 register new account
     - Payment page on register new account with Stripe
     - supabase auth
+Stream quiz question generation
 
 
 
