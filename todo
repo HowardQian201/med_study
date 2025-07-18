@@ -11,6 +11,8 @@ fastapi
     - use async clients for supabase
     - make cpu bound work like hashing offloaded to thread pool executor
 
+Make flashcard/usmle mode icon in app bar look not like a button
+Stream quiz question generation
 
 
 
@@ -21,7 +23,6 @@ fastapi
 ### LATER:
 Upload anki decks to get questions
 
-Stream quiz question generation
 
 delete questions from quiz set
 

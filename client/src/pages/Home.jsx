@@ -247,7 +247,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                 <Button
                   onClick={handleLogout}
                   variant="outlined"
-                  color="primary"
+                  color={showQuizSets ? "primary" : "success"}
                   startIcon={<Logout />}
                   size="small"
                   sx={{ py: 0.5 }}
@@ -369,7 +369,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                             </Typography>
                         )}
                     </Box>
-                    <Box display="flex" alignItems="center" gap={3}>
+                    <Box display="flex" alignItems="center" gap={1}>
                         <FormControlLabel
                             control={
                                 <Switch
@@ -424,7 +424,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                         {sets.length > 0 && (
                             <Button
                                 variant={isDeleteMode ? "contained" : "outlined"}
-                                color={isDeleteMode ? "error" : "primary"}
+                                color={isDeleteMode ? "error" : (showQuizSets ? "primary" : "success")}
                                 size="small"
                                 startIcon={isDeleteMode ? <CloseIcon /> : <DeleteIcon />}
                                 onClick={handleDeleteModeToggle}

@@ -343,7 +343,7 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                 <Button
                   onClick={handleLogout}
                   variant="outlined"
-                  color="primary"
+                  color={isQuizMode ? "primary" : "success"}
                   startIcon={<Logout />}
                   size="small"
                   sx={{ py: 0.5 }}

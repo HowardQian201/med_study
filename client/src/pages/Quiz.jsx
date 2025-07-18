@@ -579,7 +579,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                 <Button
                   onClick={handleLogout}
                   variant="outlined"
-                  color="primary"
+                  color={isQuizMode ? "primary" : "success"}
                   startIcon={<Logout />}
                   size="small"
                   sx={{ py: 0.5 }}
@@ -657,7 +657,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     startIcon={<ArrowBack />}
                     size="small"
                     sx={{ py: 1 }}
-                    color={isQuizMode ? "success" : "primary"}
+                    color="warning"
                   >
                     Preview
                   </Button>

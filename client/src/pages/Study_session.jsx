@@ -358,7 +358,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                 <Button
                   onClick={handleLogout}
                   variant="outlined"
-                  color="primary"
+                  color={isQuizMode ? "primary" : "success"}
                   startIcon={<Logout />}
                   size="small"
                   sx={{ py: 0.5 }}
@@ -492,6 +492,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                             disabled={isContentLocked || isUploading}
                             size="small"
                             startIcon={<OpenInNewIcon fontSize="small" />}
+                            color={isQuizMode ? "primary" : "success"}
                             sx={{ mb: 2 , ml: 0 }} // Add some bottom margin to align with Typography's gutterBottom
                           >
                             Expand

@@ -8,6 +8,8 @@ from datetime import datetime, timezone # Import timezone
 # Import the main Celery app instance from worker.py
 from backend.background.worker import app
 
+import asyncio # Add this import at the top of tasks.py if not already present
+
 
 @app.task
 def print_number_task(number):
@@ -66,7 +68,7 @@ def process_pdf_task(self, file_hash, bucket_name, file_path, user_id, original_
         # 3. Generate a short title for the extracted text
         _update_status('IN PROGRESS', '[3/5] Generating short title')
         try:
-            short_title = generate_short_title(cleaned_extracted_text)
+            short_title = asyncio.run(generate_short_title(cleaned_extracted_text))
             print(f"Successfully generated short title: '{short_title}' for hash {file_hash}.")
         except Exception as e:
             # Not a critical failure, we just log it and continue.
