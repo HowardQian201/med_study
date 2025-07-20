@@ -12,7 +12,7 @@ fastapi
 
 Home message should state the steps a user should take
 manual realtime stats using posthog
-    - create generic posthog function in logic.py
+    - create generic posthog function in logic.py (change login/signup)
 Generate more than 20 flashcards/usmle questions at a time
 Stream quiz question generation
 delete questions from quiz set

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePostHog } from 'posthog-js/react';
 import axios from 'axios';
 import {
   Box,
@@ -26,6 +27,7 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const posthog = usePostHog();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -57,6 +59,15 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
           setIsAuthenticated(true);
           setUser(userResponse.data.user);
           setSummary(userResponse.data.summary || '');
+          
+          // Identify user in PostHog for analytics
+          if (posthog && userResponse.data.user) {
+            posthog.identify(userResponse.data.user.id, {
+              email: userResponse.data.user.email,
+              name: userResponse.data.user.name
+            });
+          }
+          
           navigate('/');
         }
       }

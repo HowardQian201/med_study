@@ -47,8 +47,8 @@ from datetime import datetime, timezone # Import timezone for UTC
 
 
 # Initialize PostHog for server-side tracking
-posthog_api_key = os.environ.get('POSTHOG_API_KEY') or os.environ.get('VITE_PUBLIC_POSTHOG_KEY')
-posthog_host = os.environ.get('POSTHOG_HOST') or os.environ.get('VITE_PUBLIC_POSTHOG_HOST') or 'https://app.posthog.com'
+posthog_api_key = os.environ.get('VITE_PUBLIC_POSTHOG_KEY')
+posthog_host = os.environ.get('VITE_PUBLIC_POSTHOG_HOST')
 
 if posthog_api_key:
     posthog = Posthog(posthog_api_key, host=posthog_host)
