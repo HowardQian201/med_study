@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional
 # Import database functions for session management
 from ..database import (
     create_session, get_session_data, update_session_data, 
-    delete_session, extend_session_ttl, clear_redis_session_content
+    delete_session, extend_session_ttl, clear_redis_session_content,
 )
 
 

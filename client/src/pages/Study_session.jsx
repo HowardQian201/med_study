@@ -475,7 +475,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       borderRadius: 2,
                       p: 4,
                       bgcolor: (theme) => (theme.palette.mode === 'light' ? 'action.hover' : 'background.paper'),
-                      width: 470,
+                      minWidth: 400,
                       height: 500,
                       overflowY: 'auto',
                       transition: 'all 0.2s ease',
@@ -565,7 +565,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       variant="outlined"
                       startIcon={<Notes />}
                       size="large" // Adjusted size for consistency with Generate Summary
-                      sx={{ px: 4, py: 1.25, width: 175 }} // Adjusted width for consistency
+                      sx={{ px: 3, py: 1 }} // Adjusted width for consistency
                       disabled={isContentLocked || isUploading}
                       color={isQuizMode ? "primary" : "success"} // Added color prop
                     >
@@ -577,7 +577,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       variant="contained"
                       size="large"
                       startIcon={isUploading ? <CircularProgress size={24} color="inherit" /> : <CloudUpload />}
-                      sx={{ px: 4, py: 1.25, width: 250, }}
+                      sx={{ px: 4, py: 1.25 }}
                       color={isQuizMode ? "primary" : "success"}
                     >
                       {isUploading ? 'Processing...' : 'Generate Summary'}
@@ -753,6 +753,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       disabled={!summary || isUploading}
                       variant="outlined"
                       size="small"
+                      color={isQuizMode ? "primary" : "success"}
                       startIcon={isUploading ? <CircularProgress size={16} color="inherit" /> : <Refresh />}
                       sx={{ minWidth: 'fit-content' }}
                     >

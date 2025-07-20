@@ -15,7 +15,8 @@ from .utils.pydantic_models import (
     UserPdfsResponse, QuestionSetsResponse, QuizResponse, CurrentSessionSourcesResponse,
     UserTasksResponse, UploadResponse, TaskStatusResponse, UpdateSetTitleResponse,
     QuestionResponse, ShuffleQuizResponse, StarredQuizResponse, StarAllQuestionsResponse,
-    LoadStudySetResponse
+    LoadStudySetResponse,
+    SignUpRequest
 )
 from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_short_title
 from .database import (
@@ -25,7 +26,8 @@ from .database import (
     upsert_question_set, upload_pdf_to_storage, get_question_sets_for_user, get_full_study_set_data, update_question_set_title,
     touch_question_set, update_question_starred_status, delete_question_set_and_questions, insert_feedback, 
     append_pdf_hash_to_user_pdfs, get_user_associated_pdf_metadata, get_pdf_text_by_hashes,
-    update_user_task_status, get_user_tasks, delete_user_tasks_by_status, remove_pdf_hashes_from_user
+    update_user_task_status, get_user_tasks, delete_user_tasks_by_status, remove_pdf_hashes_from_user,
+    create_user
 )
 # Import the main Celery app instance from worker.py
 from .background.worker import app as celery_app
@@ -132,6 +134,33 @@ async def login(request: LoginRequest, session: SessionManager = Depends(get_ses
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post('/api/auth/signup', response_model=SuccessResponse)
+async def signup(request: SignUpRequest):
+    print("signup()")
+    try:
+        # Validate email format
+        if not re.match(EMAIL_REGEX, request.email):
+            raise HTTPException(status_code=400, detail='Invalid email format')
+        
+        # Create user in database. Use the provided name.
+        create_user_result = create_user(request.email, request.password, request.name)
+
+        if not create_user_result["success"]:
+            if create_user_result.get("status_code") == 409:
+                raise HTTPException(status_code=409, detail=create_user_result.get("error", "Account with this email already exists."))
+            else:
+                print(f"Database error during user creation: {create_user_result.get('error', 'Unknown error')}")
+                raise HTTPException(status_code=500, detail=create_user_result.get("error", "User creation failed."))
+        
+        return SuccessResponse(success=True, message="User created successfully")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error during signup: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post('/api/auth/logout', response_model=SuccessResponse)
 async def logout(session: SessionManager = Depends(get_session)):
     print("logout()")
@@ -168,8 +197,8 @@ async def check_auth(session: SessionManager = Depends(get_session)):
 
 # New endpoint to get user's associated PDFs
 @app.get('/api/get-user-pdfs', response_model=UserPdfsResponse)
-async def get_user_pdfs(user_id: int = Depends(require_auth)):
-    print("get_user_pdfs()")
+async def get_user_pdfs(user_id: str = Depends(require_auth)):
+    print(f"get_user_pdfs() called for user_id: {user_id} (type: {type(user_id)})")
     try:
         result = get_user_associated_pdf_metadata(user_id)
         
@@ -187,7 +216,7 @@ async def get_user_pdfs(user_id: int = Depends(require_auth)):
 @app.post('/api/generate-summary')
 async def generate_summary(
     request: GenerateSummaryRequest,
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     print("generate_summary()")
@@ -235,9 +264,12 @@ async def generate_summary(
             content_name_list.append("User Text") # Indicate user text was included
         
         content_hash = generate_content_hash(files_usertext_content, user_id, is_quiz_mode)
+        other_content_hash = generate_content_hash(files_usertext_content, user_id, not is_quiz_mode)
 
         session['content_hash'] = content_hash
+        session['other_content_hash'] = other_content_hash
         session['content_name_list'] = content_name_list
+        session['is_quiz_mode'] = is_quiz_mode # Store the quiz mode in the session
 
         if not total_extracted_text:
             raise HTTPException(status_code=400, detail="No text could be extracted from selected PDFs and no additional text provided")
@@ -281,7 +313,7 @@ async def generate_summary(
 @app.post('/api/generate-quiz', response_model=QuizResponse)
 async def generate_quiz(
     request: GenerateQuizRequest,
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     """Endpoint to generate quiz questions from the stored summary"""
@@ -303,6 +335,13 @@ async def generate_quiz(
         is_previewing = request.isPreviewing
         num_questions = request.numQuestions  # Default to 5 if not specified
         is_quiz_mode = str(request.isQuizMode).lower() == 'true' # Default to False (study mode)
+        if is_quiz_mode != session.get('is_quiz_mode'):
+            content_hash = session.get('other_content_hash')
+            print(f"Using other content hash: {content_hash}")
+        else:
+            content_hash = session.get('content_hash')
+            print(f"Using content hash: {content_hash}")
+
 
         # Validate number of questions is within reasonable bounds
         if not isinstance(num_questions, int) or num_questions < 1 or num_questions > 20:
@@ -371,7 +410,7 @@ async def generate_quiz(
 
 @app.get('/api/get-quiz', response_model=QuizResponse)
 async def get_quiz(
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     """Endpoint to retrieve stored quiz questions"""
@@ -392,7 +431,7 @@ async def get_quiz(
 
 @app.get('/api/get-all-quiz-questions', response_model=QuizResponse)
 async def get_all_quiz_questions(
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     """Endpoint to retrieve all stored quiz questions from previous sessions"""
@@ -413,7 +452,7 @@ async def get_all_quiz_questions(
 @app.post('/api/save-quiz-answers', response_model=SuccessResponse)
 async def save_quiz_answers(
     request: SaveQuizAnswersRequest,
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     """Endpoint to save user answers for the current quiz set"""
@@ -456,7 +495,7 @@ async def save_quiz_answers(
 @app.post('/api/regenerate-summary')
 async def regenerate_summary(
     request: RegenerateSummaryRequest,
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     """Endpoint to regenerate the summary from stored text"""
@@ -530,7 +569,7 @@ async def regenerate_summary(
 @app.post('/api/save-summary', response_model=SuccessResponse)
 async def save_summary(
     request: SaveSummaryRequest,
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     """Endpoint to save the completed summary to the session."""
@@ -556,7 +595,7 @@ async def save_summary(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get('/api/get-question-sets', response_model=QuestionSetsResponse)
-async def get_question_sets(user_id: int = Depends(require_auth)):
+async def get_question_sets(user_id: str = Depends(require_auth)):
     """Endpoint to retrieve all study sets for the logged-in user."""
     print("get_question_sets()")
     try:
@@ -577,7 +616,7 @@ async def get_question_sets(user_id: int = Depends(require_auth)):
 async def load_study_set(
     request: LoadStudySetRequest,
     background_tasks: BackgroundTasks,
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     """Endpoint to load a full study set into the user's session."""
@@ -619,7 +658,7 @@ async def load_study_set(
 
 @app.get('/api/get-current-session-sources', response_model=CurrentSessionSourcesResponse)
 async def get_current_session_sources(
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     print("get_current_session_sources()")
@@ -639,7 +678,7 @@ async def get_current_session_sources(
 @app.post('/api/update-set-title', response_model=UpdateSetTitleResponse)
 async def update_set_title(
     request: UpdateSetTitleRequest,
-    user_id: int = Depends(require_auth)
+    user_id: str = Depends(require_auth)
 ):
     """Endpoint to update the title of a study set."""
     print("update_set_title()")
@@ -662,7 +701,7 @@ async def update_set_title(
 
 @app.post('/api/clear-session-content', response_model=SuccessResponse)
 async def clear_session_content(
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     """Endpoint to clear session data related to a study set."""
@@ -678,7 +717,7 @@ async def clear_session_content(
 @app.post('/api/toggle-star-question', response_model=QuestionResponse)
 async def toggle_star_question(
     request: ToggleStarQuestionRequest,
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     print("toggle_star_question()")
@@ -732,7 +771,7 @@ async def toggle_star_question(
 
 @app.post('/api/shuffle-quiz', response_model=ShuffleQuizResponse)
 async def shuffle_quiz(
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     print("shuffle_quiz()")
@@ -762,7 +801,7 @@ async def shuffle_quiz(
 
 @app.post('/api/start-starred-quiz', response_model=StarredQuizResponse)
 async def start_starred_quiz(
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     print("start_starred_quiz()")
@@ -796,7 +835,7 @@ async def start_starred_quiz(
 @app.post('/api/star-all-questions', response_model=StarAllQuestionsResponse)
 async def star_all_questions(
     request: StarAllQuestionsRequest,
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     print("star_all_questions()")
@@ -851,7 +890,7 @@ async def star_all_questions(
 @app.post('/api/delete-question-set', response_model=SuccessResponse)
 async def delete_question_set(
     request: DeleteQuestionSetRequest,
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     print("delete_question_set()")
@@ -885,7 +924,7 @@ async def delete_question_set(
 @app.post('/api/submit-feedback', response_model=SuccessResponse)
 async def submit_feedback(
     request: SubmitFeedbackRequest,
-    user_id: int = Depends(require_auth),
+    user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
     print("submit_feedback()")
@@ -912,7 +951,7 @@ async def submit_feedback(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post('/api/clear-completed-tasks', response_model=SuccessResponse)
-async def clear_completed_tasks_endpoint(user_id: int = Depends(require_auth)):
+async def clear_completed_tasks_endpoint(user_id: str = Depends(require_auth)):
     print("clear_completed_tasks_endpoint()")
     try:
         # Define statuses to clear: SUCCESS and FAILURE
@@ -934,7 +973,7 @@ async def clear_completed_tasks_endpoint(user_id: int = Depends(require_auth)):
 @app.post('/api/remove-user-pdfs', response_model=SuccessResponse)
 async def remove_user_pdfs_endpoint(
     request: RemoveUserPdfsRequest,
-    user_id: int = Depends(require_auth)
+    user_id: str = Depends(require_auth)
 ):
     print("remove_user_pdfs_endpoint()")
     try:
@@ -957,7 +996,7 @@ async def remove_user_pdfs_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get('/api/get-user-tasks', response_model=UserTasksResponse)
-async def get_user_tasks_endpoint(user_id: int = Depends(require_auth)):
+async def get_user_tasks_endpoint(user_id: str = Depends(require_auth)):
     print("get_user_tasks()")
     try:
         result = get_user_tasks(user_id)
@@ -981,7 +1020,7 @@ async def get_user_tasks_endpoint(user_id: int = Depends(require_auth)):
 @app.post('/api/upload-pdfs', response_model=UploadResponse)
 async def upload_pdfs(
     files: List[UploadFile] = File(...),
-    user_id: int = Depends(require_auth)
+    user_id: str = Depends(require_auth)
 ):
     print("upload_pdfs()")
     try:
@@ -1105,7 +1144,7 @@ async def upload_pdfs(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/pdf-processing-status/{task_id}", response_model=TaskStatusResponse)
-async def get_pdf_processing_status(task_id: str, user_id: int = Depends(require_auth)):
+async def get_pdf_processing_status(task_id: str, user_id: str = Depends(require_auth)):
     print(f"Checking status for task_id: {task_id}")
     try:
         task_result = AsyncResult(task_id, app=celery_app)

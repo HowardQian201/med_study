@@ -213,8 +213,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
 
     const fetchQuiz = async () => {
       isFetching.current = true;
-        setIsLoading(true);
-        setError('');
+      setIsLoading(true);
+      setError('');
         
       try {
         // First try to get existing questions from the session
@@ -689,7 +689,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
 
       {/* Main Content */}
       <Container maxWidth="xl" sx={{ py: 4 }}>
-        <Card elevation={3} sx={{ maxWidth: 1000, mx: 'auto' }}>
+        <Card elevation={3} sx={{ maxWidth: 1000, mx: 'auto', alignItems: 'center'}}>
           <CardContent sx={{ p: 4 }}>
 
             {/* Loading State */}

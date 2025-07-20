@@ -19,54 +19,50 @@ import {
 import ThemeToggle from '../components/ThemeToggle';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 
-const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
+const SignUp = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState(''); // New state for name
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Simple validation
-    if (!email || !password) {
-      setError('Email and password are required');
+
+    if (!email || !password || !confirmPassword || !name) { // Add name to validation
+      setError('All fields are required');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
       return;
     }
 
     try {
       setIsLoading(true);
       setError('');
-      
-      const response = await axios.post('/api/auth/login', {
+
+      const response = await axios.post('/api/auth/signup', {
         email,
-        password
-      }, {
-        withCredentials: true
+        password,
+        name // Include name in the request body
       });
 
       if (response.data.success) {
-        // Get user info after successful login
-        const userResponse = await axios.get('/api/auth/check', {
-          withCredentials: true
-        });
-        
-        if (userResponse.data.authenticated) {
-          setIsAuthenticated(true);
-          setUser(userResponse.data.user);
-          setSummary(userResponse.data.summary || '');
-          navigate('/');
-        }
+        navigate('/login', { state: { message: 'Account created successfully! Please log in.' } });
       }
     } catch (err) {
-      if (err.response?.status === 401) {
-        setError('Invalid credentials');
+      if (err.response?.status === 409) {
+        setError('Account with this email already exists.');
       } else {
-        setError(err.response?.data?.message || 'Login failed');
+        setError(err.response?.data?.message || 'Sign up failed');
       }
-      console.error('Login error:', err);
+      console.error('Sign up error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -74,6 +70,10 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
 
   const handlePasswordVisibility = () => {
     setShowPassword(!showPassword);
+  };
+
+  const handleConfirmPasswordVisibility = () => {
+    setShowConfirmPassword(!showConfirmPassword);
   };
 
   return (
@@ -119,7 +119,7 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
               align="center"
               color="text.secondary"
             >
-              Sign in to your account
+              Create your account
             </Typography>
             
             <Box 
@@ -129,19 +129,32 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
             >
               <Stack spacing={2}>
                 <TextField
+                  id="name"
+                  name="name"
+                  label="Full Name"
+                  type="text"
+                  variant="outlined"
+                  fullWidth
+                  required
+                  autoComplete="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={isLoading}
+                />
+                <TextField
                   id="email"
                   name="email"
-                  label="Email"
+                  label="Email address"
                   type="email"
                   variant="outlined"
                   fullWidth
                   required
                   autoComplete="email"
+                  autoFocus
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isLoading}
                 />
-                
                 <TextField
                   id="password"
                   name="password"
@@ -150,7 +163,7 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
                   variant="outlined"
                   fullWidth
                   required
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isLoading}
@@ -162,6 +175,32 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
                           edge="end"
                         >
                           {showPassword ? <VisibilityOff /> : <Visibility />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+
+                <TextField
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  label="Confirm Password"
+                  type={showConfirmPassword ? "text" : "password"}
+                  variant="outlined"
+                  fullWidth
+                  required
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={isLoading}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          onClick={handleConfirmPasswordVisibility}
+                          edge="end"
+                        >
+                          {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
                         </IconButton>
                       </InputAdornment>
                     ),
@@ -188,27 +227,9 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
                     fontWeight: 'medium'
                   }}
                 >
-                  {isLoading ? 'Signing in...' : 'Sign in'}
+                  {isLoading ? 'Creating account...' : 'Sign Up'}
                 </Button>
                 
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  size="large"
-                  onClick={() => navigate('/signup')}
-                  sx={{ 
-                    mt: 1, 
-                    py: 1.5,
-                    fontSize: '1rem',
-                    fontWeight: 'medium'
-                  }}
-                >
-                  Create an account
-                </Button>
-
-                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                  <ThemeToggle />
-                </Box>
                 <Box 
                   sx={{ 
                     mt: 2, 
@@ -220,14 +241,18 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
                     borderColor: 'divider'
                   }}
                 >
-                  <Typography variant="h5" color="text.primary" fontWeight="600">
-                    Need help?
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    Email hhqian17@gmail.com for assistance
+                  <Typography variant="body2" color="text.secondary">
+                    Already have an account? {' '}
+                    <Link component="button" onClick={() => navigate('/login')} sx={{ fontWeight: 'bold' }}>
+                      Sign in
+                    </Link>
                   </Typography>
                 </Box>
               </Stack>
+            </Box>
+
+            <Box sx={{ mt: 2 }}>
+              <ThemeToggle />
             </Box>
           </Stack>
         </CardContent>
@@ -236,4 +261,4 @@ const Login = ({ setIsAuthenticated, setUser, setSummary }) => {
   );
 };
 
-export default Login; 
+export default SignUp; 

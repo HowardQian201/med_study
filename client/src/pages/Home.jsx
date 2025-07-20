@@ -31,6 +31,7 @@ import {
   Save as SaveIcon,
   Cancel as CancelIcon,
   HelpOutline,
+  Description as DescriptionIcon,
   Delete as DeleteIcon,
   Close as CloseIcon,
   CloudUpload
@@ -295,7 +296,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                   variant="outlined"
                   color={showQuizSets ? "primary" : "success"}
                   size="small" 
-                  startIcon={<Book />}
+                  startIcon={<DescriptionIcon />}
                   onClick={handleStartNewSession}
                   sx={{ py: 1 }}
                 >

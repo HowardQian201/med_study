@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import io # Import io module for BytesIO and other stream types
 import redis
 import json
+import bcrypt
 
 # Load environment variables from .env file
 load_dotenv()
@@ -141,13 +142,13 @@ def generate_file_hash(file_input: Union[io.BytesIO, str], algorithm: str = "sha
 
     return hash_obj.hexdigest()
 
-def generate_content_hash(content_set: set, user_id: int, is_quiz_mode: bool = False, algorithm: str = "sha256") -> str:
+def generate_content_hash(content_set: set, user_id: str, is_quiz_mode: bool = False, algorithm: str = "sha256") -> str:
     """
     Generate a unique hash for a set of content (files, text, etc.) that includes the user_id and quiz mode.
     
     Args:
         content_set (set): Set of content items (bytes or strings)
-        user_id (int): User ID to include in the hash
+        user_id (str): User ID to include in the hash
         is_quiz_mode (bool): Whether this is quiz mode (affects hash generation)
         algorithm (str): Hashing algorithm to use (default: "sha256")
     
@@ -226,35 +227,97 @@ def upsert_quiz_questions_batch(questions_with_hashes: List[Dict[str, Any]]) -> 
     """
     return upsert_to_table("quiz_questions", questions_with_hashes)
 
+def hash_password(password: str) -> str:
+    """
+    Hashes a password using bcrypt.
+    """
+    print(f"Hashing password...")
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    print(f"Password hashed. Length: {len(hashed_password.decode('utf-8'))}")
+    return hashed_password.decode('utf-8')
+
+def check_password(password: str, hashed_password: str) -> bool:
+    """
+    Checks if a plain-text password matches a hashed password.
+    """
+    print(f"Checking password for match.")
+    result = bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+    print(f"Password check result: {result}")
+    return result
+
+def create_user(email: str, password: str, name: str) -> Dict[str, Any]:
+    """
+    Creates a new user in the database with a hashed password.
+    """
+    print(f"Attempting to create user: {email} with name: {name}")
+    try:
+        supabase = get_supabase_client()
+        hashed_password = hash_password(password)
+        print(f"Hashed password for new user: {hashed_password[:10]}...")
+        
+        # Check if user already exists
+        existing_user = supabase.table('users').select("id").eq('email', email).execute()
+        if existing_user.data:
+            print(f"User with email {email} already exists.")
+            return {"success": False, "error": "User with this email already exists", "status_code": 409}
+
+        user_data = {
+            "email": email,
+            "password": hashed_password, # Store hashed password
+            "name": name # Assuming a default name or generating one
+        }
+        
+        print(f"Inserting new user data into database: {user_data}")
+        result = supabase.table('users').insert(user_data).execute()
+        
+        if result.data:
+            print(f"User {email} created successfully with ID: {result.data[0].get('id')}")
+            return {"success": True, "user": result.data[0]}
+        else:
+            print(f"Failed to create user {email}. Supabase error: {result.error}")
+            return {"success": False, "error": "Failed to create user", "details": result.error}
+            
+    except Exception as e:
+        print(f"Exception during create_user for {email}: {e}")
+        return {"success": False, "error": str(e)}
+
 def authenticate_user(email: str, password: str) -> Dict[str, Any]:
     """
-    Authenticate a user by checking email and password against the users table.
-    
-    Args:
-        email (str): User's email address
-        password (str): User's password (plain text - should be hashed in production)
-    
-    Returns:
-        Dict containing authentication result and user data if successful
+    Authenticate a user by checking email and hashed password against the users table.
     """
+    print(f"Attempting to authenticate user: {email}")
     try:
         supabase = get_supabase_client()
         
-        # Query for user with matching email and password
-        result = supabase.table('users').select("*").eq('email', email).eq('password', password).execute()
+        # Query for user with matching email
+        result = supabase.table('users').select("*").eq('email', email).execute()
         
         if result.data and len(result.data) > 0:
             user_data = result.data[0]
-            return {
-                "success": True,
-                "authenticated": True,
-                "user": {
-                    "id": int(user_data["id"]) if user_data.get("id") is not None else None,
-                    "name": user_data.get("name"),
-                    "email": user_data.get("email")
+            print(f"User found: {user_data.get('email')}. Comparing passwords...")
+            stored_hashed_password = user_data.get('password')
+            
+            if stored_hashed_password and check_password(password, stored_hashed_password):
+                print(f"Password matched for user: {user_data.get('email')}")
+                return {
+                    "success": True,
+                    "authenticated": True,
+                    "user": {
+                        "id": user_data["id"],
+                        "name": user_data.get("name"),
+                        "email": user_data.get("email")
+                    }
                 }
-            }
+            else:
+                print(f"Password mismatch for user: {user_data.get('email')}")
+                return {
+                    "success": True,
+                    "authenticated": False,
+                    "user": None,
+                    "message": "Invalid email or password"
+                }
         else:
+            print(f"User {email} not found in database.")
             return {
                 "success": True,
                 "authenticated": False,
@@ -263,6 +326,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
             }
         
     except Exception as e:
+        print(f"Exception during authenticate_user for {email}: {e}")
         return {
             "success": False,
             "authenticated": False,
@@ -273,7 +337,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
 
 def upsert_question_set(
     content_hash: str, 
-    user_id: int, 
+    user_id: str, 
     question_hashes: List[str], 
     content_names: List[str], 
     short_summary: Optional[str] = '', 
@@ -288,7 +352,7 @@ def upsert_question_set(
     
     Args:
         content_hash (str): The hash of the content (PDFs, user text)
-        user_id (int): The ID of the user
+        user_id (str): The ID of the user
         question_hashes (List[str]): List of hashes of the generated questions
         content_names (List[str]): List of names of the content files/sources
         short_summary (Optional[str]): A short, AI-generated title for the content.
@@ -362,12 +426,12 @@ def upsert_question_set(
             "error_type": type(e).__name__
         }
 
-def get_question_sets_for_user(user_id: int) -> Dict[str, Any]:
+def get_question_sets_for_user(user_id: str) -> Dict[str, Any]:
     """
     Retrieves all question sets for a given user, ordered by most recent.
     
     Args:
-        user_id (int): The ID of the user.
+        user_id (str): The ID of the user.
         
     Returns:
         Dict containing the result.
@@ -386,13 +450,13 @@ def get_question_sets_for_user(user_id: int) -> Dict[str, Any]:
             "error_type": type(e).__name__
         }
 
-def get_full_study_set_data(content_hash: str, user_id: int) -> Dict[str, Any]:
+def get_full_study_set_data(content_hash: str, user_id: str) -> Dict[str, Any]:
     """
     Retrieves the full data for a study set, including all related questions.
 
     Args:
         content_hash (str): The hash identifying the study set.
-        user_id (int): The ID of the user.
+        user_id (str): The ID of the user.
 
     Returns:
         A dictionary with the full study set data.
@@ -495,7 +559,7 @@ def upload_pdf_to_storage(file_input: Union[io.BytesIO, str], file_hash: str, or
             "error_type": type(e).__name__
         }
 
-def update_question_set_title(content_hash, user_id, new_title):
+def update_question_set_title(content_hash, user_id: str, new_title):
     """
     Updates the 'short_summary' (title) of a specific question set.
     """
@@ -520,7 +584,7 @@ def update_question_set_title(content_hash, user_id, new_title):
         print(f"Error updating question set title: {e}")
         return {"success": False, "error": str(e)}
 
-def touch_question_set(content_hash: str, user_id: int) -> Dict[str, Any]:
+def touch_question_set(content_hash: str, user_id: str) -> Dict[str, Any]:
     """Updates the created_at timestamp of a specific question set to the current time."""
     print(f"Touching question set {content_hash}.")
     try:
@@ -602,13 +666,13 @@ def star_all_questions_by_hashes(question_hashes: List[str], starred_status: boo
             "requested_count": len(question_hashes)
         }
 
-def delete_question_set_and_questions(content_hash: str, user_id: int) -> Dict[str, Any]:
+def delete_question_set_and_questions(content_hash: str, user_id: str) -> Dict[str, Any]:
     """
     Deletes a question set and all its associated questions from the database.
     
     Args:
         content_hash (str): The hash of the content/question set to delete
-        user_id (int): The ID of the user (for verification)
+        user_id (str): The ID of the user (for verification)
     
     Returns:
         Dict containing the result of the delete operation
@@ -645,13 +709,13 @@ def delete_question_set_and_questions(content_hash: str, user_id: int) -> Dict[s
         print(f"Error deleting question set {content_hash}: {e}")
         return {"success": False, "error": str(e)}
 
-def check_question_set_exists(content_hash: str, user_id: int) -> Dict[str, Any]:
+def check_question_set_exists(content_hash: str, user_id: str) -> Dict[str, Any]:
     """
     Check if a question set exists for a given user and content hash.
     
     Args:
         content_hash (str): The hash of the content to check for
-        user_id (int): The ID of the user
+        user_id (str): The ID of the user
     
     Returns:
         Dict containing the result and question set data if found
@@ -678,12 +742,12 @@ def check_question_set_exists(content_hash: str, user_id: int) -> Dict[str, Any]
             "question_count": 0
         }
 
-def insert_feedback(user_id: int, user_email: str, user_name: str, feedback_text: str) -> Dict[str, Any]:
+def insert_feedback(user_id: str, user_email: str, user_name: str, feedback_text: str) -> Dict[str, Any]:
     """
     Inserts a new feedback entry into the 'feedback' table.
 
     Args:
-        user_id (int): The ID of the user submitting feedback.
+        user_id (str): The ID of the user submitting feedback.
         user_email (str): The email of the user.
         user_name (str): The name of the user.
         feedback_text (str): The feedback message.
@@ -691,6 +755,7 @@ def insert_feedback(user_id: int, user_email: str, user_name: str, feedback_text
     Returns:
         Dict containing the result of the insert operation.
     """
+    print(f"insert_feedback() called for user_id: {user_id} (type: {type(user_id)})")
     try:
         supabase = get_supabase_client()
         
@@ -712,13 +777,13 @@ def insert_feedback(user_id: int, user_email: str, user_name: str, feedback_text
         print(f"Error inserting feedback: {e}")
         return {"success": False, "error": str(e)}
 
-def append_pdf_hash_to_user_pdfs(user_id: int, pdf_hash: str) -> Dict[str, Any]:
+def append_pdf_hash_to_user_pdfs(user_id: str, pdf_hash: str) -> Dict[str, Any]:
     """
     Appends a PDF hash to the 'pdfs' JSON object column in the 'users' table.
     Updates the timestamp even if hash already exists.
     
     Args:
-        user_id (int): The ID of the user.
+        user_id (str): The ID of the user.
         pdf_hash (str): The hash of the PDF file to append.
         
     Returns:
@@ -757,17 +822,18 @@ def append_pdf_hash_to_user_pdfs(user_id: int, pdf_hash: str) -> Dict[str, Any]:
         print(f"Error appending PDF hash to user {user_id} pdfs: {e}")
         return {"success": False, "error": str(e)}
 
-def get_user_associated_pdf_metadata(user_id: int) -> Dict[str, Any]:
+def get_user_associated_pdf_metadata(user_id: str) -> Dict[str, Any]:
     """
     Retrieves metadata (hash, filename, text) for all PDFs associated with a user
     from the 'pdfs' table, based on the 'pdfs' JSON object in the 'users' table.
     
     Args:
-        user_id (int): The ID of the user.
+        user_id (str): The ID of the user.
         
     Returns:
         Dict containing the result and a list of PDF metadata including updated_at timestamps.
     """
+    print(f"get_user_associated_pdf_metadata() called for user_id: {user_id} (type: {type(user_id)})")
     try:
         supabase = get_supabase_client()
         
@@ -890,12 +956,12 @@ def update_pdf_text_and_summary(file_hash: str, extracted_text: str, short_summa
 
 # --- Redis Task Management Functions ---
 
-def update_user_task_status(user_id: int, task_id: str, filename: str, status: str, message: str) -> Dict[str, Any]:
+def update_user_task_status(user_id: str, task_id: str, filename: str, status: str, message: str) -> Dict[str, Any]:
     """
     Updates a user's task status in a Redis hash.
 
     Args:
-        user_id (int): The ID of the user.
+        user_id (str): The ID of the user.
         task_id (str): The Celery task ID.
         filename (str): The name of the file being processed.
         status (str): The current status of the task (e.g., 'PROGRESS', 'SUCCESS', 'FAILURE').
@@ -931,16 +997,17 @@ def update_user_task_status(user_id: int, task_id: str, filename: str, status: s
         print(f"Error updating task status in Redis for user {user_id}: {e}")
         return {"success": False, "error": str(e)}
 
-def get_user_tasks(user_id: int) -> Dict[str, Any]:
+def get_user_tasks(user_id: str) -> Dict[str, Any]:
     """
     Retrieves all tasks and their statuses for a given user from Redis.
 
     Args:
-        user_id (int): The ID of the user.
+        user_id (str): The ID of the user.
 
     Returns:
         Dict containing a list of task data dictionaries.
     """
+    print(f"get_user_tasks() called for user_id: {user_id} (type: {type(user_id)})")
     if not redis_client:
         return {"success": True, "data": []} # Return empty list if no redis
 
@@ -960,17 +1027,18 @@ def get_user_tasks(user_id: int) -> Dict[str, Any]:
         print(f"Error retrieving tasks from Redis for user {user_id}: {e}")
         return {"success": False, "error": str(e), "data": []}
 
-def delete_user_tasks_by_status(user_id: int, statuses_to_clear: List[str]) -> Dict[str, Any]:
+def delete_user_tasks_by_status(user_id: str, statuses_to_clear: List[str]) -> Dict[str, Any]:
     """
     Deletes tasks from a user's Redis task hash based on their status.
 
     Args:
-        user_id (int): The ID of the user.
+        user_id (str): The ID of the user.
         statuses_to_clear (List[str]): A list of statuses for tasks to be cleared (e.g., ['SUCCESS', 'FAILURE']).
 
     Returns:
         Dict containing the result of the Redis operation and count of deleted tasks.
     """
+    print(f"delete_user_tasks_by_status() called for user_id: {user_id} (type: {type(user_id)})")
     if not redis_client:
         return {"success": False, "error": "Redis client not available."}
 
@@ -996,12 +1064,12 @@ def delete_user_tasks_by_status(user_id: int, statuses_to_clear: List[str]) -> D
         print(f"Error deleting tasks from Redis for user {user_id}: {e}")
         return {"success": False, "error": str(e), "deleted_count": 0}
 
-def remove_pdf_hashes_from_user(user_id: int, pdf_hashes_to_remove: List[str]) -> Dict[str, Any]:
+def remove_pdf_hashes_from_user(user_id: str, pdf_hashes_to_remove: List[str]) -> Dict[str, Any]:
     """
     Removes a list of PDF hashes from the 'pdfs' JSON object column in the 'users' table.
     
     Args:
-        user_id (int): The ID of the user.
+        user_id (str): The ID of the user.
         pdf_hashes_to_remove (List[str]): A list of PDF hashes to remove.
         
     Returns:
@@ -1222,6 +1290,7 @@ def clear_redis_session_content(session_id: str) -> Dict[str, Any]:
     Returns:
         Dict containing the result of the operation
     """
+    print(f"Clearing session content for session {session_id}.")
     if not redis_client:
         return {"success": False, "error": "Redis client not available"}
     
@@ -1236,6 +1305,7 @@ def clear_redis_session_content(session_id: str) -> Dict[str, Any]:
             "summary": "",
             "quiz_questions": [],
             "content_hash": "",
+            "other_content_hash": "",
             "content_name_list": [],
             "short_summary": ""
         }

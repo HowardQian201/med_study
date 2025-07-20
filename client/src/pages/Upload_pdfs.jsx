@@ -499,7 +499,7 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
 
             <Button
               variant="contained"
-              color="primary"
+              color={!isQuizMode ? "success" : "primary"}
               size="large"
               startIcon={<CloudUpload />}
               onClick={handleUploadFiles}
@@ -625,7 +625,7 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
                 Remove PDFs ({selectedPdfHashes.length})
               </Button>
               <Button
-                variant="contained"
+                variant={userPdfs.length > 0 ? "contained" : "outlined"}
                 startIcon={<Description />}
                 size="small"
                 color={!isQuizMode ? "success" : "primary"}

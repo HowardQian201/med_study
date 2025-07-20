@@ -8,6 +8,7 @@ import Study_session from './pages/Study_session'
 import Quiz from './pages/Quiz'
 import Home from './pages/Home'
 import Upload_pdfs from './pages/Upload_pdfs'
+import Signup from './pages/Signup'
 import axios from 'axios'
 
 function App() {
@@ -167,8 +168,8 @@ function App() {
           } 
         />
         <Route 
-          path="/" 
-          element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />} 
+          path="/signup" 
+          element={<Signup />} 
         />
         <Route 
           path="*" 

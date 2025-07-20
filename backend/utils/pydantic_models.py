@@ -13,6 +13,11 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     success: bool
 
+class SignUpRequest(BaseModel):
+    email: EmailStr
+    password: str
+    name: str # Add name field
+
 class AuthCheckResponse(BaseModel):
     authenticated: bool
     user: Optional[Dict[str, Any]] = None

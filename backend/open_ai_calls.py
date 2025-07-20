@@ -184,10 +184,10 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                     "id": 1,
                     "text": "A 34-year-old man presents to the emergency department with 5 days of worsening shortness of breath, orthopnea, and a nonproductive cough. He has no significant past medical history. Vitals show BP 110/70 mmHg, HR 105/min, and RR 22/min. Jugular venous distention is noted, and auscultation reveals bilateral crackles. ECG shows low-voltage QRS complexes. A chest x-ray demonstrates an enlarged cardiac silhouette. What is the most appropriate next step?",
                     "options": [
-                        "A. Start loop diuretics",
-                        "B. Order a transthoracic echocardiogram",
-                        "C. Begin corticosteroid therapy",
-                        "D. Perform emergent cardiac catheterization"
+                        "Start loop diuretics",
+                        "Order a transthoracic echocardiogram",
+                        "Begin corticosteroid therapy",
+                        "Perform emergent cardiac catheterization"
                     ],
                     "correctAnswer": 2,
                     "reason": "The patient presents with signs of acute heart failure and pericardial effusion (dyspnea, JVD, low-voltage ECG, enlarged cardiac silhouette). These findings raise concern for cardiac tamponade, which can be rapidly fatal. The most appropriate next step is a transthoracic echocardiogram to evaluate for pericardial fluid and assess for signs of tamponade physiology such as diastolic collapse of the right heart chambers."
