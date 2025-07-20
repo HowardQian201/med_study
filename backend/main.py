@@ -1,9 +1,10 @@
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Depends, File, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import traceback
+import httpx
 from .utils.redis import RedisSessionMiddleware, get_session, SessionManager
 from .utils.dependencies import require_auth 
 from .utils.pydantic_models import (
@@ -1228,6 +1229,74 @@ async def favicon():
     except Exception as e:
         print(f"Error serving favicon.png: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to serve favicon.png: {str(e)}")
+
+# PostHog Analytics Reverse Proxy (to avoid adblockers)
+@app.api_route("/ingest/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+async def proxy_posthog(request: Request, path: str):
+    """Proxy PostHog requests through our domain to avoid adblockers"""
+    
+    # PostHog's actual endpoint
+    posthog_url = f"https://app.posthog.com/{path}"
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Get request body if it exists
+            body = await request.body() if request.method in ["POST", "PUT", "PATCH"] else None
+            
+            # Prepare headers, excluding problematic ones
+            headers = {
+                key: value for key, value in request.headers.items()
+                if key.lower() not in [
+                    "host", "content-length", "connection", 
+                    "upgrade", "proxy-connection", "te", "trailer",
+                    "accept-encoding"  # Let httpx handle encoding
+                ]
+            }
+            
+            # Add User-Agent if not present
+            if "user-agent" not in headers:
+                headers["user-agent"] = "MedStudyAI-Proxy/1.0"
+            
+            # Forward the request to PostHog
+            response = await client.request(
+                method=request.method,
+                url=posthog_url,
+                headers=headers,
+                content=body,
+                params=request.query_params,
+                follow_redirects=True
+            )
+            
+            # Get response content
+            content = response.content
+            
+            # Prepare response headers, excluding problematic ones
+            response_headers = {
+                key: value for key, value in response.headers.items()
+                if key.lower() not in [
+                    "content-encoding", "transfer-encoding", "connection",
+                    "upgrade", "proxy-connection", "te", "trailer"
+                ]
+            }
+            
+            # Set correct content-length
+            response_headers["content-length"] = str(len(content))
+            
+            return Response(
+                content=content,
+                status_code=response.status_code,
+                headers=response_headers
+            )
+            
+    except httpx.TimeoutException:
+        print(f"PostHog proxy timeout for {path}")
+        raise HTTPException(status_code=504, detail="Analytics service timeout")
+    except httpx.RequestError as e:
+        print(f"PostHog proxy error for {path}: {str(e)}")
+        raise HTTPException(status_code=502, detail="Analytics service unavailable")
+    except Exception as e:
+        print(f"PostHog proxy unexpected error for {path}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Analytics proxy error")
 
 # Catch-all route for client-side routing (React Router)
 @app.get("/{path:path}")
