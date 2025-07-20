@@ -66,7 +66,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 # Configure CORS
 # Get allowed origins from environment variable, fallback to localhost for development
-ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5000').split(',')
+ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS').split(',')
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,  # Specific origins only

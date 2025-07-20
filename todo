@@ -11,8 +11,10 @@ fastapi
     - make cpu bound work like hashing offloaded to thread pool executor
 
 
+manual realtime stats using posthog
 Generate more than 20 flashcards/usmle questions at a time
 Stream quiz question generation
+delete questions from quiz set
 
 
 
@@ -24,12 +26,10 @@ Stream quiz question generation
 Upload anki decks to get questions
 Make flashcard/usmle mode icon in app bar look not like a button
 
-delete questions from quiz set
 
 rate limit api calls
 
 supabase mcp with cursor
-manual realtime stats using posthog
 Bug stats with Sentry.io
 
 Database indexing on question_sets.user_id, pdfs.hash, and quiz_questions.hash so that db queries are fast when querying
