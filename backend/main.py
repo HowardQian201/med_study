@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Depends, F
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from posthog import Posthog
 from typing import List
 import traceback
 import httpx
@@ -44,7 +45,18 @@ from celery.result import AsyncResult # Import this to interact with task result
 import tempfile # Import tempfile for creating temporary files
 from datetime import datetime, timezone # Import timezone for UTC
 
-# FastAPI Redis Session Management is now handled by middleware in redis.py
+
+# Initialize PostHog for server-side tracking
+posthog_api_key = os.environ.get('POSTHOG_API_KEY') or os.environ.get('VITE_PUBLIC_POSTHOG_KEY')
+posthog_host = os.environ.get('POSTHOG_HOST') or os.environ.get('VITE_PUBLIC_POSTHOG_HOST') or 'https://app.posthog.com'
+
+if posthog_api_key:
+    posthog = Posthog(posthog_api_key, host=posthog_host)
+    print(f"PostHog initialized for server-side tracking: {posthog_host}")
+else:
+    posthog = None
+    print("Warning: PostHog API key not found. Server-side exception tracking disabled.")
+
 
 # Streaming flag
 STREAMING_ENABLED = True
@@ -62,6 +74,28 @@ app = FastAPI(
 # Custom exception handler to maintain Flask error format compatibility
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    # Try to get user ID from session for exception tracking
+    try:
+        session = get_session(request)
+        user_id = session.get('user_id') if session else None
+        
+        # Capture exception in PostHog with user context
+        if posthog:
+            posthog.capture_exception(
+                exc, 
+                distinct_id=user_id or 'anonymous',
+                properties={
+                    'status_code': exc.status_code,
+                    'detail': exc.detail,
+                    'path': request.url.path,
+                    'method': request.method,
+                    'user_id': user_id
+                }
+            )
+    except Exception as e:
+        # If PostHog tracking fails, don't break the error response
+        print(f"Failed to track exception in PostHog: {e}")
+    
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": exc.detail}  # Use "error" instead of "detail" for Flask compatibility
@@ -126,6 +160,18 @@ async def login(request: LoginRequest, session: SessionManager = Depends(get_ses
         session['name'] = user['name']
         session['email'] = user['email']
         
+        # Track successful login in PostHog
+        if posthog:
+            posthog.capture(
+                distinct_id=user['id'],
+                event='user_login_server',
+                properties={
+                    'email': user['email'],
+                    'name': user['name'],
+                    'login_method': 'email_password'
+                }
+            )
+        
         # Ensure PDF results are empty on fresh login
         session['summary'] = ""
         session['quiz_questions'] = []
@@ -154,6 +200,18 @@ async def signup(request: SignUpRequest):
             else:
                 print(f"Database error during user creation: {create_user_result.get('error', 'Unknown error')}")
                 raise HTTPException(status_code=500, detail=create_user_result.get("error", "User creation failed."))
+        
+        # Track successful signup in PostHog
+        if posthog:
+            posthog.capture(
+                distinct_id=create_user_result.get('id', 'unknown'),
+                event='user_signup_server',
+                properties={
+                    'email': request.email,
+                    'name': request.name,
+                    'signup_method': 'email_password'
+                }
+            )
         
         return SuccessResponse(success=True, message="User created successfully")
 
