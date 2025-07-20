@@ -21,7 +21,8 @@ import {
   Chip,
   CircularProgress,
   Collapse,
-  TextField
+  TextField,
+  Snackbar
 } from '@mui/material';
 import {
   ArrowBack,
@@ -66,6 +67,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [contentHash, setContentHash] = useState('');
   const [generationTimer, setGenerationTimer] = useState(0);
   const [showAnswersInPreview, setShowAnswersInPreview] = useState(false); // Changed to false to hide answers by default
+  const [show429Error, setShow429Error] = useState(false); // State for 429 error popup
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -228,30 +230,77 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         // If no existing questions, generate new ones
         const numQuestions = parseInt(sessionStorage.getItem('numQuestions')) || 5;
         const isQuizModeBoolean = sessionStorage.getItem('isQuizMode') === 'true';
-        const response = await axios.post('/api/generate-quiz', {
-          type: 'initial',
-          numQuestions: numQuestions,
-          isQuizMode: String(isQuizModeBoolean), // Ensure it's a string "true" or "false"
-          incorrectQuestionIds: [],
-          previousQuestions: [],
-          isPreviewing: false,
-        }, {
-          withCredentials: true
-        });
         
-        if (response.data.success && response.data.questions) {
-          setQuestions(response.data.questions);
-          setCurrentSessionShortSummary(response.data.short_summary || '');
-        } else if (response.data.error === "Quiz set already exists") {
-          setError("Quiz set for that material already exists. Here it is!");
-          setContentHash(response.data.content_hash);
-        } else {
-          setError('Failed to generate quiz questions');
+        const attemptGeneration = async () => {
+          try {
+            const response = await axios.post('/api/generate-quiz', {
+              type: 'initial',
+              numQuestions: numQuestions,
+              isQuizMode: String(isQuizModeBoolean), // Ensure it's a string "true" or "false"
+              incorrectQuestionIds: [],
+              previousQuestions: [],
+              isPreviewing: false,
+            }, {
+              withCredentials: true
+            });
+            
+            if (response.data.success && response.data.questions) {
+              setQuestions(response.data.questions);
+              setCurrentSessionShortSummary(response.data.short_summary || '');
+              return true; // Success
+            } else if (response.data.error === "Quiz set already exists") {
+              setError("Quiz set for that material already exists. Here it is!");
+              setContentHash(response.data.content_hash);
+              return true; // Handled
+            } else {
+              setError('Failed to generate quiz questions');
+              return true; // Error handled
+            }
+          } catch (genErr) {
+            if (genErr.response?.status === 429) {
+              // Quiz generation already in progress, keep loading and retry
+              console.log('Quiz generation in progress, waiting...');
+              return false; // Continue polling
+            } else {
+              // Other error, stop trying
+              throw genErr;
+            }
+          }
+        };
+        
+        // Try to generate, if 429 then poll until complete
+        let success = await attemptGeneration();
+        
+        // If we got a 429, poll every 2 seconds until generation completes
+        while (!success) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+          
+          // First check if questions are now available in session
+          try {
+            const pollResponse = await axios.get('/api/get-quiz', {
+              withCredentials: true
+            });
+            
+            if (pollResponse.data.success && pollResponse.data.questions.length > 0) {
+              setQuestions(pollResponse.data.questions);
+              success = true;
+              break;
+            }
+          } catch (pollErr) {
+            console.log('Error polling for existing questions:', pollErr);
+          }
+          
+          // If no questions yet, try generation again
+          success = await attemptGeneration();
         }
         }
       } catch (err) {
         console.error('Error fetching quiz questions:', err);
-        setError(err.response?.data?.error || 'Failed to generate quiz questions');
+        if (err.response?.status === 429) {
+          setError('Quiz generation in progress. Please wait...');
+        } else {
+          setError(err.response?.data?.error || 'Failed to generate quiz questions');
+        }
       } finally {
         setIsLoading(false);
         isFetching.current = false;
@@ -414,7 +463,12 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       }
     } catch (err) {
       console.error('Error generating more questions:', err);
-      setError(err.response?.data?.error || 'Failed to generate more questions');
+      if (err.response?.status === 429) {
+        // Show popup for 429 error
+        setShow429Error(true);
+      } else {
+        setError(err.response?.data?.error || 'Failed to generate more questions');
+      }
     } finally {
       setIsGeneratingMoreQuestions(false);
     }
@@ -1529,6 +1583,23 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         </Card>
       </Container>
       <FeedbackButton />
+      
+      {/* Snackbar for 429 error */}
+      <Snackbar
+        open={show429Error}
+        autoHideDuration={10000}
+        onClose={() => setShow429Error(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setShow429Error(false)} 
+          severity="warning" 
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          Quiz generation already in progress. Please wait for the current generation to complete. (please refresh periodically)
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

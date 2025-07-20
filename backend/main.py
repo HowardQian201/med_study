@@ -18,7 +18,7 @@ from .utils.pydantic_models import (
     LoadStudySetResponse,
     SignUpRequest
 )
-from .open_ai_calls import gpt_summarize_transcript, generate_quiz_questions, generate_short_title
+from .open_ai_calls import randomize_answer_choices, gpt_summarize_transcript, generate_quiz_questions, generate_short_title
 from .database import (
     upsert_pdf_results, check_question_set_exists,
     check_file_exists, generate_content_hash, generate_file_hash,
@@ -27,7 +27,7 @@ from .database import (
     touch_question_set, update_question_starred_status, delete_question_set_and_questions, insert_feedback, 
     append_pdf_hash_to_user_pdfs, get_user_associated_pdf_metadata, get_pdf_text_by_hashes,
     update_user_task_status, get_user_tasks, delete_user_tasks_by_status, remove_pdf_hashes_from_user,
-    create_user
+    create_user, redis_client
 )
 # Import the main Celery app instance from worker.py
 from .background.worker import app as celery_app
@@ -317,7 +317,18 @@ async def generate_quiz(
     session: SessionManager = Depends(get_session)
 ):
     """Endpoint to generate quiz questions from the stored summary"""
-    print("generate_quiz()")
+    print(f"generate_quiz() called for user_id: {user_id}")
+    
+    # Use Redis directly for the lock to ensure it's immediately available across requests
+    lock_key = f"quiz_generation_lock:{user_id}"
+    
+    # Try to set the lock with a timeout (expires in 2 minutes as failsafe)
+    lock_acquired = redis_client.set(lock_key, "locked", nx=True, ex=120) if redis_client else False
+    
+    if not lock_acquired:
+        print(f"Quiz generation already in progress for user {user_id}, rejecting duplicate request")
+        raise HTTPException(status_code=429, detail='Quiz generation already in progress. Please wait.')
+    
     try:
         content_hash = session.get('content_hash')
         content_name_list = session.get('content_name_list', [])
@@ -335,13 +346,13 @@ async def generate_quiz(
         is_previewing = request.isPreviewing
         num_questions = request.numQuestions  # Default to 5 if not specified
         is_quiz_mode = str(request.isQuizMode).lower() == 'true' # Default to False (study mode)
-        if is_quiz_mode != session.get('is_quiz_mode'):
+        print(f"Question type: {question_type}, is_quiz_mode: {is_quiz_mode}, session is_quiz_mode: {session.get('is_quiz_mode')}")
+        if question_type == 'initial' and is_quiz_mode != session.get('is_quiz_mode'):
             content_hash = session.get('other_content_hash')
             print(f"Using other content hash: {content_hash}")
         else:
             content_hash = session.get('content_hash')
             print(f"Using content hash: {content_hash}")
-
 
         # Validate number of questions is within reasonable bounds
         if not isinstance(num_questions, int) or num_questions < 1 or num_questions > 20:
@@ -405,6 +416,11 @@ async def generate_quiz(
         print(f"Error generating quiz questions: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Always clear the lock, whether success or failure
+        if redis_client:
+            redis_client.delete(lock_key)
+        print(f"Quiz generation lock cleared for user {user_id}")
 
 
 
@@ -787,6 +803,8 @@ async def shuffle_quiz(
         # Apply Fisher-Yates shuffle algorithm
         shuffled_questions = list(latest_questions)
         random.shuffle(shuffled_questions)
+        for question in shuffled_questions:
+            randomize_answer_choices(question)
         
         # Update the latest set in session with shuffled questions
         quiz_questions_sets[-1] = shuffled_questions
