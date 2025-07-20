@@ -38,6 +38,8 @@ import re
 from datetime import timedelta, datetime
 import gc
 import random
+import json
+import gzip
 from celery.result import AsyncResult # Import this to interact with task results
 import tempfile # Import tempfile for creating temporary files
 from datetime import datetime, timezone # Import timezone for UTC
@@ -1232,8 +1234,8 @@ async def favicon():
 
 # PostHog Analytics Reverse Proxy (to avoid adblockers)
 @app.api_route("/ingest/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-async def proxy_posthog(request: Request, path: str):
-    """Proxy PostHog requests through our domain to avoid adblockers"""
+async def proxy_posthog(request: Request, path: str, session: SessionManager = Depends(get_session)):
+    """Proxy PostHog requests through our domain to avoid adblockers and inject user ID"""
     
     # PostHog's actual endpoint
     posthog_url = f"https://app.posthog.com/{path}"
@@ -1242,6 +1244,90 @@ async def proxy_posthog(request: Request, path: str):
         async with httpx.AsyncClient(timeout=30.0) as client:
             # Get request body if it exists
             body = await request.body() if request.method in ["POST", "PUT", "PATCH"] else None
+            
+            # Inject user ID into PostHog requests if user is authenticated
+            if body and request.method == "POST":
+                try:
+                    # Check if the body is gzip compressed (PostHog uses compression=gzip-js)
+                    body_str = None
+                    if body.startswith(b'\x1f\x8b'):  # gzip magic number
+                        # Decompress gzip data
+                        try:
+                            decompressed = gzip.decompress(body)
+                            body_str = decompressed.decode('utf-8')
+                        except Exception as e:
+                            print(f"Failed to decompress gzip PostHog data: {e}")
+                            # If decompression fails, skip user injection
+                            body_str = None
+                    else:
+                        # Not compressed, decode as usual
+                        body_str = body.decode('utf-8')
+                    
+                    if body_str:
+                        # PostHog sends data in different formats, handle the most common ones
+                        if body_str.startswith('data='):
+                            # URL-encoded format: data={"batch":[...]}
+                            from urllib.parse import unquote_plus
+                            json_part = body_str[5:]  # Remove 'data=' prefix
+                            json_data = json.loads(unquote_plus(json_part))
+                        else:
+                            # Direct JSON format
+                            json_data = json.loads(body_str)
+                        
+                        # Get user ID from session
+                        user_id = session.get('user_id')
+                        user_email = session.get('email')
+                        user_name = session.get('name')
+                        
+                        if user_id:
+                            # Inject user properties into PostHog events
+                            if 'batch' in json_data:
+                                # Batch format (multiple events)
+                                for event in json_data['batch']:
+                                    if 'properties' not in event:
+                                        event['properties'] = {}
+                                    
+                                    # Set distinct_id to user_id for proper user identification
+                                    event['distinct_id'] = user_id
+                                    
+                                    # Add user properties
+                                    event['properties']['user_id'] = user_id
+                                    if user_email:
+                                        event['properties']['user_email'] = user_email
+                                    if user_name:
+                                        event['properties']['user_name'] = user_name
+                                    
+                            elif 'distinct_id' in json_data or 'event' in json_data:
+                                # Single event format
+                                json_data['distinct_id'] = user_id
+                                
+                                if 'properties' not in json_data:
+                                    json_data['properties'] = {}
+                                
+                                json_data['properties']['user_id'] = user_id
+                                if user_email:
+                                    json_data['properties']['user_email'] = user_email
+                                if user_name:
+                                    json_data['properties']['user_name'] = user_name
+                        
+                        # Convert back to the original format
+                        if body_str.startswith('data='):
+                            from urllib.parse import quote_plus
+                            modified_body = f"data={quote_plus(json.dumps(json_data))}"
+                            modified_body_bytes = modified_body.encode('utf-8')
+                        else:
+                            modified_body_bytes = json.dumps(json_data).encode('utf-8')
+                        
+                        # Re-compress if original was compressed
+                        if body.startswith(b'\x1f\x8b'):
+                            body = gzip.compress(modified_body_bytes)
+                        else:
+                            body = modified_body_bytes
+                    
+                except (json.JSONDecodeError, UnicodeDecodeError, KeyError, gzip.BadGzipFile) as e:
+                    # If we can't parse the body, just forward it as-is
+                    print(f"Could not parse PostHog request body for user injection: {e}")
+                    pass
             
             # Prepare headers, excluding problematic ones
             headers = {
@@ -1256,6 +1342,10 @@ async def proxy_posthog(request: Request, path: str):
             # Add User-Agent if not present
             if "user-agent" not in headers:
                 headers["user-agent"] = "MedStudyAI-Proxy/1.0"
+            
+            # Update content-length if body was modified
+            if body:
+                headers["content-length"] = str(len(body))
             
             # Forward the request to PostHog
             response = await client.request(

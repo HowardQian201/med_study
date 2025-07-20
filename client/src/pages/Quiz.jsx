@@ -1332,7 +1332,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                   </>
                                 ) : (
                                   <>
-                                    Press <strong>Space</strong> to flip card, <strong>←/→</strong> for navigation, <strong>s</strong> to star/unstar
+                                    Press <strong>Space</strong>/<strong>Enter</strong> to flip card, <strong>←/→</strong> for navigation, <strong>s</strong> to star/unstar
                                   </>
                                 )}
                               </Typography>
