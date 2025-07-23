@@ -6,13 +6,15 @@
 register new account
     - Payment page on register new account with Stripe
 
+manual realtime stats using posthog
+    - create generic posthog function in logic.py for backend manual tracking (change login/signup)
+
 fastapi
     - use async clients for supabase
     - make cpu bound work like hashing offloaded to thread pool executor
 
-Home message should state the steps a user should take
-manual realtime stats using posthog
-    - create generic posthog function in logic.py (change login/signup)
+
+Option to create/go to other mode in the quiz preview
 Generate more than 20 flashcards/usmle questions at a time
 Stream quiz question generation
 delete questions from quiz set

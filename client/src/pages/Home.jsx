@@ -340,10 +340,37 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                         justifyContent: 'center',
                         width: '100%'
                     }}>
-                        <Box sx={{ flex: '0 0 47%' }}>
-                            <Typography variant="h5" color="text.primary">
+                        <Box sx={{ flex: '0 0 40%' }}>
+                            <Typography variant="h5" fontSize="1.4rem" color="text.primary">
                                 Transform your medical PDFs and notes into interactive study materials with AI-generated summaries, active recall flashcards, and USMLE clinical vignette style questions.
                             </Typography>
+                        </Box>
+                        <Box sx={{ 
+                            flex: '0 0 54%',
+                            borderLeft: '2px solid',
+                            borderColor: 'divider',
+                            pl: 6,
+                            pr: 4
+                        }}>
+                            <Box component="ol" sx={{ m: 0, pl: 2 }}>
+                                <Typography variant="body1" fontSize="1.3rem" component="li" color="text.primary" sx={{ mb: 1.5, textAlign: 'left' }}>
+                                    Upload your medical school PDFs
+                                </Typography>
+                                <Typography variant="body1" fontSize="1.3rem" component="li" color="text.primary" sx={{ mb: 0.5, textAlign: 'left' }}>
+                                    Start a Study Session to:
+                                </Typography>
+                                <Box component="ul" sx={{ pl: 4, mb: 1.5 }}>
+                                    <Typography variant="body1" fontSize="1.3rem" component="li" color="text.primary" sx={{ textAlign: 'left' }}>
+                                      Generate <strong><u>summaries</u></strong> of your lecture materials
+                                    </Typography>
+                                    <Typography variant="body1" fontSize="1.3rem" component="li" color="text.primary" sx={{ textAlign: 'left' }}>
+                                      Create <strong><u>flashcards</u></strong> or <strong><u>USMLE-style questions</u></strong>
+                                    </Typography>
+                                </Box>
+                                <Typography variant="body1" fontSize="1.3rem" component="li" color="text.primary" sx={{ textAlign: 'left' }}>
+                                    Review your saved sets from the dashboard
+                                </Typography>
+                            </Box>
                         </Box>
                         
                     </Box>
