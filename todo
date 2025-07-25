@@ -16,6 +16,7 @@ fastapi
 
 Option to create/go to other mode in the quiz preview
 Generate more than 20 flashcards/usmle questions at a time
+flashcard mode should also have multiple choice "learn mode"
 Stream quiz question generation
 delete questions from quiz set
 
