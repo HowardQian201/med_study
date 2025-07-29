@@ -728,14 +728,34 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                             checked={isMultipleChoiceMode}
                             onChange={(e) => setIsMultipleChoiceMode(e.target.checked)}
                             size="small"
-                            color="success"
+                            sx={{
+                              '& .MuiSwitch-switchBase.Mui-checked': {
+                                color: 'warning.main',
+                                '&:hover': {
+                                  color: 'warning.dark',
+                                },
+                              },
+                              '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                backgroundColor: 'warning.main',
+                              },
+                              '& .MuiSwitch-switchBase': {
+                                color: 'warning.main',
+                                '&:hover': {
+                                  color: 'warning.dark',
+                                },
+                              },
+                              '& .MuiSwitch-track': {
+                                backgroundColor: 'warning.light',
+                              },
+                            }}
                           />
                         }
                         label={
                           <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-                            {isMultipleChoiceMode ? 'Multiple Choice' : 'Flashcard'}
+                            {isMultipleChoiceMode ? 'Learn' : 'Recall'}
                           </Typography>
                         }
+                        labelPlacement="bottom"
                         sx={{ 
                           mr: 0,
                           '& .MuiFormControlLabel-label': {
