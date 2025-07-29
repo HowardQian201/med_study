@@ -159,6 +159,7 @@ async def login(request: LoginRequest, session: SessionManager = Depends(get_ses
         session['user_id'] = user['id']
         session['name'] = user['name']
         session['email'] = user['email']
+        print(f"Session data set - user_id: {session.get('user_id')}, name: {session.get('name')}, email: {session.get('email')}")
         
         # Track successful login in PostHog
         if posthog:
@@ -237,9 +238,11 @@ async def logout(session: SessionManager = Depends(get_session)):
 async def check_auth(session: SessionManager = Depends(get_session)):
     print("check_auth()")
     try:
+        print(f"Session state during auth check: user_id={session.get('user_id')}, name={session.get('name')}, email={session.get('email')}")
         if 'user_id' in session:
             # Get user email from session
             email = session.get('email')
+            print(f"User authenticated in check_auth: {email}")
             # In a real app, you might want to fetch more user details from a database
             return AuthCheckResponse(
                 authenticated=True,

@@ -22,7 +22,9 @@ import {
   CircularProgress,
   Collapse,
   TextField,
-  Snackbar
+  Snackbar,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import {
   ArrowBack,
@@ -68,6 +70,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [generationTimer, setGenerationTimer] = useState(0);
   const [showAnswersInPreview, setShowAnswersInPreview] = useState(false); // Changed to false to hide answers by default
   const [show429Error, setShow429Error] = useState(false); // State for 429 error popup
+  const [isMultipleChoiceMode, setIsMultipleChoiceMode] = useState(false); // New state for flashcard/multiple choice toggle
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -111,7 +114,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   // Hotkey handlers
   const handleKeyboardAnswer = (optionIndex) => {
     const currentQuestionId = questions[currentQuestion]?.id;
-    if (currentQuestionId && !submittedAnswers[currentQuestionId] && isQuizMode) {
+    if (currentQuestionId && !submittedAnswers[currentQuestionId] && (isQuizMode || isMultipleChoiceMode)) {
       handleAnswerSelect(currentQuestionId, optionIndex);
     }
   };
@@ -133,22 +136,22 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
 
   useHotkeys('space', (e) => {
     e.preventDefault();
-    if (!isPreviewing && !showResults && !isQuizMode) {
+    if (!isPreviewing && !showResults && !isQuizMode && !isMultipleChoiceMode) {
       setIsCardFlipped(!isCardFlipped);
     }
-  }, [isPreviewing, showResults, isQuizMode, isCardFlipped]);
+  }, [isPreviewing, showResults, isQuizMode, isMultipleChoiceMode, isCardFlipped]);
 
   useHotkeys('enter', (e) => {
     e.preventDefault();
-    if (!isPreviewing && !showResults && !isQuizMode) {
+    if (!isPreviewing && !showResults && !isQuizMode && !isMultipleChoiceMode) {
       setIsCardFlipped(!isCardFlipped);
     }
-  }, [isPreviewing, showResults, isQuizMode, isCardFlipped]);
+  }, [isPreviewing, showResults, isQuizMode, isMultipleChoiceMode, isCardFlipped]);
 
   useHotkeys('enter', (e) => {
     e.preventDefault();
     const currentQuestionId = questions[currentQuestion]?.id;
-    if (!isPreviewing && !showResults && isQuizMode) {
+    if (!isPreviewing && !showResults && (isQuizMode || isMultipleChoiceMode)) {
       if (submittedAnswers[currentQuestionId]) {
         // If answer was submitted, go to next question
         moveToNextQuestion();
@@ -157,13 +160,13 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         handleSubmitAnswer(currentQuestionId);
       }
     }
-  }, [currentQuestion, isPreviewing, showResults, isQuizMode, selectedAnswers, submittedAnswers, questions]);
+  }, [currentQuestion, isPreviewing, showResults, isQuizMode, isMultipleChoiceMode, selectedAnswers, submittedAnswers, questions]);
 
   // Number key bindings for answer selection (1-4 for A-D)
-  useHotkeys('1', () => handleKeyboardAnswer(0), [currentQuestion, submittedAnswers, isQuizMode]);
-  useHotkeys('2', () => handleKeyboardAnswer(1), [currentQuestion, submittedAnswers, isQuizMode]);
-  useHotkeys('3', () => handleKeyboardAnswer(2), [currentQuestion, submittedAnswers, isQuizMode]);
-  useHotkeys('4', () => handleKeyboardAnswer(3), [currentQuestion, submittedAnswers, isQuizMode]);
+  useHotkeys('1', () => handleKeyboardAnswer(0), [currentQuestion, submittedAnswers, isQuizMode, isMultipleChoiceMode]);
+  useHotkeys('2', () => handleKeyboardAnswer(1), [currentQuestion, submittedAnswers, isQuizMode, isMultipleChoiceMode]);
+  useHotkeys('3', () => handleKeyboardAnswer(2), [currentQuestion, submittedAnswers, isQuizMode, isMultipleChoiceMode]);
+  useHotkeys('4', () => handleKeyboardAnswer(3), [currentQuestion, submittedAnswers, isQuizMode, isMultipleChoiceMode]);
 
   // Hotkey for starring/unstarring current question
   const handleToggleStar = useCallback(async (questionId) => {
@@ -529,10 +532,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       questionsWithStatus
     };
   };
-  
-  // Check if all questions have been answered
-  const allQuestionsAnswered = questions.length > 0 && 
-    questions.every(question => submittedAnswers[question.id]);
 
   const stats = calculateStats();
   const starredQuestionsCount = questions.filter(q => q.starred).length;
@@ -720,20 +719,47 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
               {(() => {
                 const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
                 return (
-                  <Typography 
-                    variant="body2" 
-                    color="primary"
-                    sx={{ 
-                      fontWeight: 600,
-                      bgcolor: isQuizMode ? 'primary.light' : 'success.main',
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: 1,
-                      color: 'text.primary'
-                    }}
-                  >
-                    {isQuizMode ? 'USMLE Mode' : 'Flashcard Mode'}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    {/* Flashcard/Multiple Choice Toggle - only show when not in quiz mode */}
+                    {!isQuizMode && (
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={isMultipleChoiceMode}
+                            onChange={(e) => setIsMultipleChoiceMode(e.target.checked)}
+                            size="small"
+                            color="success"
+                          />
+                        }
+                        label={
+                          <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                            {isMultipleChoiceMode ? 'Multiple Choice' : 'Flashcard'}
+                          </Typography>
+                        }
+                        sx={{ 
+                          mr: 0,
+                          '& .MuiFormControlLabel-label': {
+                            fontSize: '0.75rem',
+                            color: 'text.secondary'
+                          }
+                        }}
+                      />
+                    )}
+                    <Typography 
+                      variant="body2" 
+                      color="primary"
+                      sx={{ 
+                        fontWeight: 600,
+                        bgcolor: isQuizMode ? 'primary.light' : 'success.main',
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: 1,
+                        color: 'text.primary'
+                      }}
+                    >
+                      {isQuizMode ? 'USMLE Mode' : 'Flashcard Mode'}
+                    </Typography>
+                  </Box>
                 );
               })()}
             </Toolbar>
@@ -809,45 +835,38 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
 
                       return (
                         <Box textAlign="center" mb={4}>
-                          {isQuizMode && (
+                          {(isQuizMode || isMultipleChoiceMode) && (
                             <>
                               <Typography variant="h5" fontWeight="600" gutterBottom sx={{ mb: 2 }}>
                                 Quiz Performance
                               </Typography>
-                              
-                              {!allQuestionsAnswered && !isQuizMode ? (
-                                <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
-                                  You haven't answered all questions yet. Your current score is based on the questions you've completed.
-                                </Alert>
-                              ) : (
-                                <Paper elevation={1} sx={{ display: 'inline-block', p: 4, mb: 3, borderRadius: 3 }}>
-                                  <Box display="flex" alignItems="center" justifyContent="center">
-                                    <Box position="relative" display="inline-flex">
-                                      <CircularProgress variant="determinate" value={100} size={120} thickness={4} sx={{ color: 'grey.300' }} />
-                                      <CircularProgress
-                                        variant="determinate"
-                                        value={stats.percentage}
-                                        size={120}
-                                        thickness={4}
-                                        sx={{
-                                          color: stats.percentage >= 70 ? 'success.main' :
-                                                stats.percentage >= 40 ? 'warning.main' : 'error.main',
-                                          position: 'absolute',
-                                          left: 0,
-                                        }}
-                                      />
-                                      <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Typography variant="h4" component="div" fontWeight="bold">
-                                          {stats.percentage}%
-                                        </Typography>
-                                      </Box>
+                              <Paper elevation={1} sx={{ display: 'inline-block', p: 4, mb: 3, borderRadius: 3 }}>
+                                <Box display="flex" alignItems="center" justifyContent="center">
+                                  <Box position="relative" display="inline-flex">
+                                    <CircularProgress variant="determinate" value={100} size={120} thickness={4} sx={{ color: 'grey.300' }} />
+                                    <CircularProgress
+                                      variant="determinate"
+                                      value={stats.percentage}
+                                      size={120}
+                                      thickness={4}
+                                      sx={{
+                                        color: stats.percentage >= 70 ? 'success.main' :
+                                              stats.percentage >= 40 ? 'warning.main' : 'error.main',
+                                        position: 'absolute',
+                                        left: 0,
+                                      }}
+                                    />
+                                    <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Typography variant="h4" component="div" fontWeight="bold">
+                                        {stats.percentage}%
+                                      </Typography>
                                     </Box>
                                   </Box>
-                                  <Typography variant="body1" color="text.secondary" mt={2}>
-                                    {stats.correct} correct out of {stats.total} questions
-                                  </Typography>
-                                </Paper>
-                              )}
+                                </Box>
+                                <Typography variant="body1" color="text.secondary" mt={2}>
+                                  {stats.correct} correct out of {stats.total} questions
+                                </Typography>
+                              </Paper>
                             </>
                           )}
                           
@@ -879,7 +898,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               elevation={1}
                               sx={{
                                 border: '1px solid',
-                                borderColor: isQuizMode 
+                                borderColor: (isQuizMode || isMultipleChoiceMode)
                                   ? (question.isAnswered 
                                       ? (question.isCorrect ? 'success.main' : 'error.main')
                                       : 'divider')
@@ -888,7 +907,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                             >
                               <CardContent>
                                 <Box display="flex" alignItems="flex-start" mb={2}>
-                                  {isQuizMode && (
+                                  {(isQuizMode || isMultipleChoiceMode) && (
                                     <Chip
                                       icon={question.isAnswered
                                         ? (question.isCorrect ? <CheckCircle /> : <Cancel />)
@@ -922,7 +941,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                 </Box>
                               
                                 <Box ml={2}>
-                                  {isQuizMode ? (
+                                  {(isQuizMode || isMultipleChoiceMode) ? (
                                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
                                       {question.options.map((option, index) => {
                                         const questionId = question.id;
@@ -1330,6 +1349,11 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                     Use <strong>1-4</strong> to select answers, <strong>Enter</strong> to submit,{' '}
                                     <strong>←/→</strong> for navigation, <strong>s</strong> to star/unstar
                                   </>
+                                ) : isMultipleChoiceMode ? (
+                                  <>
+                                    Use <strong>1-4</strong> to select answers, <strong>Enter</strong> to submit,{' '}
+                                    <strong>←/→</strong> for navigation, <strong>s</strong> to star/unstar
+                                  </>
                                 ) : (
                                   <>
                                     Press <strong>Space</strong>/<strong>Enter</strong> to flip card, <strong>←/→</strong> for navigation, <strong>s</strong> to star/unstar
@@ -1338,7 +1362,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               </Typography>
                             )}
                             
-                            {isQuizMode ? (
+                            {(isQuizMode || isMultipleChoiceMode) ? (
                               <FormControl component="fieldset" sx={{ width: '100%', mt: 3 }}>
                                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
                                   {questions[currentQuestion].options.map((option, index) => {
@@ -1504,14 +1528,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                 startIcon={<ArrowForward />}
                                 color={isQuizMode ? "primary" : "success"}
                               >
-                                {isQuizMode ? 'Skip' : 'Next'}
+                                {isQuizMode || isMultipleChoiceMode ? 'Skip' : 'Next'}
                               </Button>
-                              {isQuizMode && (
+                              {(isQuizMode || isMultipleChoiceMode) && (
                                 <Button
                                   onClick={() => handleSubmitAnswer(questions[currentQuestion].id)}
                                   disabled={selectedAnswers[questions[currentQuestion].id] === undefined}
                                   variant="contained"
-                                  color="primary"
+                                  color={isQuizMode ? "primary" : "success"}
                                 >
                                   Submit Answer
                                 </Button>
@@ -1522,7 +1546,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               <Button
                                 onClick={completeQuiz}
                                 variant="contained"
-                                color="primary"
+                                color={isQuizMode ? "primary" : "success"}
                                 startIcon={<CheckCircle />}
                               >
                                 Complete Quiz
@@ -1531,7 +1555,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               <Button
                                 onClick={moveToNextQuestion}
                                 variant="contained"
-                                color="primary"
+                                color={isQuizMode ? "primary" : "success"}
                                 endIcon={<ArrowForward />}
                               >
                                 Next Question

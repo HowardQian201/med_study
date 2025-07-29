@@ -205,7 +205,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             Output **only** valid JSON exactly matching the schema below.
             """
         else:
-            max_completion_tokens = 4000
+            max_completion_tokens = 5000
             quiz_schema = {
                 "type": "object",
                 "required": ["questions"],
@@ -223,11 +223,11 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                                 "text":         {"type": "string"},
                                 "options": {
                                     "type": "array",
-                                    "minItems": 1,
-                                    "maxItems": 1,
+                                    "minItems": 4,
+                                    "maxItems": 4,
                                     "items": {"type": "string"}
                                 },
-                                "correctAnswer": {"type": "integer", "minimum": 0, "maximum": 0},
+                                "correctAnswer": {"type": "integer", "minimum": 0, "maximum": 3},
                                 "reason":       {"type": "string"}
                             },
                             "additionalProperties": False
@@ -241,7 +241,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
 
             Requirements:
             1. Clear, specific, and concise question stems for active recall flashcards (about 100 characters). Do not include the answer in the question stem or suggest there are multiple answers.
-            2. Simple, direct active recall flashcard questions based on the summary.
+            2. Simple, direct active recall flashcard/multiple choice questions based on the summary.
             3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
             4. Aim for clarity, clinical relevance, and high-yield facts
             5. Each flashcard must contain one clear fact.
@@ -251,7 +251,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                 {{
                     "id": 1,
                     "text": "Which cytokine is most critical for Th1 differentiation?",
-                    "options": ["IL-12"],
+                    "options": ["IL-12", "TGF-β", "IL-4", "IL-10"],
                     "correctAnswer": 0,
                     "reason": "IL-12 is essential for naïve CD4+ T cells to differentiate into Th1 cells. It activates STAT4, a transcription factor that upregulates T-bet, the master regulator of Th1 lineage commitment. T-bet then promotes the production of IFN-γ, the key Th1 cytokine, which amplifies the Th1 response. In contrast, IL-4 promotes Th2 differentiation, IL-6 supports Th17 development, and IL-10 suppresses inflammatory responses, including Th1 activity."
                 }},
@@ -264,7 +264,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
 
             system_prompt = """
             You are an expert medical professor that creates 
-            accurate, active recall flashcard questions. 
+            accurate, active recall flashcard/multiple choice questions. 
             Output **only** valid JSON exactly matching the schema below.
             """
         
