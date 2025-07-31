@@ -1172,7 +1172,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                       >
                         <TextField
                           type="number"
-                          value={numAdditionalQuestions}
+                          value={Math.min(numAdditionalQuestions, isQuizMode ? 30 : 100)}
                           onChange={(e) => {
                             e.stopPropagation();
                             const maxQuestions = isQuizMode ? 30 : 100;
