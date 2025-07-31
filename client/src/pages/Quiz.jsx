@@ -72,6 +72,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [show429Error, setShow429Error] = useState(false); // State for 429 error popup
   const [showNavigationWarning, setShowNavigationWarning] = useState(false); // State for navigation warning popup
   const [isMultipleChoiceMode, setIsMultipleChoiceMode] = useState(false); // New state for flashcard/multiple choice toggle
+  const [quizModeChangeTrigger, setQuizModeChangeTrigger] = useState(0); // State to trigger useEffect when quiz mode changes
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -219,12 +220,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     return option.replace(/^[A-D][.)]\s*/, '').trim();
   };
 
-  // Fetch questions from the API when the component mounts or the summary changes.
+  // Fetch questions from the API when the component mounts, the summary changes, or quiz mode changes.
   useEffect(() => {
+    // Update quiz mode from sessionStorage if it exists
     const storedQuizMode = sessionStorage.getItem('isQuizMode');
-    if (storedQuizMode) {
+    if (storedQuizMode && storedQuizMode !== isQuizMode.toString()) {
       setIsQuizMode(storedQuizMode === 'true');
     }
+    
     if (!propSummary) {
       setIsLoading(false);
       return;
@@ -247,6 +250,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         
         if (existingResponse.data.success && existingResponse.data.questions.length > 0) {
           setQuestions(existingResponse.data.questions);
+          setContentHash(existingResponse.data.content_hash);
         } else {
         // If no existing questions, generate new ones
         const numQuestions = parseInt(sessionStorage.getItem('numQuestions')) || 5;
@@ -263,6 +267,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
               isQuizMode: String(isQuizModeBoolean), // Ensure it's a string "true" or "false"
               incorrectQuestionIds: [],
               isPreviewing: false,
+              diff_mode: quizModeChangeTrigger > 0
             }, {
               withCredentials: true
             });
@@ -270,6 +275,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
             if (response.data.success && response.data.questions) {
               setQuestions(response.data.questions);
               setCurrentSessionShortSummary(response.data.short_summary || '');
+              setContentHash(response.data.content_hash);
               hideNavigationWarningPopup(); // Hide warning on success
               return true; // Success
             } else if (response.data.error === "Quiz set already exists") {
@@ -341,7 +347,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     return () => {
         isFetching.current = false;
     }
-  }, [propSummary]);
+  }, [propSummary, quizModeChangeTrigger, isQuizMode]);
 
   // New useEffect to fetch current session sources
   useEffect(() => {
@@ -503,6 +509,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
 
         if (response.data.success && response.data.questions) {
           setQuestions(prevQuestions => [...prevQuestions, ...response.data.questions]);
+          setContentHash(response.data.content_hash);
         } else {
           setError('Failed to generate more questions');
           return;
@@ -523,6 +530,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
 
         if (response.data.success && response.data.questions) {
           setQuestions(prevQuestions => [...prevQuestions, ...response.data.questions]);
+          setContentHash(response.data.content_hash);
         } else {
           setError('Failed to generate more questions');
           return;
@@ -671,6 +679,32 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
 
   const handleStarAllQuestions = () => handleBulkStarQuestions('star');
   const handleUnstarAllQuestions = () => handleBulkStarQuestions('unstar');
+
+  const handleOtherSetButtonClick = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const response = await axios.get('/api/get-other-quiz', {
+        withCredentials: true
+      });
+      
+      if (response.data.success) {
+        // Toggle quiz mode and trigger useEffect to refetch questions
+        const newQuizMode = !isQuizMode;
+        sessionStorage.setItem('isQuizMode', newQuizMode.toString());
+        setIsQuizMode(newQuizMode); // Update the state immediately
+        setQuizModeChangeTrigger(prev => prev + 1); // Trigger useEffect to refetch
+        
+      } else {
+        setError('Failed to get other quiz set');
+      }
+    } catch (err) {
+      console.error('Error getting other quiz set:', err);
+      setError(err.response?.data?.error || 'Failed to get other quiz set');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleBackToPreview = () => {
     setIsPreviewing(true);
@@ -1211,7 +1245,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     </Box>
 
                     {/* Second Row of Buttons */}
-                    <Box display="flex" justifyContent="center" gap={2} mb={4}>
+                    <Box display="flex" justifyContent="center" gap={2} mb={2}>
                       <Button
                         onClick={() => setShowAnswersInPreview(prev => !prev)}
                         variant="outlined"
@@ -1253,6 +1287,19 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                       </Button>
                     </Box>
 
+                    {/* New Button */}
+                    <Box display="flex" justifyContent="center" gap={2} mb={4}>
+                      <Button
+                        onClick={handleOtherSetButtonClick}
+                        variant="outlined"
+                        color={isQuizMode ? "success" : "primary"}
+                        size="large"
+                        startIcon={<Add />}
+                        disabled={isGeneratingMoreQuestions}
+                      >
+                        Create {isQuizMode ? '/ Go To Flashcard' : '/ Go To USMLE'} Set
+                      </Button>
+                    </Box>
                     
                     {currentSessionShortSummary && (
                       <Typography variant="h2" color="text.primary" sx={{ textAlign: 'center', mb: 0 }}>

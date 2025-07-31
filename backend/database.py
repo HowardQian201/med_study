@@ -337,6 +337,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
 
 def upsert_question_set(
     content_hash: str, 
+    other_content_hash: str,
     user_id: str, 
     question_hashes: List[str], 
     content_names: List[str], 
@@ -352,6 +353,7 @@ def upsert_question_set(
     
     Args:
         content_hash (str): The hash of the content (PDFs, user text)
+        other_content_hash (str): The hash of the other mode's content
         user_id (str): The ID of the user
         question_hashes (List[str]): List of hashes of the generated questions
         content_names (List[str]): List of names of the content files/sources
@@ -390,7 +392,8 @@ def upsert_question_set(
                     'content_names': existing_metadata.get('content_names', content_names)
                 },
                 'created_at': datetime.now(timezone.utc).isoformat(),
-                'is_quiz': is_quiz
+                'is_quiz': is_quiz,
+                'other_content_hash': other_content_hash
             }
 
             result = supabase.table('question_sets').update(update_data).eq('hash', content_hash).eq('user_id', user_id).execute()
@@ -411,7 +414,8 @@ def upsert_question_set(
                 'short_summary': short_summary,
                 'content_summary': summary,
                 'created_at': datetime.now(timezone.utc).isoformat(),
-                'is_quiz': is_quiz
+                'is_quiz': is_quiz,
+                'other_content_hash': other_content_hash
             }
 
             result = supabase.table('question_sets').insert(insert_data).execute()
@@ -493,6 +497,7 @@ def get_full_study_set_data(content_hash: str, user_id: str) -> Dict[str, Any]:
                 "summary": study_set.get('content_summary'),
                 "short_summary": study_set.get('short_summary'),
                 "content_hash": study_set.get('hash'),
+                "other_content_hash": study_set.get('other_content_hash'),
                 "content_name_list": study_set.get('metadata', {}).get('content_names', []),
                 # The session expects a list containing one set of questions.
                 "quiz_questions": [all_questions] if all_questions else [],

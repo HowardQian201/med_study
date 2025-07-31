@@ -1,7 +1,6 @@
 
 ###URGENT:
 
-Option to create/go to other mode in the quiz preview
 use async clients for supabase
 delete questions from quiz set
 
@@ -15,6 +14,7 @@ Stripe payment on login (free for basic tier and 14.99 for pro)
 
 
 ### LATER:
+upgrade instances and increase workers
 
 manual realtime stats using posthog
     - create generic posthog function in logic.py for backend manual tracking (change login/signup)

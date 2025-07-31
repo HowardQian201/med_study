@@ -418,9 +418,13 @@ async def generate_quiz(
         is_previewing = request.isPreviewing
         num_questions = request.numQuestions  # Default to 5 if not specified
         is_quiz_mode = str(request.isQuizMode).lower() == 'true' # Default to False (study mode)
+        diff_mode = request.diff_mode
         print(f"Question type: {question_type}, is_quiz_mode: {is_quiz_mode}, session is_quiz_mode: {session.get('is_quiz_mode')}")
-        if question_type == 'initial' and is_quiz_mode != session.get('is_quiz_mode'):
+        if question_type == 'initial' and is_quiz_mode != session.get('is_quiz_mode') and not diff_mode:
+            prev_content_hash = session.get('content_hash')
             content_hash = session.get('other_content_hash')
+            session['other_content_hash'] = prev_content_hash
+            session['content_hash'] = content_hash
             print(f"Using other content hash: {content_hash}")
         else:
             content_hash = session.get('content_hash')
@@ -448,16 +452,18 @@ async def generate_quiz(
             num_questions=num_questions,
             is_quiz_mode=is_quiz_mode
         )
+
+        other_content_hash = session.get('other_content_hash')
         
         # Only generate short title and upsert question set for initial generation
         if question_type == 'initial':
             short_summary = await generate_short_title(summary) # Await the async function
             # Upsert the question set to the database
-            upsert_question_set(content_hash, user_id, question_hashes, content_name_list, short_summary, summary, is_quiz_mode)
+            upsert_question_set(content_hash, other_content_hash, user_id, question_hashes, content_name_list, short_summary, summary, is_quiz_mode)
             session['short_summary'] = short_summary
         else:
             # For focused/additional questions, just upsert the new questions
-            upsert_question_set(content_hash, user_id, question_hashes, content_name_list, is_quiz=is_quiz_mode)
+            upsert_question_set(content_hash, other_content_hash, user_id, question_hashes, content_name_list, is_quiz=is_quiz_mode)
         
         # Store questions in session
         if is_previewing:
@@ -476,7 +482,9 @@ async def generate_quiz(
         return QuizResponse(
             success=True,
             questions=questions,
-            short_summary=session.get('short_summary', '')
+            short_summary=session.get('short_summary', ''),
+            content_hash=content_hash,
+            other_content_hash=other_content_hash
         )
     except HTTPException:
         raise
@@ -503,35 +511,48 @@ async def get_quiz(
         # Get stored questions
         questions = session.get('quiz_questions', [])
         latest_questions = questions[-1] if questions else []
+        # print(f"Latest questions: {latest_questions}")
         
         return QuizResponse(
             success=True,
-            questions=latest_questions
+            questions=latest_questions,
+            content_hash=session.get('content_hash', ''),
+            other_content_hash=session.get('other_content_hash', '')
         )
     except Exception as e:
         print(f"Error retrieving quiz questions: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get('/api/get-all-quiz-questions', response_model=QuizResponse)
-async def get_all_quiz_questions(
+
+@app.get('/api/get-other-quiz', response_model=QuizResponse)
+async def get_other_quiz(
     user_id: str = Depends(require_auth),
     session: SessionManager = Depends(get_session)
 ):
-    """Endpoint to retrieve all stored quiz questions from previous sessions"""
-    print("get_all_quiz_questions()")
+    """Endpoint to retrieve stored quiz questions"""
+    print("get_other_quiz()")
     try:
-        # Get all stored questions
-        all_questions = session.get('quiz_questions', [])
+        # Get stored questions
+        session['quiz_questions'] = []
+        new_other_content_hash = session.get('content_hash')
+        new_content_hash = session.get('other_content_hash')
+        print(session.get('content_hash'), session.get('other_content_hash'))
+        session['content_hash'] = new_content_hash
+        session['other_content_hash'] = new_other_content_hash
+        print(session.get('content_hash'), session.get('other_content_hash'))
         
         return QuizResponse(
             success=True,
-            questions=all_questions
+            questions=[],
+            content_hash=session.get('content_hash', ''),
+            other_content_hash=session.get('other_content_hash', '')
         )
     except Exception as e:
-        print(f"Error retrieving all quiz questions: {str(e)}")
+        print(f"Error retrieving quiz questions: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    
 
 @app.post('/api/save-quiz-answers', response_model=SuccessResponse)
 async def save_quiz_answers(
@@ -729,10 +750,11 @@ async def load_study_set(
         session['short_summary'] = set_data.get('short_summary', '')
         session['quiz_questions'] = set_data.get('quiz_questions', [])
         session['content_hash'] = set_data.get('content_hash', '')
+        session['other_content_hash'] = set_data.get('other_content_hash', '')
         session['content_name_list'] = set_data.get('content_name_list', [])
         
         print(f"Loaded {len(session.get('quiz_questions', []))} question sets into session.")
-        return LoadStudySetResponse(success=True, summary=summary_text)
+        return LoadStudySetResponse(success=True, summary=summary_text, content_hash=session['content_hash'], other_content_hash=session['other_content_hash'])
     except HTTPException:
         raise
     except Exception as e:

@@ -305,8 +305,8 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             """
             messages.append({"role": "user", "content": new_message})
 
-        for message in messages:
-            print(f"message: {message}")
+        # for message in messages:
+        #     print(f"message: {message}")
 
         response = await openai_client.chat.completions.create(
             model=model,

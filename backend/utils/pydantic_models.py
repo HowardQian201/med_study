@@ -44,6 +44,7 @@ class GenerateQuizRequest(BaseModel):
     isPreviewing: Optional[bool] = None
     numQuestions: int = 5
     isQuizMode: Optional[str] = "false"
+    diff_mode: Optional[bool] = False
 
 class SaveQuizAnswersRequest(BaseModel):
     userAnswers: Dict[str, int]
@@ -69,6 +70,8 @@ class DeleteQuestionSetRequest(BaseModel):
 class LoadStudySetResponse(BaseModel):
     success: bool
     summary: str
+    content_hash: str
+    other_content_hash: str
 
 # PDF management models
 class RemoveUserPdfsRequest(BaseModel):
@@ -98,6 +101,8 @@ class QuizResponse(BaseModel):
     success: bool
     questions: List[Dict[str, Any]]
     short_summary: Optional[str] = None
+    content_hash: Optional[str] = None
+    other_content_hash: Optional[str] = None
 
 class CurrentSessionSourcesResponse(BaseModel):
     success: bool
