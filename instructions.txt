@@ -8,7 +8,6 @@ python devapp.py
 
 ### Start background worker
 .venv\Scripts\activate
-
 celery -A backend.background.worker worker --loglevel=debug --pool=solo
 
 ### dev redis

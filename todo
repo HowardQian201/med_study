@@ -1,19 +1,11 @@
 
 ###URGENT:
 
-Generate more than 20 flashcards/usmle questions at a time
 Option to create/go to other mode in the quiz preview
-
+use async clients for supabase
+delete questions from quiz set
 
 Stripe payment on login (free for basic tier and 14.99 for pro)
-
-manual realtime stats using posthog
-    - create generic posthog function in logic.py for backend manual tracking (change login/signup)
-
-fastapi
-    - use async clients for supabase
-    - make cpu bound work like hashing offloaded to thread pool executor
-
 
 
 
@@ -23,11 +15,18 @@ fastapi
 
 
 ### LATER:
+
+manual realtime stats using posthog
+    - create generic posthog function in logic.py for backend manual tracking (change login/signup)
+
+
+generating flashcards/usmle questions loading page is off center
+
+
+
 Upload anki decks to get questions
 Make flashcard/usmle mode icon in app bar look not like a button
-delete questions from quiz set
-Stream quiz question generation
-generating flashcards/usmle questions loading page is off center
+
 
 rate limit api calls
 

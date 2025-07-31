@@ -131,9 +131,12 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
 
         incorrect_questions = []
         correct_questions = []
+        correct_question_answers = []
         if is_questions:
             incorrect_questions = [q['text'] for q in previous_questions if q['id'] in incorrect_question_ids]
             correct_questions = [q['text'] for q in previous_questions if q['id'] not in incorrect_question_ids]
+            correct_question_answers = [q['options'][q['correctAnswer']] for q in previous_questions if q['id'] not in incorrect_question_ids]
+        print(correct_question_answers)
 
         print(f"is_quiz_mode: {is_quiz_mode}")
         
@@ -169,16 +172,18 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                 }
             }
             prompt = f'''
-            Based on the following medical text summary, create {num_questions} VERY challenging USMLE clinical vignette style \
-                multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
-            
-            Requirements:
+            <Prompt description>
+            Based on the following medical text summary, create {num_questions} VERY challenging USMLE clinical vignette style multiple-choice questions to test the student's understanding. Make sure to include all the key concepts and information from the summary.
+            </Prompt description>
+
+            <Requirements>
             1. Clear, specific and challenging clinical vignette stems (about 400 characters).
             2. Question stems must be in the style of a USMLE clinical vignette 
             3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
             4. Aim for clarity, clinical relevance, and high-yield facts
+            </Requirements>
 
-            Example question fromat:
+            <Example question fromat>
             [
                 {{
                     "id": 1,
@@ -194,15 +199,14 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                 }},
                 ...
             ]
+            </Example question fromat>
 
-            Summary:
+            <Summary>
             {summary_text}
+            </Summary>
             '''
 
-            system_prompt = """
-            You are an expert medical professor that creates 
-            accurate, challenging USMLE clinical vignette style multiple choice questions. 
-            Output **only** valid JSON exactly matching the schema below.
+            system_prompt = """You are an expert medical professor that creates accurate, challenging USMLE clinical vignette style multiple choice questions. Output **only** valid JSON exactly matching the schema below.
             """
         else:
             max_completion_tokens = 5000
@@ -236,17 +240,19 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                 }
             }
             prompt = f'''
-            Based on the following medical text summary, create {num_questions}
-            active‑recall flashcards that cover every key concept.
+            <Prompt description>
+            Based on the following medical text summary, create {num_questions} active‑recall flashcards that cover every key concept.
+            </Prompt description>
 
-            Requirements:
+            <Requirements>
             1. Clear, specific, and concise question stems for active recall flashcards (about 100 characters). Do not include the answer in the question stem or suggest there are multiple answers.
             2. Simple, direct active recall flashcard/multiple choice questions based on the summary.
             3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
             4. Aim for clarity, clinical relevance, and high-yield facts
             5. Each flashcard must contain one clear fact.
+            </Requirements>
 
-            Example flashcard format:
+            <Example flashcard format>
             [
                 {{
                     "id": 1,
@@ -257,15 +263,14 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                 }},
                 ...
             ]
+            </Example flashcard format>
 
-            Summary:
+            <Summary>
             {summary_text}
+            </Summary>
             '''
 
-            system_prompt = """
-            You are an expert medical professor that creates 
-            accurate, active recall flashcard/multiple choice questions. 
-            Output **only** valid JSON exactly matching the schema below.
+            system_prompt = """You are an expert medical professor that creates accurate, active recall flashcard/multiple choice questions. Output **only** valid JSON exactly matching the schema below.
             """
         
         print(f"Using model: {model} for quiz generation USMLE mode: {is_quiz_mode} with max completion tokens: {max_completion_tokens}")
@@ -275,8 +280,33 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             {"role": "user", "content": prompt}
         ]
         if correct_questions and len(correct_questions) > 0:
-            messages.append({"role": "user", "content": f"Generate {num_questions} new questions that are cover entirely different topics from the questions below. \n\n{json.dumps(correct_questions)}"})
-        
+            new_message = f"""Generate {num_questions} new questions that:
+            - **Cover entirely new medical subtopics** not addressed by the questions below.
+            - **Avoid any repetition** or rewording of concepts already covered.
+            - Each question must test a **unique fact** not yet assessed, even if phrased differently.
+            - **Do not reuse** the same conditions, complications, lab findings, mechanisms, or drug classes from earlier questions.
+            - Prioritize **coverage gaps**—review previous questions to identify what's missing, then fill in those gaps.
+
+            You may reference the summary content below to ensure all concepts are grounded in the original source.
+
+            <Previous question answers>
+            {json.dumps(correct_question_answers)}
+            </Previous question answers>
+
+            <Previous question stems>
+            {json.dumps(correct_questions)}
+            </Previous question stems>
+
+            <Summary>
+            {summary_text}
+            </Summary>
+
+            Return the new questions in the JSON format specified earlier.
+            """
+            messages.append({"role": "user", "content": new_message})
+
+        for message in messages:
+            print(f"message: {message}")
 
         response = await openai_client.chat.completions.create(
             model=model,
@@ -289,11 +319,11 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                     "schema": quiz_schema
                 }
             },
-            temperature=0.2,
-            presence_penalty=0.0,
+            temperature=0.5,
+            presence_penalty=0.5,
             max_completion_tokens=max_completion_tokens,
             top_p=0.9,
-            frequency_penalty=0.2,
+            frequency_penalty=0.5,
         )
         print(f"Completion tokens used: {response.usage.completion_tokens}")
         gpt_time_end = time.time()

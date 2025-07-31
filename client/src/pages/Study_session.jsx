@@ -808,7 +808,6 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                       variant="contained"
                       color={isQuizMode ? "primary" : "success"}
                       size="small"
-                      startIcon={<Quiz />}
                       sx={{ 
                         minWidth: 'fit-content',
                         display: 'flex',
@@ -817,7 +816,6 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         px: 2
                       }}
                     >
-                      {isQuizMode ? "Create Quiz" : "Create Cards"}
                       <TextField
                         type="number"
                         value={numQuestions}
@@ -860,6 +858,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                           }
                         }}
                       />
+                      {isQuizMode ? "Create Quiz" : "Create Cards"}
                     </Button>
                     <Button
                         onClick={clearResults}

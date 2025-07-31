@@ -70,11 +70,29 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [generationTimer, setGenerationTimer] = useState(0);
   const [showAnswersInPreview, setShowAnswersInPreview] = useState(false); // Changed to false to hide answers by default
   const [show429Error, setShow429Error] = useState(false); // State for 429 error popup
+  const [showNavigationWarning, setShowNavigationWarning] = useState(false); // State for navigation warning popup
   const [isMultipleChoiceMode, setIsMultipleChoiceMode] = useState(false); // New state for flashcard/multiple choice toggle
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
   const timerRef = useRef(null);
+
+  // Add event listener to prevent navigation during generation
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isGeneratingMoreQuestions) {
+        e.preventDefault();
+        e.returnValue = 'Please do not navigate away while questions are being generated.';
+        return 'Please do not navigate away while questions are being generated.';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isGeneratingMoreQuestions]);
 
   // Timer effect for question generation
   useEffect(() => {
@@ -236,12 +254,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         
         const attemptGeneration = async () => {
           try {
+            // Show navigation warning for initial generation
+            showNavigationWarningPopup();
+            
             const response = await axios.post('/api/generate-quiz', {
               type: 'initial',
               numQuestions: numQuestions,
               isQuizMode: String(isQuizModeBoolean), // Ensure it's a string "true" or "false"
               incorrectQuestionIds: [],
-              previousQuestions: [],
               isPreviewing: false,
             }, {
               withCredentials: true
@@ -250,13 +270,16 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
             if (response.data.success && response.data.questions) {
               setQuestions(response.data.questions);
               setCurrentSessionShortSummary(response.data.short_summary || '');
+              hideNavigationWarningPopup(); // Hide warning on success
               return true; // Success
             } else if (response.data.error === "Quiz set already exists") {
               setError("Quiz set for that material already exists. Here it is!");
               setContentHash(response.data.content_hash);
+              hideNavigationWarningPopup(); // Hide warning on success
               return true; // Handled
             } else {
               setError('Failed to generate quiz questions');
+              hideNavigationWarningPopup(); // Hide warning on error
               return true; // Error handled
             }
           } catch (genErr) {
@@ -266,6 +289,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
               return false; // Continue polling
             } else {
               // Other error, stop trying
+              hideNavigationWarningPopup(); // Hide warning on error
               throw genErr;
             }
           }
@@ -307,6 +331,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       } finally {
         setIsLoading(false);
         isFetching.current = false;
+        hideNavigationWarningPopup(); // Ensure warning is hidden when loading completes
       }
     };
 
@@ -441,28 +466,67 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     setIsPreviewing(true);
   };
 
+  // Function to show navigation warning popup
+  const showNavigationWarningPopup = () => {
+    setShowNavigationWarning(true);
+  };
+
+  // Function to hide navigation warning popup
+  const hideNavigationWarningPopup = () => {
+    setShowNavigationWarning(false);
+  };
+
   const generateAdditionalQuestions = async () => {
     try {
       setIsGeneratingMoreQuestions(true);
       setError('');
+      
+      // Show navigation warning popup
+      showNavigationWarningPopup();
 
       const isQuizModeBoolean = sessionStorage.getItem('isQuizMode') === 'true';
-      const response = await axios.post('/api/generate-quiz', {
-        type: 'additional',
-        incorrectQuestionIds: [],
-        previousQuestions: questions,
-        isPreviewing: true,
-        numQuestions: numAdditionalQuestions,
-        isQuizMode: String(isQuizModeBoolean)
-      }, {
-        withCredentials: true
-      });
+      const batchSize = 10;
+      const numFullBatches = Math.floor(numAdditionalQuestions / batchSize);
+      const remainder = numAdditionalQuestions % batchSize;
 
-      if (response.data.success && response.data.questions) {
-        // Add new questions to the existing set
-        setQuestions(prevQuestions => [...prevQuestions, ...response.data.questions]);
-      } else {
-        setError('Failed to generate more questions');
+      // Process full batches of 20
+      for (let i = 0; i < numFullBatches; i++) {
+        const response = await axios.post('/api/generate-quiz', {
+          type: 'additional',
+          incorrectQuestionIds: [],
+          isPreviewing: true,
+          numQuestions: batchSize,
+          isQuizMode: String(isQuizModeBoolean)
+        }, {
+          withCredentials: true
+        });
+
+        if (response.data.success && response.data.questions) {
+          setQuestions(prevQuestions => [...prevQuestions, ...response.data.questions]);
+        } else {
+          setError('Failed to generate more questions');
+          return;
+        }
+      }
+
+      // Process remaining questions if any
+      if (remainder > 0) {
+        const response = await axios.post('/api/generate-quiz', {
+          type: 'additional', 
+          incorrectQuestionIds: [],
+          isPreviewing: true,
+          numQuestions: remainder,
+          isQuizMode: String(isQuizModeBoolean)
+        }, {
+          withCredentials: true
+        });
+
+        if (response.data.success && response.data.questions) {
+          setQuestions(prevQuestions => [...prevQuestions, ...response.data.questions]);
+        } else {
+          setError('Failed to generate more questions');
+          return;
+        }
       }
     } catch (err) {
       console.error('Error generating more questions:', err);
@@ -474,6 +538,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       }
     } finally {
       setIsGeneratingMoreQuestions(false);
+      // Hide navigation warning popup when generation is complete
+      hideNavigationWarningPopup();
     }
   };
 
@@ -1062,7 +1128,6 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         variant="outlined"
                         color={isQuizMode ? "primary" : "success"}
                         size="large"
-                        startIcon={isGeneratingMoreQuestions ? <CircularProgress size={24} color="inherit" /> : <Add />}
                         disabled={isGeneratingMoreQuestions}
                         sx={{ 
                           display: 'flex',
@@ -1071,26 +1136,19 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                           px: 2
                         }}
                       >
-                        {isGeneratingMoreQuestions ? (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Generating...</span>
-                            <Typography variant="body2" color="text.secondary">
-                              {formatTimer(generationTimer)}
-                            </Typography>
-                          </Box>
-                        ) : 'Generate More'}
                         <TextField
                           type="number"
                           value={numAdditionalQuestions}
                           onChange={(e) => {
                             e.stopPropagation();
-                            setNumAdditionalQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)));
+                            const maxQuestions = isQuizMode ? 30 : 100;
+                            setNumAdditionalQuestions(Math.max(1, Math.min(maxQuestions, parseInt(e.target.value) || 1)));
                           }}
                           onClick={(e) => e.stopPropagation()}
                           disabled={isGeneratingMoreQuestions}
                           inputProps={{ 
                             min: 1, 
-                            max: 20,
+                            max: isQuizMode ? 30 : 100,
                             style: { textAlign: 'center', width: '40px', fontSize: '14px' }
                           }}
                           size="small"
@@ -1121,6 +1179,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                             }
                           }}
                         />
+                        {isGeneratingMoreQuestions ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span>Generating...</span>
+                            <Typography variant="body2" color="text.secondary">
+                              {formatTimer(generationTimer)}
+                            </Typography>
+                          </Box>
+                        ) : 'Generate More'}
                       </Button>
                       <Button
                         onClick={handleStartQuiz}
@@ -1642,6 +1708,21 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
           sx={{ width: '100%' }}
         >
           Quiz generation already in progress. Please wait for the current generation to complete. (please refresh periodically)
+        </Alert>
+      </Snackbar>
+
+      {/* Snackbar for navigation warning */}
+      <Snackbar
+        open={showNavigationWarning}
+        autoHideDuration={null}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          severity={isQuizMode ? "primary" : "success"}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          ⚠️ Please do not navigate away or refresh until questions are done generating
         </Alert>
       </Snackbar>
     </Box>

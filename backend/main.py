@@ -406,7 +406,15 @@ async def generate_quiz(
         # Get request data and determine question type
         question_type = request.type  # 'initial', 'focused', or 'additional'
         incorrect_question_ids = request.incorrectQuestionIds
-        previous_questions = request.previousQuestions
+        previous_questions = session.get('quiz_questions', [])
+        
+        if previous_questions:
+            previous_questions = previous_questions[-1]
+        else:
+            previous_questions = []
+
+        print(f"Previous questions length: {len(previous_questions)}")
+
         is_previewing = request.isPreviewing
         num_questions = request.numQuestions  # Default to 5 if not specified
         is_quiz_mode = str(request.isQuizMode).lower() == 'true' # Default to False (study mode)
@@ -454,13 +462,9 @@ async def generate_quiz(
         # Store questions in session
         if is_previewing:
             # Store new questions in session, appending to the last set
-            quiz_questions_sets = session.get('quiz_questions', [])
-            if not quiz_questions_sets:
-                # If there are no sets for some reason, create a new one.
-                quiz_questions_sets.append(questions)
-            else:
-                # Get the last question set and extend it with the new questions.
-                quiz_questions_sets[-1].extend(questions)
+            quiz_questions_sets = session.get('quiz_questions', [[]])
+            # Get the last question set and extend it with the new questions.
+            quiz_questions_sets[-1].extend(questions)
 
             session['quiz_questions'] = quiz_questions_sets
         else:
