@@ -2,6 +2,9 @@ from dotenv import load_dotenv
 import PyPDF2
 import gc
 from .aws_ocr import extract_text_with_ocr_from_pdf
+from fastapi import HTTPException
+from .database import get_user_question_count
+
 
 load_dotenv()
 
@@ -114,3 +117,23 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
         # Force cleanup on error
         gc.collect()
         return ""
+    
+def check_question_limit(user_id: str, num_questions: int, is_quiz_mode: bool):
+    print("check_question_limit()")
+    
+    question_count_result = get_user_question_count(user_id)
+    print("get_user_question_count Total", question_count_result['data']['total'])
+    print("get_user_question_count USMLE", question_count_result['data']['usmle'])
+    print("get_user_question_count Flashcard", question_count_result['data']['flashcard'])
+
+    if is_quiz_mode:
+        if num_questions + question_count_result['data']['usmle'] > 75:
+            print("You have reached the maximum number of USMLE questions. Please upgrade to a paid plan to continue.")
+            raise HTTPException(status_code=501, detail='You have reached the maximum number of USMLE questions. Please upgrade to a paid plan to continue.')
+    else:
+        if num_questions + question_count_result['data']['flashcard'] > 250:
+            print("You have reached the maximum number of Flashcard questions. Please upgrade to a paid plan to continue.")
+            raise HTTPException(status_code=501, detail='You have reached the maximum number of Flashcard questions. Please upgrade to a paid plan to continue.')
+    
+    print("check_question_limit() passed")
+

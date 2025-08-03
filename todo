@@ -5,6 +5,10 @@ use async clients for supabase
 delete questions from quiz set
 
 Stripe payment on login (free for basic tier and 14.99 for pro)
+    - method to check user's total number of questions
+    - if over number for each type based on user's level, return error that triggers stripe payment
+    - if upgraded, update user_level and the session['user_level']
+    - add page to downgrade/upgrade level and see user stats like pdfs, quiz sets, quiz questions
 
 
 

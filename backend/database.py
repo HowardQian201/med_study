@@ -305,7 +305,8 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
                     "user": {
                         "id": user_data["id"],
                         "name": user_data.get("name"),
-                        "email": user_data.get("email")
+                        "email": user_data.get("email"),
+                        "user_level": user_data.get("user_level")
                     }
                 }
             else:
@@ -447,6 +448,45 @@ def get_question_sets_for_user(user_id: str) -> Dict[str, Any]:
         ).eq('user_id', user_id).order('created_at', desc=True).execute()
         
         return {"success": True, "data": result.data}
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+    
+def get_user_question_count(user_id: str) -> Dict[str, Any]:
+    """
+    Retrieves the total number of questions for a given user by counting question_hashes in metadata,
+    separated by quiz type.
+    """
+    try:
+        supabase = get_supabase_client()
+        result = supabase.table('question_sets').select("metadata, is_quiz").eq('user_id', user_id).execute()
+
+        quiz_questions = 0
+        study_questions = 0
+        
+        for question_set in result.data:
+            metadata = question_set.get('metadata', {})
+            question_hashes = metadata.get('question_hashes', [])
+            question_count = len(question_hashes)
+            
+            if question_set.get('is_quiz', False):
+                quiz_questions += question_count
+            else:
+                study_questions += question_count
+
+        total_questions = quiz_questions + study_questions
+
+        return {
+            "success": True, 
+            "data": {
+                "total": total_questions,
+                "usmle": quiz_questions,
+                "flashcard": study_questions
+            }
+        }
     except Exception as e:
         return {
             "success": False,

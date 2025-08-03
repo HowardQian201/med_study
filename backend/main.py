@@ -6,6 +6,7 @@ from posthog import Posthog
 from typing import List
 import traceback
 import httpx
+from .logic import check_question_limit
 from .utils.redis import RedisSessionMiddleware, get_session, SessionManager
 from .utils.dependencies import require_auth 
 from .utils.pydantic_models import (
@@ -159,7 +160,8 @@ async def login(request: LoginRequest, session: SessionManager = Depends(get_ses
         session['user_id'] = user['id']
         session['name'] = user['name']
         session['email'] = user['email']
-        print(f"Session data set - user_id: {session.get('user_id')}, name: {session.get('name')}, email: {session.get('email')}")
+        session['user_level'] = user['user_level']
+        print(f"Session data set - user_id: {session.get('user_id')}, name: {session.get('name')}, email: {session.get('email')}, user_level: {session.get('user_level')}")
         
         # Track successful login in PostHog
         if posthog:
@@ -169,7 +171,8 @@ async def login(request: LoginRequest, session: SessionManager = Depends(get_ses
                 properties={
                     'email': user['email'],
                     'name': user['name'],
-                    'login_method': 'email_password'
+                    'login_method': 'email_password',
+                    'user_level': user['user_level']
                 }
             )
         
@@ -390,7 +393,21 @@ async def generate_quiz(
 ):
     """Endpoint to generate quiz questions from the stored summary"""
     print(f"generate_quiz() called for user_id: {user_id}")
-    
+
+    num_questions = request.numQuestions  # Default to 5 if not specified
+    is_quiz_mode = str(request.isQuizMode).lower() == 'true' # Default to False (study mode)
+
+    try:
+        if session.get('user_level', 'basic') == "basic":
+            check_question_limit(user_id, num_questions, is_quiz_mode)
+    except HTTPException as e:
+        pass
+        # raise e
+    except Exception as e:
+        print(f"Error checking question limit: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
     # Use Redis directly for the lock to ensure it's immediately available across requests
     lock_key = f"quiz_generation_lock:{user_id}"
     
@@ -424,8 +441,6 @@ async def generate_quiz(
         print(f"Previous questions length: {len(previous_questions)}")
 
         is_previewing = request.isPreviewing
-        num_questions = request.numQuestions  # Default to 5 if not specified
-        is_quiz_mode = str(request.isQuizMode).lower() == 'true' # Default to False (study mode)
         diff_mode = request.diff_mode
         print(f"Question type: {question_type}, is_quiz_mode: {is_quiz_mode}, session is_quiz_mode: {session.get('is_quiz_mode')}")
         if question_type == 'initial' and is_quiz_mode != session.get('is_quiz_mode') and not diff_mode:
