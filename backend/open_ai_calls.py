@@ -52,26 +52,24 @@ def randomize_answer_choices(question):
     
     return question
 
-async def gpt_summarize_transcript(text, temperature=1.0, stream=False): # Changed to async def
+async def gpt_summarize_transcript(text, temperature=0.3, stream=False): # Changed to async def
     # Generate random number between 1-50 for question ID
     random_id = random.randint(1, 50)
     print(f"gpt_summarize_transcript called random_id: {random_id}, stream: {stream}")
 
     gpt_time_start = time.time()
-    prompt = f"""Create a comprehensive, detailed study guide/summary from this transcript that covers ALL content thoroughly.
+    prompt = f"""The following text is a long medical transcript or set of PDF extracts. Your task is to produce a truly comprehensive, equally-weighted, high-yield summary that a med student could use for exam prep.  
 
-    CRITICAL REQUIREMENTS:
-    - You MUST read and analyze the ENTIRE transcript from beginning to end, no matter how long it is
-    - Do NOT skip any sections, pages, or content - process everything completely
-    - Include information from EVERY single page, section, paragraph, and sentence of the transcript
-    - Focus on high-yield information for USMLE, COMLEX, and medical school exams
-    - Include ALL key concepts, clinical correlates, and important details mentioned throughout
-    - Provide real-world examples and clinical applications
-    - Make this as comprehensive and detailed as possible - leave nothing out
-    - Structure the content logically with clear organization
-    - If the transcript is very long, take your time to process it completely and thoroughly
+    <CRITICAL REQUIREMENTS>  
+    1. **Equal attention**: Divide the input into logical sections (2,000-character chunks), then for each section generate a **detailed sub-summary** of **5-10 bullet points** covering every concept, clinical correlate, and real-world example mentioned.  
+    2. **High-yield focus**: Highlight every exam-relevant fact—lab values, diagnostic criteria, management steps, pathophysiology mechanisms—using **bold** for key terms and **italics** for definitions.  
+    3. **Clinical correlates & examples**: For each major point, include at least one clinical vignette or real-world application illustrating how it presents or is managed in practice.  
+    4. **Depth & length**: Aim for at least **2,000 words** in total. Ensure no section is shorter than any other by more than 10%.  
+    5. **Structured integration**: After the sectional sub-summaries, synthesize them into a single cohesive study guide, organized with Markdown headers (`#`, `##`), tables for comparisons, numbered step-by-step processes, and blockquotes for “clinical pearls.”  
+    </CRITICAL REQUIREMENTS>
+    
 
-    FORMAT REQUIREMENTS:
+    <FORMAT REQUIREMENTS>
     - Use Markdown formatting throughout
     - Use headers (# for main sections, ## for subsections)
     - Use bold (**text**) for key terms and important concepts
@@ -80,11 +78,11 @@ async def gpt_summarize_transcript(text, temperature=1.0, stream=False): # Chang
     - Use numbered lists (1.) for step-by-step processes
     - Include tables where appropriate for comparisons
     - Use blockquotes (>) for important clinical pearls
+    </FORMAT REQUIREMENTS>
 
-    IMPORTANT: This transcript contains {len(text)} characters. Please ensure you process every single character and include all details in your summary.
-
-    Transcript:
+    <Transcript>
     {text}
+    </Transcript>
     """
 
     completion = await openai_client.chat.completions.create(
@@ -94,7 +92,7 @@ async def gpt_summarize_transcript(text, temperature=1.0, stream=False): # Chang
             {"role": "user", "content": prompt},
         ],
         temperature=temperature,
-        frequency_penalty=0.25,
+        max_completion_tokens=10000,
         stream=stream,
     )
     print(f"gpt_summarize_transcript returning random_id: {random_id}")

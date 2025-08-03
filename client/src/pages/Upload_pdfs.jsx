@@ -165,9 +165,20 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
   }, [processingJobs, setUserPdfs, setIsAuthenticated, navigate]); // Added setUserPdfs, setIsAuthenticated, navigate to dependency array
 
   const handleFileSelect = (event) => {
-    // Implementation will go here later
-    console.log('Files selected:', event.target.files);
-    setSelectedFiles(Array.from(event.target.files));
+    const files = Array.from(event.target.files);
+    
+    // Check if the number of files exceeds the limit
+    if (files.length > 5) {
+      setError('You can only upload up to 5 PDFs at once. Please select fewer files.');
+      // Clear the file input
+      event.target.value = null;
+      // Clear selected files state
+      setSelectedFiles([]);
+      return;
+    }
+    
+    console.log('Files selected:', files);
+    setSelectedFiles(files);
     setError('');
     setSuccessMessage('');
     setUploadedFilesReport([]);
@@ -186,47 +197,76 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
     setUploadedFilesReport([]);
     setFailedFilesReport([]);
 
-    const formData = new FormData();
-    selectedFiles.forEach(file => {
-      formData.append('files', file);
-    });
-
-    try {
-      const response = await axios.post('/api/upload-pdfs', formData, {
+    // Create individual upload promises for each file
+    const uploadPromises = selectedFiles.map(file => {
+      const formData = new FormData();
+      formData.append('files', file); // Single file per request
+      
+      return axios.post('/api/upload-pdfs', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
         withCredentials: true,
       });
+    });
 
-      if (response.data.success) {
-        // setSuccessMessage(response.data.message || 'Files uploaded successfully!');
-        setUploadedFilesReport(response.data.uploaded_files || []);
-        setFailedFilesReport(response.data.failed_files || []);
-        
-        // Initialize processing jobs state
-        const initialProcessingJobs = (response.data.task_details || []).map(task => ({
-            ...task,
-            status: 'PENDING',
-            message: 'Queued for processing'
-        }));
-        setProcessingJobs(prevJobs => [...prevJobs, ...initialProcessingJobs]);
+    try {
+      // Send all requests concurrently and wait for all to complete
+      const responses = await Promise.allSettled(uploadPromises);
+      
+      let allUploadedFiles = [];
+      let allFailedFiles = [];
+      let allTaskDetails = [];
+      let hasAnySuccess = false;
 
-        let generalMessage = '';
-        if (response.data.uploaded_files.length > 0) {
-            generalMessage += `Successfully uploaded ${response.data.uploaded_files.length} files. `;
-        }
-        if (response.data.failed_files.length > 0) {
-            generalMessage += `Failed to upload ${response.data.failed_files.length} files.`;
-        }
-
-        if (generalMessage) {
-            setSuccessMessage(generalMessage);
+      // Process each response individually
+      responses.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value.data.success) {
+          hasAnySuccess = true;
+          const responseData = result.value.data;
+          allUploadedFiles.push(...(responseData.uploaded_files || []));
+          allFailedFiles.push(...(responseData.failed_files || []));
+          allTaskDetails.push(...(responseData.task_details || []));
         } else {
-            setSuccessMessage('Operation completed with no new uploads, existing files, or failures.');
+          // Handle individual file failures
+          const fileName = selectedFiles[index].name;
+          allFailedFiles.push({
+            filename: fileName,
+            error: result.status === 'rejected' 
+              ? (result.reason?.response?.data?.error || result.reason?.message || 'Upload failed')
+              : (result.value?.data?.error || 'Upload failed')
+          });
         }
+      });
 
-        // Re-fetch user PDFs after upload to reflect any 'touched' files in the UI
+      // Update state with aggregated results
+      setUploadedFilesReport(allUploadedFiles);
+      setFailedFilesReport(allFailedFiles);
+      
+      // Initialize processing jobs state
+      const initialProcessingJobs = allTaskDetails.map(task => ({
+          ...task,
+          status: 'PENDING',
+          message: 'Queued for processing'
+      }));
+      setProcessingJobs(prevJobs => [...prevJobs, ...initialProcessingJobs]);
+
+      let generalMessage = '';
+      if (allUploadedFiles.length > 0) {
+          generalMessage += `Successfully uploaded ${allUploadedFiles.length} files. `;
+      }
+      if (allFailedFiles.length > 0) {
+          generalMessage += `Failed to upload ${allFailedFiles.length} files.`;
+      }
+
+      if (generalMessage) {
+          setSuccessMessage(generalMessage);
+      } else {
+          setSuccessMessage('Operation completed with no new uploads, existing files, or failures.');
+      }
+
+      // Re-fetch user PDFs after upload to reflect any 'touched' files in the UI
+      if (hasAnySuccess) {
         try {
             const userPdfsResponse = await axios.get('/api/get-user-pdfs', { withCredentials: true });
             if (userPdfsResponse.data.success) {
@@ -235,12 +275,11 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
         } catch (fetchErr) {
             console.error('Error re-fetching user PDFs after upload completion:', fetchErr);
         }
-
-        setSelectedFiles([]);
-        fileInputRef.current.value = null;
-      } else {
-        setError(response.data.error || 'File upload failed.');
       }
+
+      setSelectedFiles([]);
+      fileInputRef.current.value = null;
+
     } catch (err) {
       console.error('Error uploading files:', err);
       if (err.response?.status === 401) {
@@ -467,6 +506,9 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
               <CloudUpload sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 Drag & Drop PDF files here, or click to browse
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Maximum 5 PDFs per upload
               </Typography>
               {selectedFiles.length > 0 && (
                 <Stack sx={{ mt: 1, alignItems: 'center' }}>

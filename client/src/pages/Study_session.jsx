@@ -24,7 +24,8 @@ import {
   DialogTitle,
   DialogContent,
   IconButton,
-  Switch
+  Switch,
+  Snackbar
 } from '@mui/material';
 import {
   CloudUpload,
@@ -61,6 +62,8 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const [selectedPdfHashes, setSelectedPdfHashes] = useState([]); // Stores only the hashes of selected PDFs
   const [showExpandedPdfList, setShowExpandedPdfList] = useState(false); // New state for expanded view
   const [showUserTextDialog, setShowUserTextDialog] = useState(false); // New state for user text dialog
+  const [snackbarOpen, setSnackbarOpen] = useState(false); // State for snackbar popup
+  const [snackbarMessage, setSnackbarMessage] = useState(''); // State for snackbar message
 
   // Clear existing results when component mounts, ensuring a fresh start
   useEffect(() => {
@@ -133,6 +136,13 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const handlePdfCheckboxChange = (event) => {
     const { value, checked } = event.target;
     console.log(`Checkbox clicked: value=${value}, checked=${checked}`);
+    
+    if (checked && selectedPdfHashes.length >= 3) {
+      setSnackbarMessage('You can only select up to 3 PDFs at once. Please deselect some PDFs first.');
+      setSnackbarOpen(true);
+      return;
+    }
+    
     setSelectedPdfHashes(prev => {
       const newSelected = checked ? [...prev, value] : prev.filter(hash => hash !== value);
       console.log('New selectedPdfHashes:', newSelected);
@@ -821,13 +831,13 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         value={numQuestions}
                         onChange={(e) => {
                           e.stopPropagation();
-                          setNumQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)));
+                          setNumQuestions(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)));
                         }}
                         onClick={(e) => e.stopPropagation()}
                         disabled={!summary || isUploading}
                         inputProps={{ 
                           min: 1, 
-                          max: 20,
+                          max: 10,
                           style: { textAlign: 'center', width: '40px', fontSize: '14px' }
                         }}
                         size="small"
@@ -977,10 +987,26 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
               },
             }}
           />
-        </DialogContent>
-      </Dialog>
-    </Box>
-  );
-};
+                 </DialogContent>
+       </Dialog>
+
+       {/* Snackbar for PDF limit error */}
+       <Snackbar
+         open={snackbarOpen}
+         autoHideDuration={7500}
+         onClose={() => setSnackbarOpen(false)}
+         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+       >
+         <Alert
+           onClose={() => setSnackbarOpen(false)}
+           severity="error"
+           sx={{ width: '100%' }}
+         >
+           {snackbarMessage}
+         </Alert>
+       </Snackbar>
+     </Box>
+   );
+ };
 
 export default Study_session; 
