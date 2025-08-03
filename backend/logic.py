@@ -119,7 +119,7 @@ def extract_text_from_pdf_memory(file_obj, filename=""):
         return ""
     
 def check_question_limit(user_id: str, num_questions: int, is_quiz_mode: bool):
-    print("check_question_limit()")
+    print("check_question_limit() called with user_id:", user_id, "num_questions:", num_questions, "is_quiz_mode:", is_quiz_mode)
     
     question_count_result = get_user_question_count(user_id)
     print("get_user_question_count Total", question_count_result['data']['total'])
@@ -127,10 +127,12 @@ def check_question_limit(user_id: str, num_questions: int, is_quiz_mode: bool):
     print("get_user_question_count Flashcard", question_count_result['data']['flashcard'])
 
     if is_quiz_mode:
+        print("requested total usmle questions", num_questions + question_count_result['data']['usmle'])
         if num_questions + question_count_result['data']['usmle'] > 75:
             print("You have reached the maximum number of USMLE questions. Please upgrade to a paid plan to continue.")
             raise HTTPException(status_code=501, detail='You have reached the maximum number of USMLE questions. Please upgrade to a paid plan to continue.')
     else:
+        print("requested total flashcard questions", num_questions + question_count_result['data']['flashcard'])
         if num_questions + question_count_result['data']['flashcard'] > 250:
             print("You have reached the maximum number of Flashcard questions. Please upgrade to a paid plan to continue.")
             raise HTTPException(status_code=501, detail='You have reached the maximum number of Flashcard questions. Please upgrade to a paid plan to continue.')
