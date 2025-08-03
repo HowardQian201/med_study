@@ -190,9 +190,9 @@ def check_file_exists(file_hash: str) -> Dict[str, Any]:
         
         result = supabase.table('pdfs').select("*").eq('hash', file_hash).execute()
         
-        # Check if file exists and has a valid text (not empty)
+        # Check if file exists and has a valid text (not empty) and valid summary (not 'Untitled')
         exists = len(result.data) > 0
-        if exists and result.data[0].get('text') == "":
+        if exists and (result.data[0].get('text') == "" or result.data[0].get('short_summary') == "Untitled"):
             exists = False
         
         print(f"File exists: {exists}")
@@ -856,14 +856,17 @@ def get_user_associated_pdf_metadata(user_id: str) -> Dict[str, Any]:
         pdf_hashes = list(pdfs_object.keys())
             
         # 2. Fetch the corresponding PDF metadata from the 'pdfs' table
-        pdfs_metadata_result = supabase.table('pdfs').select("hash, filename, short_summary").in_('hash', pdf_hashes).execute()
+        pdfs_metadata_result = supabase.table('pdfs').select("hash, filename, text, short_summary").in_('hash', pdf_hashes).execute()
         
         # 3. Add the updated_at timestamp from the user's pdfs object to each PDF's metadata
         enriched_metadata = []
         for pdf in pdfs_metadata_result.data:
             pdf_hash = pdf['hash']
             pdf['created_at'] = pdfs_object[pdf_hash].get('updated_at')
-            enriched_metadata.append(pdf)
+            # Only append if the short_summary is not "Untitled" and the text is not empty
+            if pdf.get('short_summary') != "Untitled" and pdf.get('text') != "":
+                pdf['text'] = ""  # Set text to empty to avoid sending large text data
+                enriched_metadata.append(pdf)
             
         # Sort by updated_at timestamp in descending order (most recent first)
         enriched_metadata.sort(key=lambda x: x['created_at'] if x['created_at'] else '', reverse=True)

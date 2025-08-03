@@ -167,16 +167,6 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
   const handleFileSelect = (event) => {
     const files = Array.from(event.target.files);
     
-    // Check if the number of files exceeds the limit
-    if (files.length > 5) {
-      setError('You can only upload up to 5 PDFs at once. Please select fewer files.');
-      // Clear the file input
-      event.target.value = null;
-      // Clear selected files state
-      setSelectedFiles([]);
-      return;
-    }
-    
     console.log('Files selected:', files);
     setSelectedFiles(files);
     setError('');
@@ -506,9 +496,6 @@ const Upload_pdfs = ({ setIsAuthenticated, user, setSummary }) => {
               <CloudUpload sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 Drag & Drop PDF files here, or click to browse
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Maximum 5 PDFs per upload
               </Typography>
               {selectedFiles.length > 0 && (
                 <Stack sx={{ mt: 1, alignItems: 'center' }}>

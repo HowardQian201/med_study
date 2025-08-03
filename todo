@@ -1,7 +1,6 @@
 
 ###URGENT:
 
-Summary gen is not comprehensive
 use async clients for supabase
 delete questions from quiz set
 

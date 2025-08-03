@@ -7,10 +7,214 @@ import uuid
 import random
 import traceback
 import hashlib
+import tiktoken
+import asyncio
 from .database import upsert_quiz_questions_batch
 
 load_dotenv()
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"), timeout=600.0) # Changed to AsyncOpenAI
+
+# Initialize tiktoken encoder
+encoding = tiktoken.get_encoding("cl100k_base")  # GPT-4 tokenizer
+
+def count_tokens(text: str) -> int:
+    """Count the number of tokens in a text string."""
+    return len(encoding.encode(text))
+
+def split_text_into_chunks(text: str, max_tokens: int = 1000) -> list:
+    """
+    Split text into chunks of approximately max_tokens each.
+    
+    Args:
+        text (str): The text to split
+        max_tokens (int): Maximum tokens per chunk
+        
+    Returns:
+        list: List of text chunks
+    """
+    if not text:
+        return []
+    
+    # Encode the text to get token positions
+    tokens = encoding.encode(text)
+    
+    if len(tokens) <= max_tokens:
+        return [text]
+    
+    chunks = []
+    current_chunk = []
+    current_token_count = 0
+    
+    # Split by sentences to avoid breaking mid-sentence
+    sentences = text.split('. ')
+    
+    for sentence in sentences:
+        # Add period back if it's not the last sentence
+        if sentence != sentences[-1]:
+            sentence += '. '
+        
+        sentence_tokens = encoding.encode(sentence)
+        
+        # If adding this sentence would exceed the limit, start a new chunk
+        if current_token_count + len(sentence_tokens) > max_tokens and current_chunk:
+            # Join current chunk and add to chunks
+            chunks.append(''.join(current_chunk))
+            current_chunk = [sentence]
+            current_token_count = len(sentence_tokens)
+        else:
+            # Add sentence to current chunk
+            current_chunk.append(sentence)
+            current_token_count += len(sentence_tokens)
+    
+    # Add the last chunk if it has content
+    if current_chunk:
+        chunks.append(''.join(current_chunk))
+    
+    return chunks
+
+async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False):
+    """
+    Summarize text by breaking it into 1000-token chunks, summarizing each chunk,
+    then creating a comprehensive summary from all chunk summaries.
+    
+    Args:
+        text (str): The text to summarize
+        temperature (float): Temperature for OpenAI API calls
+        stream (bool): Whether to stream the response
+        
+    Returns:
+        str: Comprehensive summary or streaming response
+    """
+    text_tokens = count_tokens(text)
+    print(f"gpt_summarize_transcript_chunked called with {text_tokens} tokens, stream: {stream}")
+    
+    if text_tokens > 100000:
+        raise ValueError("Text is too long. Please select fewer PDFs or select smaller PDFs.")
+
+    # Split text into chunks
+    chunks = split_text_into_chunks(text, max_tokens=1000)
+    print(f"Split text into {len(chunks)} chunks")
+    
+    # Summarize each chunk in parallel while maintaining order
+    async def process_chunk(chunk, chunk_index):
+        """Process a single chunk and return (index, summary) tuple to maintain order"""
+        print(f"Processing chunk {chunk_index+1}/{len(chunks)} ({count_tokens(chunk)} tokens)")
+        
+        chunk_prompt = f"""Extract exactly 5 key medical concepts from the following text chunk. 
+        Focus on high-yield information for medical students.
+        Format as 5 bullet points with bold text for important terms.
+        
+        <Text chunk>
+        {chunk}
+        </Text chunk>
+        
+        Return exactly 5 bullet points, each highlighting a key medical concept or high-yield fact.
+        """
+        
+        try:
+            chunk_completion = await openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert medical educator. Extract exactly 5 key medical concepts from text chunks as bullet points with bold formatting for important terms."},
+                    {"role": "user", "content": chunk_prompt},
+                ],
+                temperature=temperature,
+                max_tokens=500,  # Reduced for concise 5 bullet points
+            )
+            
+            chunk_summary = chunk_completion.choices[0].message.content.strip()
+            print(f"Completed chunk {chunk_index+1} summary ({len(chunk_summary)} characters)")
+            return (chunk_index, chunk_summary)
+            
+        except Exception as e:
+            print(f"Error processing chunk {chunk_index+1}: {e}")
+            # Return None for failed chunks
+            return (chunk_index, None)
+    
+    # Create tasks for all chunks
+    chunk_tasks = [process_chunk(chunk, i) for i, chunk in enumerate(chunks)]
+    
+    # Execute all chunk summarizations in parallel
+    chunk_results = await asyncio.gather(*chunk_tasks, return_exceptions=True)
+    
+    # Sort results by original index to maintain order
+    chunk_results.sort(key=lambda x: x[0] if isinstance(x, tuple) else -1)
+    
+    # Extract summaries in correct order, filtering out failed chunks
+    chunk_summaries = []
+    for result in chunk_results:
+        if isinstance(result, tuple) and result[1] is not None:
+            chunk_summaries.append(result[1])
+            print(f"Completed chunk {result[0]+1} summary ({len(result[1])} characters)")
+        elif isinstance(result, Exception):
+            print(f"Chunk processing failed with exception: {result}")
+            # Continue with other chunks even if one fails
+            continue
+    
+    if not chunk_summaries:
+        raise Exception("No chunk summaries were successfully generated")
+    
+    # Combine all chunk summaries
+    combined_summaries = "\n\n".join(chunk_summaries)
+    print(f"Combined summaries: {len(combined_summaries)} characters and {count_tokens(combined_summaries)} tokens")
+    
+    # Create comprehensive summary from all chunk summaries
+    final_prompt = f"""The following are detailed summaries of different sections of a medical text. 
+    Create a comprehensive, well-organized medical study guide that synthesizes all this information.
+    This comprehensive study guide should be more than 2,500 words.
+    
+    <CRITICAL REQUIREMENTS>  
+    1. **Equal attention**: Ensure all sections receive equal coverage in the final summary
+    2. **High-yield focus**: Highlight every exam-relevant fact—lab values, diagnostic criteria, management steps, pathophysiology mechanisms—using **bold** for key terms and **italics** for definitions.  
+    3. **Clinical correlates & examples**: For each major point, include at least one clinical vignette or real-world application illustrating how it presents or is managed in practice.  
+    4. **Depth & length**: The final summary should have more than **2,500 words** in total. Ensure comprehensive coverage of all topics.
+    </CRITICAL REQUIREMENTS>
+    
+    <FORMAT REQUIREMENTS>
+    - Use Markdown formatting throughout
+    - Use headers (# for main sections, ## for subsections)
+    - Use bold (**text**) for key terms and important concepts
+    - Use italics (*text*) for emphasis and definitions
+    - Use bulleted lists (-) for key points and examples
+    - Use numbered lists (1.) for step-by-step processes
+    - Include tables where appropriate for comparisons
+    - Use blockquotes (>) for important clinical pearls
+    </FORMAT REQUIREMENTS>
+    
+    <Chunk Summaries>
+    {combined_summaries}
+    </Chunk Summaries>
+    """
+    
+    if stream:
+        # Return streaming response for the final comprehensive summary
+        return await openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert medical educator and USMLE/COMLEX tutor with extensive experience creating comprehensive study materials. Your goal is to create the most thorough, detailed, and well-organized study guides possible. You excel at identifying high-yield content, explaining complex concepts clearly, and structuring information in ways that maximize learning and retention. Always double-check your responses for accuracy and completeness. All of your study guides should be more than 2,500 words."},
+                {"role": "user", "content": final_prompt},
+            ],
+            temperature=temperature,
+            max_tokens=10000,
+            stream=True,
+        )
+    
+    # Generate final comprehensive summary
+    final_completion = await openai_client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are an expert medical educator and USMLE/COMLEX tutor with extensive experience creating comprehensive study materials. Your goal is to create the most thorough, detailed, and well-organized study guides possible. You excel at identifying high-yield content, explaining complex concepts clearly, and structuring information in ways that maximize learning and retention. Always double-check your responses for accuracy and completeness. All of your study guides should more than 2,500 words."},
+            {"role": "user", "content": final_prompt},
+        ],
+        temperature=temperature,
+        max_tokens=10000,
+        stream=False,
+    )
+    
+    final_summary = final_completion.choices[0].message.content.strip()
+    print(f"Final comprehensive summary: {len(final_summary)} characters")
+    
+    return final_summary
 
 def randomize_answer_choices(question):
     """
@@ -52,61 +256,6 @@ def randomize_answer_choices(question):
     
     return question
 
-async def gpt_summarize_transcript(text, temperature=0.3, stream=False): # Changed to async def
-    # Generate random number between 1-50 for question ID
-    random_id = random.randint(1, 50)
-    print(f"gpt_summarize_transcript called random_id: {random_id}, stream: {stream}")
-
-    gpt_time_start = time.time()
-    prompt = f"""The following text is a long medical transcript or set of PDF extracts. Your task is to produce a truly comprehensive, equally-weighted, high-yield summary that a med student could use for exam prep.  
-
-    <CRITICAL REQUIREMENTS>  
-    1. **Equal attention**: Divide the input into logical sections (2,000-character chunks), then for each section generate a **detailed sub-summary** of **5-10 bullet points** covering every concept, clinical correlate, and real-world example mentioned.  
-    2. **High-yield focus**: Highlight every exam-relevant fact—lab values, diagnostic criteria, management steps, pathophysiology mechanisms—using **bold** for key terms and **italics** for definitions.  
-    3. **Clinical correlates & examples**: For each major point, include at least one clinical vignette or real-world application illustrating how it presents or is managed in practice.  
-    4. **Depth & length**: Aim for at least **2,000 words** in total. Ensure no section is shorter than any other by more than 10%.  
-    5. **Structured integration**: After the sectional sub-summaries, synthesize them into a single cohesive study guide, organized with Markdown headers (`#`, `##`), tables for comparisons, numbered step-by-step processes, and blockquotes for “clinical pearls.”  
-    </CRITICAL REQUIREMENTS>
-    
-
-    <FORMAT REQUIREMENTS>
-    - Use Markdown formatting throughout
-    - Use headers (# for main sections, ## for subsections)
-    - Use bold (**text**) for key terms and important concepts
-    - Use italics (*text*) for emphasis and definitions
-    - Use bulleted lists (-) for key points and examples
-    - Use numbered lists (1.) for step-by-step processes
-    - Include tables where appropriate for comparisons
-    - Use blockquotes (>) for important clinical pearls
-    </FORMAT REQUIREMENTS>
-
-    <Transcript>
-    {text}
-    </Transcript>
-    """
-
-    completion = await openai_client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are an expert medical educator and USMLE/COMLEX tutor with extensive experience creating comprehensive study materials. Your goal is to create the most thorough, detailed, and well-organized study guides possible. You excel at identifying high-yield content, explaining complex concepts clearly, and structuring information in ways that maximize learning and retention. Always double-check your responses for accuracy and completeness."},
-            {"role": "user", "content": prompt},
-        ],
-        temperature=temperature,
-        max_completion_tokens=10000,
-        stream=stream,
-    )
-    print(f"gpt_summarize_transcript returning random_id: {random_id}")
-
-    if stream:
-        return completion
-
-    print("gpt_summarize_transcript completion")
-    gpt_time_end = time.time()
-    print(f"GPT time: {gpt_time_end - gpt_time_start} seconds")
-
-    # Parse the response into lines
-    text = completion.choices[0].message.content.strip()
-    return text
 
 async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_question_ids=None, previous_questions=None, num_questions=5, is_quiz_mode=True, model="gpt-4o-mini"): # Changed to async def
     """Generate quiz questions from a summary text using OpenAI's API

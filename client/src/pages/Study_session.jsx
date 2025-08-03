@@ -137,8 +137,8 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
     const { value, checked } = event.target;
     console.log(`Checkbox clicked: value=${value}, checked=${checked}`);
     
-    if (checked && selectedPdfHashes.length >= 3) {
-      setSnackbarMessage('You can only select up to 3 PDFs at once. Please deselect some PDFs first.');
+    if (checked && selectedPdfHashes.length >= 5) {
+      setSnackbarMessage('You can only select up to 5 PDFs at once. Please deselect some PDFs first.');
       setSnackbarOpen(true);
       return;
     }
@@ -203,8 +203,25 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
-          finalSummary += chunk;
-          setSummary(finalSummary);
+          
+          // Check if this chunk is an error response
+          try {
+            const parsedChunk = JSON.parse(chunk);
+            if (parsedChunk.type === 'streaming_error') {
+              console.log('Received streaming error:', parsedChunk.error);
+              throw new Error(parsedChunk.error);
+            }
+          } catch (parseError) {
+            // If it's not valid JSON, treat it as normal content
+            if (parseError instanceof SyntaxError) {
+              finalSummary += chunk;
+              setSummary(finalSummary);
+            } else {
+              // It's a valid JSON but contains an error
+              console.log('Throwing parsed error:', parseError);
+              throw parseError;
+            }
+          }
         }
 
         // After stream is complete, save the final summary to the session
@@ -291,8 +308,25 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
-          finalSummary += chunk;
-          setSummary(finalSummary);
+          
+          // Check if this chunk is an error response
+          try {
+            const parsedChunk = JSON.parse(chunk);
+            if (parsedChunk.type === 'streaming_error') {
+              console.log('Received streaming error (regenerate):', parsedChunk.error);
+              throw new Error(parsedChunk.error);
+            }
+          } catch (parseError) {
+            // If it's not valid JSON, treat it as normal content
+            if (parseError instanceof SyntaxError) {
+              finalSummary += chunk;
+              setSummary(finalSummary);
+            } else {
+              // It's a valid JSON but contains an error
+              console.log('Throwing parsed error (regenerate):', parseError);
+              throw parseError;
+            }
+          }
         }
 
         // After stream is complete, save the final summary to the session

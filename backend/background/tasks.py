@@ -1,7 +1,7 @@
 from io import BytesIO # Import BytesIO for in-memory binary streams
 from backend.database import download_file_from_storage, update_pdf_text_and_summary, append_pdf_hash_to_user_pdfs, update_user_task_status # Import new database functions
 from backend.logic import extract_text_from_pdf_memory # Import PDF extraction logic
-from backend.open_ai_calls import generate_short_title # Import short title generation
+from backend.open_ai_calls import generate_short_title, count_tokens # Import short title generation and token counting
 from backend.database import check_file_exists
 from datetime import datetime, timezone # Import timezone
 
@@ -64,6 +64,12 @@ def process_pdf_task(self, file_hash, bucket_name, file_path, user_id, original_
         
         cleaned_extracted_text = extracted_text.replace('\u0000', '').encode('utf-8', errors='ignore').decode('utf-8')
         print(f"Successfully extracted text (length: {len(cleaned_extracted_text)}) for hash {file_hash}.")
+
+        # Check token count and reject if too large
+        token_count = count_tokens(cleaned_extracted_text)
+        print(f"Extracted text has {token_count} tokens for hash {file_hash}.")
+        if token_count > 100000:
+            raise ValueError(f"PDF text is too large ({token_count} tokens). Maximum allowed is 100,000 tokens.")
 
         # 3. Generate a short title for the extracted text
         _update_status('IN PROGRESS', '[3/5] Generating short title')

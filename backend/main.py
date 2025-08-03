@@ -20,7 +20,7 @@ from .utils.pydantic_models import (
     LoadStudySetResponse,
     SignUpRequest
 )
-from .open_ai_calls import randomize_answer_choices, gpt_summarize_transcript, generate_quiz_questions, generate_short_title
+from .open_ai_calls import randomize_answer_choices, gpt_summarize_transcript_chunked, generate_quiz_questions, generate_short_title
 from .database import (
     upsert_pdf_results, check_question_set_exists,
     check_file_exists, generate_content_hash, generate_file_hash,
@@ -342,21 +342,29 @@ async def generate_summary(
         print(f"Text length being sent to AI: {len(total_extracted_text)} characters")
                 
         if not STREAMING_ENABLED:
-            summary = await gpt_summarize_transcript(total_extracted_text, stream=STREAMING_ENABLED) # Await the async function
+            summary = await gpt_summarize_transcript_chunked(total_extracted_text, stream=STREAMING_ENABLED) # Await the async function
             session['summary'] = summary
             return JSONResponse(content={'success': True, 'results': summary})
             
         # --- Streaming Response ---
         async def stream_generator(text_to_summarize): # Change to async def
-            stream_gen = await gpt_summarize_transcript(text_to_summarize, stream=STREAMING_ENABLED) # Await the async function
-            async for chunk in stream_gen: # Await for chunks in streaming
-                content = chunk.choices[0].delta.content
-                if content:
-                    yield content
-            
-            # The session cannot be modified here. The client will send the final summary
-            # to a different endpoint to be saved.
-            gc.collect()
+            try:
+                stream_gen = await gpt_summarize_transcript_chunked(text_to_summarize, stream=STREAMING_ENABLED) # Await the async function
+                async for chunk in stream_gen: # Await for chunks in streaming
+                    content = chunk.choices[0].delta.content
+                    if content:
+                        yield content
+                
+                # The session cannot be modified here. The client will send the final summary
+                # to a different endpoint to be saved.
+                gc.collect()
+            except Exception as e:
+                print(f"Error in gpt_summarize_transcript_chunked: {str(e)}")
+                traceback.print_exc()
+                # Convert the error to a JSON error response that can be streamed
+                error_response = json.dumps({"error": str(e), "type": "streaming_error"})
+                print(f"Streaming error response: {error_response}")
+                yield error_response
 
         # Before streaming, save file-related info to the session. This is okay
         # because it happens within the initial request context.
@@ -643,21 +651,29 @@ async def regenerate_summary(
         
         # Generate new summary
         if not STREAMING_ENABLED:
-            summary = await gpt_summarize_transcript(total_extracted_text, temperature=1.2, stream=STREAMING_ENABLED)
+            summary = await gpt_summarize_transcript_chunked(total_extracted_text, temperature=0.4, stream=STREAMING_ENABLED)
             session['summary'] = summary
             session['quiz_questions'] = []
             return JSONResponse(content={'success': True, 'summary': summary})
 
         # --- Streaming Response ---
         async def stream_generator(text_to_summarize):
-            stream_gen = await gpt_summarize_transcript(text_to_summarize, temperature=1.2, stream=STREAMING_ENABLED)
-            async for chunk in stream_gen:
-                content = chunk.choices[0].delta.content
-                if content:
-                    yield content
-            
-            # Redis session cannot be modified here.
-            print("Redis session not modified, streaming complete (regenerate).")
+            try:
+                stream_gen = await gpt_summarize_transcript_chunked(text_to_summarize, temperature=0.4, stream=STREAMING_ENABLED)
+                async for chunk in stream_gen:
+                    content = chunk.choices[0].delta.content
+                    if content:
+                        yield content
+                
+                # Redis session cannot be modified here.
+                print("Redis session not modified, streaming complete (regenerate).")
+            except Exception as e:
+                print(f"Error in gpt_summarize_transcript_chunked (regenerate): {str(e)}")
+                traceback.print_exc()
+                # Convert the error to a JSON error response that can be streamed
+                error_response = json.dumps({"error": str(e), "type": "streaming_error"})
+                print(f"Streaming error response (regenerate): {error_response}")
+                yield error_response
 
         # Clear old questions
         session['quiz_questions'] = []
