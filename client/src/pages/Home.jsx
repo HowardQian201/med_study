@@ -176,7 +176,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
         });
 
         if (response.data.success && response.data.data) {
-            const updatedSet = response.data.data[0];
+            const updatedSet = response.data.data;
             setSets(sets.map(s => (s.hash === contentHash ? updatedSet : s)));
             handleEditCancel(); // Exit editing mode
         } else {

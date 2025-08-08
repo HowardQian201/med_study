@@ -11,6 +11,7 @@ python devapp.py
 celery -A backend.background.worker worker --loglevel=debug --pool=solo
 
 ### dev redis
+Start in docker desktop
 docker run --name medstudy-redis -p 6379:6379 -d redis
 docker ps # check if running
 docker exec -it medstudy-redis redis-cli

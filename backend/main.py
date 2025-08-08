@@ -398,7 +398,9 @@ async def generate_quiz(
     is_quiz_mode = str(request.isQuizMode).lower() == 'true' # Default to False (study mode)
 
     try:
-        if session.get('user_level', 'basic') == "basic":
+        user_level = session.get('user_level')
+        print(f"User level: {user_level}")
+        if user_level == "basic":
             check_question_limit(user_id, num_questions, is_quiz_mode)
     except HTTPException as e:
         pass
@@ -828,7 +830,11 @@ async def update_set_title(
         if not result['success']:
             raise HTTPException(status_code=500, detail=result.get('error', 'Failed to update title'))
             
-        return UpdateSetTitleResponse(success=True, data=result['data'])
+        # Supabase returns a list for updates; response model expects a dict
+        updated_data = result.get('data', {})
+        if isinstance(updated_data, list):
+            updated_data = updated_data[0] if updated_data else {}
+        return UpdateSetTitleResponse(success=True, data=updated_data)
     except HTTPException:
         raise
     except Exception as e:

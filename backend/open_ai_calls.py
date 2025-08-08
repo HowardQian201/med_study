@@ -72,7 +72,7 @@ def split_text_into_chunks(text: str, max_tokens: int = 1000) -> list:
     
     return chunks
 
-async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False):
+async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False, model="gpt-5-nano"):
     """
     Summarize text by breaking it into 1000-token chunks, summarizing each chunk,
     then creating a comprehensive summary from all chunk summaries.
@@ -103,6 +103,7 @@ async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False)
         chunk_prompt = f"""Extract exactly 5 key medical concepts from the following text chunk. 
         Focus on high-yield information for medical students.
         Format as 5 bullet points with bold text for important terms.
+        Include important lab values, diagnostic criteria, management steps, pathophysiology mechanisms, and clinical vignettes.
         
         <Text chunk>
         {chunk}
@@ -113,17 +114,18 @@ async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False)
         
         try:
             chunk_completion = await openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {"role": "system", "content": "You are an expert medical educator. Extract exactly 5 key medical concepts from text chunks as bullet points with bold formatting for important terms."},
                     {"role": "user", "content": chunk_prompt},
                 ],
-                temperature=temperature,
-                max_tokens=500,  # Reduced for concise 5 bullet points
+                # temperature=temperature,
+                # max_completion_tokens=500,  # Reduced for concise 5 bullet points
             )
             
             chunk_summary = chunk_completion.choices[0].message.content.strip()
             print(f"Completed chunk {chunk_index+1} summary ({len(chunk_summary)} characters)")
+            print(f"Chunk summary: {chunk_summary}\n\n")
             return (chunk_index, chunk_summary)
             
         except Exception as e:
@@ -161,13 +163,13 @@ async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False)
     # Create comprehensive summary from all chunk summaries
     final_prompt = f"""The following are detailed summaries of different sections of a medical text. 
     Create a comprehensive, well-organized medical study guide that synthesizes all this information.
-    This comprehensive study guide should be more than 2,500 words.
+    This comprehensive study guide should be more than 2,000 words.
     
     <CRITICAL REQUIREMENTS>  
     1. **Equal attention**: Ensure all sections receive equal coverage in the final summary
-    2. **High-yield focus**: Highlight every exam-relevant fact—lab values, diagnostic criteria, management steps, pathophysiology mechanisms—using **bold** for key terms and **italics** for definitions.  
+    2. **High-yield focus**: Highlight every exam-relevant lab values, diagnostic criteria, management steps, pathophysiology mechanisms—using **bold** for key terms and **italics** for definitions.  
     3. **Clinical correlates & examples**: For each major point, include at least one clinical vignette or real-world application illustrating how it presents or is managed in practice.  
-    4. **Depth & length**: The final summary should have more than **2,500 words** in total. Ensure comprehensive coverage of all topics.
+    4. **Depth & length**: The final summary should have more than **2,000 words** in total. Ensure comprehensive coverage of all topics.
     </CRITICAL REQUIREMENTS>
     
     <FORMAT REQUIREMENTS>
@@ -189,25 +191,25 @@ async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False)
     if stream:
         # Return streaming response for the final comprehensive summary
         return await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model,
             messages=[
-                {"role": "system", "content": "You are an expert medical educator and USMLE/COMLEX tutor with extensive experience creating comprehensive study materials. Your goal is to create the most thorough, detailed, and well-organized study guides possible. You excel at identifying high-yield content, explaining complex concepts clearly, and structuring information in ways that maximize learning and retention. Always double-check your responses for accuracy and completeness. All of your study guides should be more than 2,500 words."},
+                {"role": "system", "content": "You are an expert medical educator and USMLE/COMLEX tutor with extensive experience creating comprehensive study materials. Your goal is to create the most thorough, detailed, and well-organized study guides possible. You excel at identifying high-yield content, explaining complex concepts clearly, and structuring information in ways that maximize learning and retention. Always double-check your responses for accuracy and completeness. All of your study guides should be more than 2,000 words."},
                 {"role": "user", "content": final_prompt},
             ],
-            temperature=temperature,
-            max_tokens=10000,
+            # temperature=temperature,
+            # max_completion_tokens=10000,
             stream=True,
         )
     
     # Generate final comprehensive summary
     final_completion = await openai_client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=model,
         messages=[
             {"role": "system", "content": "You are an expert medical educator and USMLE/COMLEX tutor with extensive experience creating comprehensive study materials. Your goal is to create the most thorough, detailed, and well-organized study guides possible. You excel at identifying high-yield content, explaining complex concepts clearly, and structuring information in ways that maximize learning and retention. Always double-check your responses for accuracy and completeness. All of your study guides should more than 2,500 words."},
             {"role": "user", "content": final_prompt},
         ],
-        temperature=temperature,
-        max_tokens=10000,
+        # temperature=temperature,
+        # max_completion_tokens=10000,
         stream=False,
     )
     
@@ -257,7 +259,7 @@ def randomize_answer_choices(question):
     return question
 
 
-async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_question_ids=None, previous_questions=None, num_questions=5, is_quiz_mode=True, model="gpt-4o-mini"): # Changed to async def
+async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect_question_ids=None, previous_questions=None, num_questions=5, is_quiz_mode=True, model="gpt-5-nano"): # Changed to async def
     """Generate quiz questions from a summary text using OpenAI's API
     
     Args:
@@ -353,7 +355,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             </Summary>
             '''
 
-            system_prompt = """You are an expert medical professor that creates accurate, challenging USMLE clinical vignette style multiple choice questions. Output **only** valid JSON exactly matching the schema below.
+            system_prompt = """You are an expert medical professor that creates accurate, challenging USMLE clinical vignette style multiple choice questions. Output **only** valid JSON exactly matching the specified schema.
             """
         else:
             max_completion_tokens = 5000
@@ -417,7 +419,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             </Summary>
             '''
 
-            system_prompt = """You are an expert medical professor that creates accurate, active recall flashcard/multiple choice questions. Output **only** valid JSON exactly matching the schema below.
+            system_prompt = """You are an expert medical professor that creates accurate, active recall flashcard/multiple choice questions. Output **only** valid JSON exactly matching the specified schema.
             """
         
         print(f"Using model: {model} for quiz generation USMLE mode: {is_quiz_mode} with max completion tokens: {max_completion_tokens}")
@@ -466,11 +468,11 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                     "schema": quiz_schema
                 }
             },
-            temperature=0.5,
-            presence_penalty=0.5,
-            max_completion_tokens=max_completion_tokens,
-            top_p=0.9,
-            frequency_penalty=0.5,
+            # temperature=0.5,
+            # presence_penalty=0.5,
+            # max_completion_tokens=max_completion_tokens,
+            # top_p=0.9,
+            # frequency_penalty=0.5,
         )
         print(f"Completion tokens used: {response.usage.completion_tokens}")
         gpt_time_end = time.time()
@@ -531,6 +533,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
 
     except (json.JSONDecodeError, ValueError) as e:
         print(f"Failed to get valid JSON. Error: {e}")
+        print(f"Response text: {response_text}")
         raise Exception(f"Failed to get valid JSON response from AI: {e}")
     
     except Exception as e:
@@ -538,7 +541,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
         traceback.print_exc()
         raise e
 
-async def generate_short_title(text_to_summarize: str) -> str: # Changed to async def
+async def generate_short_title(text_to_summarize: str, model: str = "gpt-5-nano") -> str: # Changed to async def
     """
     Generates a short, max 8-word title for a given text.
 
@@ -562,15 +565,13 @@ async def generate_short_title(text_to_summarize: str) -> str: # Changed to asyn
         """
 
         completion = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model,
             messages=[
                 {"role": "system", "content": "You are an expert at creating short, descriptive titles from text. You always follow length constraints and instructions precisely."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=1.0,
-            max_tokens=20,  # Generous buffer for 10 words
-            n=1,
-            stop=None,
+            # temperature=1.0,
+            # max_completion_tokens=20,  # Generous buffer for 10 words
         )
 
         title = completion.choices[0].message.content.strip()
