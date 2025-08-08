@@ -54,7 +54,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const abortController = useRef(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isContentLocked, setIsContentLocked] = useState(false);
-  const [numQuestions, setNumQuestions] = useState(5);
+
   const [isQuizMode, setIsQuizMode] = useState(false);
 
   // New state for available and selected PDFs
@@ -349,7 +349,6 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   
   const goToQuiz = () => {
     // Store the number of questions and quiz mode in sessionStorage so the Quiz page can access it
-    sessionStorage.setItem('numQuestions', numQuestions.toString());
     sessionStorage.setItem('isQuizMode', isQuizMode.toString());
     navigate('/quiz');
   };
@@ -860,48 +859,6 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
                         px: 2
                       }}
                     >
-                      <TextField
-                        type="number"
-                        value={numQuestions}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          setNumQuestions(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)));
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        disabled={!summary || isUploading}
-                        inputProps={{ 
-                          min: 1, 
-                          max: 10,
-                          style: { textAlign: 'center', width: '40px', fontSize: '14px' }
-                        }}
-                        size="small"
-                        sx={{
-                          width: '45px',
-                          '& .MuiOutlinedInput-root': {
-                            height: '24px',
-                            backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                            border: '1px solid rgba(255, 255, 255, 0.3)',
-                            borderRadius: '4px',
-                            '&:hover': {
-                              backgroundColor: 'rgba(255, 255, 255, 0.25)',
-                            },
-                            '&.Mui-focused': {
-                              backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                              border: '1px solid rgba(255, 255, 255, 0.5)',
-                            }
-                          },
-                          '& .MuiInputBase-input': {
-                            color: 'white',
-                            padding: '2px 4px',
-                            '&::placeholder': {
-                              color: 'rgba(255, 255, 255, 0.7)',
-                            }
-                          },
-                          '& .MuiOutlinedInput-notchedOutline': {
-                            border: 'none'
-                          }
-                        }}
-                      />
                       {isQuizMode ? "Create Quiz" : "Create Cards"}
                     </Button>
                     <Button

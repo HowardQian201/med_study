@@ -253,7 +253,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
           setContentHash(existingResponse.data.content_hash);
         } else {
         // If no existing questions, generate new ones
-        const numQuestions = parseInt(sessionStorage.getItem('numQuestions')) || 5;
+        const numQuestions = 5;
         const isQuizModeBoolean = sessionStorage.getItem('isQuizMode') === 'true';
         
         const attemptGeneration = async () => {
@@ -897,7 +897,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
               <Paper elevation={2} sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, width: 800 }}>
                 <CircularProgress size={48} sx={{ mb: 2 }} />
                 <Typography variant="h6" color="text.secondary">
-                  {isQuizMode ? 'Generating USMLE questions ...' : 'Generating flashcards ...'}
+                  {isQuizMode ? 'Generating USMLE set ...' : 'Generating flashcards set ...'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                   {formatTimer(generationTimer)}
@@ -1220,7 +1220,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               {formatTimer(generationTimer)}
                             </Typography>
                           </Box>
-                        ) : 'Generate More'}
+                        ) : 'Generate Questions'}
                       </Button>
                       <Button
                         onClick={handleStartQuiz}

@@ -125,7 +125,7 @@ async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False,
             
             chunk_summary = chunk_completion.choices[0].message.content.strip()
             print(f"Completed chunk {chunk_index+1} summary ({len(chunk_summary)} characters)")
-            print(f"Chunk summary: {chunk_summary}\n\n")
+            # print(f"Chunk summary: {chunk_summary}\n\n")
             return (chunk_index, chunk_summary)
             
         except Exception as e:

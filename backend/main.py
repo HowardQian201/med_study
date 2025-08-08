@@ -426,6 +426,7 @@ async def generate_quiz(
         
         # Check if there's a summary to work with
         summary = session.get('summary', '')
+        short_summary = session.get('short_summary', '')
         if not summary or not content_hash:
             print(f"No summary or content_hash available - returning 400")
             raise HTTPException(status_code=400, detail='No summary available. Please upload content first.')
@@ -469,14 +470,17 @@ async def generate_quiz(
                     content={'error': 'Quiz set already exists', 'content_hash': content_hash}
                 )
         
-        # Generate questions (can be initial or focused based on parameters)
-        questions, question_hashes = await generate_quiz_questions(
-            summary, user_id, content_hash, 
-            incorrect_question_ids=incorrect_question_ids, 
-            previous_questions=previous_questions,
-            num_questions=num_questions,
-            is_quiz_mode=is_quiz_mode
-        )
+        questions = []
+        question_hashes = []
+        if question_type != 'initial':
+            # Generate questions (can be initial or focused based on parameters)
+            questions, question_hashes = await generate_quiz_questions(
+                summary, user_id, content_hash, 
+                incorrect_question_ids=incorrect_question_ids, 
+                previous_questions=previous_questions,
+                num_questions=num_questions,
+                is_quiz_mode=is_quiz_mode
+            )
 
         other_content_hash = session.get('other_content_hash')
         
@@ -488,13 +492,15 @@ async def generate_quiz(
             session['short_summary'] = short_summary
         else:
             # For focused/additional questions, just upsert the new questions
-            upsert_question_set(content_hash, other_content_hash, user_id, question_hashes, content_name_list, is_quiz=is_quiz_mode)
+            upsert_question_set(content_hash, other_content_hash, user_id, question_hashes, content_name_list, short_summary, summary, is_quiz_mode)
         
         # Store questions in session
         if is_previewing:
             # Store new questions in session, appending to the last set
             quiz_questions_sets = session.get('quiz_questions', [[]])
             # Get the last question set and extend it with the new questions.
+            if quiz_questions_sets == []:
+                quiz_questions_sets = [[]]
             quiz_questions_sets[-1].extend(questions)
 
             session['quiz_questions'] = quiz_questions_sets
@@ -562,10 +568,10 @@ async def get_other_quiz(
         session['quiz_questions'] = []
         new_other_content_hash = session.get('content_hash')
         new_content_hash = session.get('other_content_hash')
-        print(session.get('content_hash'), session.get('other_content_hash'))
+        # print(session.get('content_hash'), session.get('other_content_hash'))
         session['content_hash'] = new_content_hash
         session['other_content_hash'] = new_other_content_hash
-        print(session.get('content_hash'), session.get('other_content_hash'))
+        # print(session.get('content_hash'), session.get('other_content_hash'))
         
         return QuizResponse(
             success=True,
