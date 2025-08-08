@@ -1769,7 +1769,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
           variant="filled"
           sx={{ width: '100%' }}
         >
-          ⚠️ Please do not navigate away or refresh until questions are done generating
+          ⚠️ Please do not navigate away or refresh until your quiz is done generating
         </Alert>
       </Snackbar>
     </Box>
