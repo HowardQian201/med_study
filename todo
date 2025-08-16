@@ -3,7 +3,6 @@
 
 use async clients for supabase
 delete questions from quiz set
-When generating batches of questions, show a popup of the generation progress
 
 Stripe payment on login (free for basic tier and 14.99 for pro)
     - method to check user's total number of questions

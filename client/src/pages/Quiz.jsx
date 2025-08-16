@@ -73,6 +73,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [showNavigationWarning, setShowNavigationWarning] = useState(false); // State for navigation warning popup
   const [isMultipleChoiceMode, setIsMultipleChoiceMode] = useState(false); // New state for flashcard/multiple choice toggle
   const [quizModeChangeTrigger, setQuizModeChangeTrigger] = useState(0); // State to trigger useEffect when quiz mode changes
+  const [showBatchProgress, setShowBatchProgress] = useState(false); // State for batch progress popup
+  const [batchProgress, setBatchProgress] = useState({ completed: 0, total: 0 }); // State for batch progress tracking
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -494,8 +496,13 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       const batchSize = 10;
       const numFullBatches = Math.floor(numAdditionalQuestions / batchSize);
       const remainder = numAdditionalQuestions % batchSize;
+      const totalBatches = numFullBatches + (remainder > 0 ? 1 : 0);
 
-      // Process full batches of 20
+      // Initialize batch progress
+      setBatchProgress({ completed: 0, total: totalBatches });
+      setShowBatchProgress(true);
+
+      // Process full batches of 10
       for (let i = 0; i < numFullBatches; i++) {
         const response = await axios.post('/api/generate-quiz', {
           type: 'additional',
@@ -510,6 +517,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         if (response.data.success && response.data.questions) {
           setQuestions(prevQuestions => [...prevQuestions, ...response.data.questions]);
           setContentHash(response.data.content_hash);
+          // Update progress after each batch
+          setBatchProgress(prev => ({ ...prev, completed: i + 1 }));
         } else {
           setError('Failed to generate more questions');
           return;
@@ -531,6 +540,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         if (response.data.success && response.data.questions) {
           setQuestions(prevQuestions => [...prevQuestions, ...response.data.questions]);
           setContentHash(response.data.content_hash);
+          // Update progress for the final batch
+          setBatchProgress(prev => ({ ...prev, completed: totalBatches }));
         } else {
           setError('Failed to generate more questions');
           return;
@@ -546,6 +557,10 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       }
     } finally {
       setIsGeneratingMoreQuestions(false);
+      // Hide batch progress popup after a delay
+      setTimeout(() => {
+        setShowBatchProgress(false);
+      }, 10000);
       // Hide navigation warning popup when generation is complete
       hideNavigationWarningPopup();
     }
@@ -1755,6 +1770,53 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
           sx={{ width: '100%' }}
         >
           Quiz generation already in progress. Please wait for the current generation to complete. (please refresh periodically)
+        </Alert>
+      </Snackbar>
+
+      {/* Snackbar for batch generation progress */}
+      <Snackbar
+        open={showBatchProgress}
+        autoHideDuration={null}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ 
+          bottom: showNavigationWarning ? '80px !important' : '24px !important'
+        }}
+      >
+        <Alert 
+          severity={isQuizMode ? "primary" : "success"}
+          variant="filled"
+          sx={{ 
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+            <CircularProgress 
+              size={20} 
+              sx={{ color: 'white' }}
+            />
+            <Typography variant="body2">
+              Generating questions: Batch {batchProgress.completed} of {batchProgress.total} completed
+            </Typography>
+            <LinearProgress 
+              variant="determinate" 
+              value={(batchProgress.completed / batchProgress.total) * 100}
+              sx={{ 
+                flexGrow: 1,
+                height: 6,
+                borderRadius: 3,
+                bgcolor: 'rgba(255, 255, 255, 0.3)',
+                '& .MuiLinearProgress-bar': {
+                  bgcolor: 'white'
+                }
+              }}
+            />
+            <Typography variant="body2" sx={{ minWidth: 'fit-content' }}>
+              {Math.round((batchProgress.completed / batchProgress.total) * 100)}%
+            </Typography>
+          </Box>
         </Alert>
       </Snackbar>
 

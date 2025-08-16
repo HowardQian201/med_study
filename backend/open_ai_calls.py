@@ -522,11 +522,11 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                 "question_set_hash": content_hash
             })
 
-            print(f"Question: {q['text']}")
-            print(f"Question options: {q['options']}")
-            print(f"Question correct answer: {q['correctAnswer']}")
-            print(f"Question reason: {q['reason']}")
-            print("--------------------------------")
+            # print(f"Question: {q['text']}")
+            # print(f"Question options: {q['options']}")
+            # print(f"Question correct answer: {q['correctAnswer']}")
+            # print(f"Question reason: {q['reason']}")
+            # print("--------------------------------")
         
         # Batch upsert all questions
         db_result = upsert_quiz_questions_batch(questions_with_ids)
