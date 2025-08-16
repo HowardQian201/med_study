@@ -343,7 +343,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                         "Begin corticosteroid therapy",
                         "Perform emergent cardiac catheterization"
                     ],
-                    "correctAnswer": 2,
+                    "correctAnswer": 1,
                     "reason": "The patient presents with signs of acute heart failure and pericardial effusion (dyspnea, JVD, low-voltage ECG, enlarged cardiac silhouette). These findings raise concern for cardiac tamponade, which can be rapidly fatal. The most appropriate next step is a transthoracic echocardiogram to evaluate for pericardial fluid and assess for signs of tamponade physiology such as diastolic collapse of the right heart chambers."
                 }},
                 ...
@@ -521,6 +521,12 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                 "user_id": user_id,
                 "question_set_hash": content_hash
             })
+
+            print(f"Question: {q['text']}")
+            print(f"Question options: {q['options']}")
+            print(f"Question correct answer: {q['correctAnswer']}")
+            print(f"Question reason: {q['reason']}")
+            print("--------------------------------")
         
         # Batch upsert all questions
         db_result = upsert_quiz_questions_batch(questions_with_ids)
