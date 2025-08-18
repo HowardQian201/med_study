@@ -131,7 +131,7 @@ const SignUp = () => {
                 <TextField
                   id="name"
                   name="name"
-                  label="Full Name"
+                  label="Name"
                   type="text"
                   variant="outlined"
                   fullWidth
