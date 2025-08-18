@@ -42,7 +42,10 @@ import {
   Star,
   StarBorder,
   Description as DescriptionIcon,
-  CloudUpload
+  CloudUpload,
+  Edit as EditIcon,
+  Save as SaveIcon,
+  Cancel as CancelIcon
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { alpha } from '@mui/material/styles';
@@ -75,6 +78,10 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const [quizModeChangeTrigger, setQuizModeChangeTrigger] = useState(0); // State to trigger useEffect when quiz mode changes
   const [showBatchProgress, setShowBatchProgress] = useState(false); // State for batch progress popup
   const [batchProgress, setBatchProgress] = useState({ completed: 0, total: 0 }); // State for batch progress tracking
+  
+  // State for editing quiz set name
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editingTitle, setEditingTitle] = useState('');
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -726,6 +733,51 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
     setShowResults(false);
   };
 
+  // Title editing functions
+  const handleEditTitleStart = () => {
+    setIsEditingTitle(true);
+    setEditingTitle(currentSessionShortSummary || '');
+  };
+
+  const handleEditTitleCancel = () => {
+    setIsEditingTitle(false);
+    setEditingTitle('');
+  };
+
+  const handleEditTitleSave = async () => {
+    if (!editingTitle.trim()) {
+      setError('Title cannot be empty.');
+      return;
+    }
+
+    // If title hasn't changed, just exit edit mode
+    if (currentSessionShortSummary === editingTitle.trim()) {
+      handleEditTitleCancel();
+      return;
+    }
+    
+    try {
+      const response = await axios.post('/api/update-set-title', {
+        content_hash: contentHash,
+        new_title: editingTitle.trim()
+      }, {
+        withCredentials: true
+      });
+
+      if (response.data.success && response.data.data) {
+        // Update the current session short summary
+        setCurrentSessionShortSummary(response.data.data.short_summary || editingTitle.trim());
+        handleEditTitleCancel(); // Exit editing mode
+        setError(''); // Clear any previous errors
+      } else {
+        setError('Failed to update the title.');
+      }
+    } catch (err) {
+      console.error('Error updating title:', err);
+      setError(err.response?.data?.error || 'An error occurred while saving the title.');
+    }
+  };
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* App Bar */}
@@ -912,7 +964,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
               <Paper elevation={2} sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, width: 800 }}>
                 <CircularProgress size={48} sx={{ mb: 2 }} />
                 <Typography variant="h6" color="text.secondary">
-                  {isQuizMode ? 'Generating USMLE set ...' : 'Generating flashcards set ...'}
+                  {isQuizMode ? 'Creating empty USMLE set ...' : 'Creating empty flashcards set ...'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                   {formatTimer(generationTimer)}
@@ -1243,7 +1295,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         color={isQuizMode ? "primary" : "success"}
                         size="large"
                         startIcon={<ArrowForward />}
-                        disabled={isGeneratingMoreQuestions}
+                        disabled={isGeneratingMoreQuestions || questions.length === 0}
                       >
                         Start Quiz
                       </Button>
@@ -1253,7 +1305,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         color="warning"
                         size="large"
                         startIcon={<Star />}
-                        disabled={starredQuestionsCount === 0 || isGeneratingMoreQuestions}
+                        disabled={starredQuestionsCount === 0 || isGeneratingMoreQuestions  || questions.length === 0}
                       >
                         Start Quiz ({starredQuestionsCount})
                       </Button>
@@ -1286,7 +1338,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         color="warning"
                         size="large"
                         startIcon={<Star />}
-                        disabled={isGeneratingMoreQuestions}
+                        disabled={isGeneratingMoreQuestions || questions.length === 0}
                       >
                         All
                       </Button>
@@ -1296,7 +1348,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         color="warning"
                         size="large"
                         startIcon={<StarBorder />}
-                        disabled={isGeneratingMoreQuestions}
+                        disabled={isGeneratingMoreQuestions || questions.length === 0}
                       >
                         All
                       </Button>
@@ -1317,9 +1369,82 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     </Box>
                     
                     {currentSessionShortSummary && (
-                      <Typography variant="h2" color="text.primary" sx={{ textAlign: 'center', mb: 0 }}>
-                        {currentSessionShortSummary}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 0 }}>
+                        {isEditingTitle ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%', maxWidth: 600 }}>
+                            <TextField
+                              value={editingTitle}
+                              onChange={(e) => setEditingTitle(e.target.value)}
+                              variant="outlined"
+                              size="small"
+                              fullWidth
+                              autoFocus
+                              multiline
+                              rows={2}
+                              sx={{
+                                '& .MuiInputBase-input': {
+                                  textAlign: 'center',
+                                  fontSize: '1.5rem',
+                                  fontWeight: 600,
+                                  lineHeight: 1.2
+                                }
+                              }}
+                            />
+                            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+                              <Button
+                                onClick={handleEditTitleCancel}
+                                variant="outlined"
+                                size="small"
+                                startIcon={<CancelIcon />}
+                                color="error"
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                onClick={handleEditTitleSave}
+                                variant="contained"
+                                size="small"
+                                startIcon={<SaveIcon />}
+                                color={isQuizMode ? "primary" : "success"}
+                              >
+                                Save
+                              </Button>
+                            </Box>
+                          </Box>
+                        ) : (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography 
+                              variant="h2" 
+                              color="text.primary" 
+                              sx={{ 
+                                textAlign: 'center',
+                                cursor: 'pointer',
+                                '&:hover': {
+                                  color: isQuizMode ? 'primary.main' : 'success.main'
+                                },
+                                transition: 'color 0.2s ease'
+                              }}
+                              onClick={handleEditTitleStart}
+                            >
+                              {currentSessionShortSummary}
+                            </Typography>
+                            <Button
+                              onClick={handleEditTitleStart}
+                              sx={{
+                                minWidth: 'auto',
+                                p: 0.5,
+                                color: 'text.secondary',
+                                '&:hover': {
+                                  color: isQuizMode ? 'primary.main' : 'success.main',
+                                  bgcolor: 'transparent'
+                                }
+                              }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </Button>
+                          </Box>
+                        )}
+                      </Box>
                     )}
                     {currentSessionSources.length > 0 && (
                       <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', mb: 2 }}>

@@ -62,8 +62,8 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const [selectedPdfHashes, setSelectedPdfHashes] = useState([]); // Stores only the hashes of selected PDFs
   const [showExpandedPdfList, setShowExpandedPdfList] = useState(false); // New state for expanded view
   const [showUserTextDialog, setShowUserTextDialog] = useState(false); // New state for user text dialog
-  const [snackbarOpen, setSnackbarOpen] = useState(false); // State for snackbar popup
-  const [snackbarMessage, setSnackbarMessage] = useState(''); // State for snackbar message
+  // const [snackbarOpen, setSnackbarOpen] = useState(false); // State for snackbar popup
+  // const [snackbarMessage, setSnackbarMessage] = useState(''); // State for snackbar message
 
   // Clear existing results when component mounts, ensuring a fresh start
   useEffect(() => {
@@ -137,11 +137,11 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
     const { value, checked } = event.target;
     console.log(`Checkbox clicked: value=${value}, checked=${checked}`);
     
-    if (checked && selectedPdfHashes.length >= 5) {
-      setSnackbarMessage('You can only select up to 5 PDFs at once. Please deselect some PDFs first.');
-      setSnackbarOpen(true);
-      return;
-    }
+    // if (checked && selectedPdfHashes.length >= 5) {
+    //   setSnackbarMessage('You can only select up to 5 PDFs at once. Please deselect some PDFs first.');
+    //   setSnackbarOpen(true);
+    //   return;
+    // }
     
     setSelectedPdfHashes(prev => {
       const newSelected = checked ? [...prev, value] : prev.filter(hash => hash !== value);
@@ -982,7 +982,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
        </Dialog>
 
        {/* Snackbar for PDF limit error */}
-       <Snackbar
+       {/* <Snackbar
          open={snackbarOpen}
          autoHideDuration={7500}
          onClose={() => setSnackbarOpen(false)}
@@ -995,7 +995,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
          >
            {snackbarMessage}
          </Alert>
-       </Snackbar>
+       </Snackbar> */}
      </Box>
    );
  };
