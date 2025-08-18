@@ -823,7 +823,8 @@ async def get_current_session_sources(
 @app.post('/api/update-set-title', response_model=UpdateSetTitleResponse)
 async def update_set_title(
     request: UpdateSetTitleRequest,
-    user_id: str = Depends(require_auth)
+    user_id: str = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
 ):
     """Endpoint to update the title of a study set."""
     print("update_set_title()")
@@ -840,6 +841,13 @@ async def update_set_title(
         updated_data = result.get('data', {})
         if isinstance(updated_data, list):
             updated_data = updated_data[0] if updated_data else {}
+        
+        # Update session if this is the currently loaded set
+        current_content_hash = session.get('content_hash')
+        if current_content_hash == request.content_hash:
+            session['short_summary'] = request.new_title
+            print(f"Updated session short_summary to: {request.new_title}")
+        
         return UpdateSetTitleResponse(success=True, data=updated_data)
     except HTTPException:
         raise

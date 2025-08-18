@@ -643,8 +643,8 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                                             <Box sx={{ mt: 'auto', display: 'flex', justifyContent: 'center', pt: 1 }}>
                                                 {editingSetHash === set.hash ? (
                                                     <Stack direction="row" spacing={1} width="100%">
-                                                        <Button onClick={handleEditCancel} variant="contained" size="small" fullWidth startIcon={<CancelIcon />}>Cancel</Button>
-                                                        <Button onClick={() => handleEditSave(set.hash)} variant="contained" size="small" fullWidth startIcon={<SaveIcon />}>Save</Button>
+                                                        <Button onClick={handleEditCancel} variant="contained" color="error" size="small" fullWidth startIcon={<CancelIcon />}>Cancel</Button>
+                                                        <Button onClick={() => handleEditSave(set.hash)} variant="contained" color={showQuizSets ? "primary" : "success"} size="small" fullWidth startIcon={<SaveIcon />}>Save</Button>
                                                     </Stack>
                                                 ) : (
                                                     <Button
