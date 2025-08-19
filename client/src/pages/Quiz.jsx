@@ -1226,7 +1226,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     <Box display="flex" justifyContent="center" gap={2} mb={2}>
                       <Button
                         onClick={generateAdditionalQuestions}
-                        variant="outlined"
+                        variant="contained"
                         color={isQuizMode ? "primary" : "success"}
                         size="large"
                         disabled={isGeneratingMoreQuestions}
@@ -1250,26 +1250,31 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                           inputProps={{ 
                             min: 1, 
                             max: isQuizMode ? 30 : 100,
-                            style: { textAlign: 'center', width: '40px', fontSize: '14px' }
+                            style: { textAlign: 'center', width: '40px', fontSize: '14px', fontWeight: 'bold' }
                           }}
                           size="small"
                           sx={{ 
                             width: '45px',
                             '& .MuiOutlinedInput-root': {
                               height: '24px',
-                              backgroundColor: 'rgba(25, 118, 210, 0.15)',
-                              border: '1px solid rgba(25, 118, 210, 0.3)',
+                              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                              border: '2px solid rgba(25, 118, 210, 0.8)',
                               borderRadius: '4px',
+                              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
                               '&:hover': {
-                                backgroundColor: 'rgba(25, 118, 210, 0.25)',
+                                backgroundColor: 'rgba(255, 255, 255, 1)',
+                                border: '2px solid rgba(25, 118, 210, 1)',
                               },
                               '&.Mui-focused': {
-                                backgroundColor: 'rgba(25, 118, 210, 0.3)',
-                                border: '1px solid rgba(25, 118, 210, 0.5)',
+                                backgroundColor: 'rgba(255, 255, 255, 1)',
+                                border: '2px solid rgba(25, 118, 210, 1)',
+                                boxShadow: '0 0 0 2px rgba(25, 118, 210, 0.2)',
                               }
                             },
                             '& .MuiInputBase-input': {
-                              color: (theme) => theme.palette.mode === 'dark' ? 'white' : 'primary.main',
+                              color: (theme) => theme.palette.mode === 'dark' ? '#1976d2' : '#1976d2',
+                              fontWeight: 'bold',
+                              fontSize: '14px',
                               padding: '2px 4px',
                               '&::placeholder': {
                                 color: 'rgba(25, 118, 210, 0.7)',
