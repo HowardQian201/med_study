@@ -24,7 +24,16 @@ import {
   TextField,
   Snackbar,
   Switch,
-  FormControlLabel
+  FormControlLabel,
+  IconButton,
+  Menu,
+  MenuItem,
+  Drawer,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Divider
 } from '@mui/material';
 import {
   ArrowBack,
@@ -45,7 +54,8 @@ import {
   CloudUpload,
   Edit as EditIcon,
   Save as SaveIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  Menu as MenuIcon
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { alpha } from '@mui/material/styles';
@@ -82,6 +92,9 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   // State for editing quiz set name
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editingTitle, setEditingTitle] = useState('');
+  
+  // State for mobile menu
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -781,187 +794,356 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* App Bar */}
-      <AppBar position="static" color="default" elevation={1} sx={{ minWidth: 1100 }}>
+      <AppBar position="static" color="default" elevation={1} sx={{ 
+        minWidth: { xs: 'auto', sm: 1100 },
+        width: '100%'
+      }}>
         <Container maxWidth="xl">
-          <Box>
-            <Toolbar sx={{ pb: 0, minHeight: '48px' }}>
-              <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <img src="/favicon.png" alt="MedStudyAI Logo" style={{ width: 28, height: 28 }} />
-                <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
+          <Toolbar sx={{ minHeight: '64px', px: { xs: 1, sm: 3 } }}>
+            {/* Mobile Layout */}
+            <Box sx={{ display: { xs: 'flex', sm: 'none' }, alignItems: 'center', width: '100%' }}>
+              <IconButton
+                edge="start"
+                color="inherit"
+                aria-label="menu"
+                onClick={() => setMobileMenuOpen(true)}
+                sx={{ mr: 1 }}
+              >
+                <MenuIcon />
+              </IconButton>
+              <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <img src="/favicon.png" alt="MedStudyAI Logo" style={{ width: 24, height: 24 }} />
+                <Typography variant="h6" component="h1" sx={{ fontWeight: 600, fontSize: '1.1rem' }}>
                   MedStudyAI
                 </Typography>
               </Box>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Typography variant="body2" color="text.secondary">
-                  Welcome, {user?.name}
-                </Typography>
-                <ThemeToggle size="small" />
-                <Button
-                  onClick={handleLogout}
-                  variant="outlined"
-                  color={isQuizMode ? "primary" : "success"}
-                  startIcon={<Logout />}
-                  size="small"
-                  sx={{ py: 0.5 }}
-                >
-                  Logout
-                </Button>
-              </Stack>
-            </Toolbar>
-            <Toolbar sx={{ pt: 0, mt: -2.5, mb: 0.5, minHeight: '48px', width: '100%' }}>
-              <Box sx={{ display: 'flex', gap: 1, flexGrow: 1 }}>
-                <Button
-                  onClick={handleBack}
-                  variant="outlined"
-                  startIcon={<HomeIcon />}
-                  size="small"
-                  sx={{ py: 1 }}
-                  color={!isQuizMode ? "success" : "primary"}
-                >
-                  Home
-                </Button>
-                <Button
-                  onClick={async () => {
-                    try {
-                      // Clear session content on the server
-                      await axios.post('/api/clear-session-content', {}, { withCredentials: true });
-                      // Clear summary in App.js state
-                      if (setSummary) {
-                        setSummary('');
-                      }
-                      // Navigate to upload_pdfs
-                      navigate('/upload_pdfs');
-                    } catch (err) {
-                      console.error('Failed to clear session and navigate:', err);
-                      // Still attempt to navigate even if clearing fails
-                      navigate('/upload_pdfs');
-                    }
-                  }}
-                  variant="outlined"
-                  startIcon={<CloudUpload />}
-                  size="small"
-                  sx={{ py: 1 }}
-                  color={!isQuizMode ? "success" : "primary"}
-                >
-                  Upload PDFs
-                </Button>
-                <Button
-                  onClick={async () => {
-                    try {
-                      // Clear session content on the server
-                      await axios.post('/api/clear-session-content', {}, { withCredentials: true });
-                      // Clear summary in App.js state
-                      if (setSummary) {
-                        setSummary('');
-                      }
-                      // Navigate to study_session
-                      navigate('/study_session');
-                    } catch (err) {
-                      console.error('Failed to clear session and navigate:', err);
-                      // Still attempt to navigate even if clearing fails
-                      navigate('/study_session');
-                    }
-                  }}
-                  variant="outlined"
-                  startIcon={<DescriptionIcon />}
-                  size="small"
-                  sx={{ py: 1 }}
-                  color={!isQuizMode ? "success" : "primary"}
-                >
-                  Study Session
-                </Button>
-                {(showResults || !isPreviewing) && (
-                  <Button
-                    onClick={handleBackToPreview}
-                    variant="outlined"
-                    startIcon={<ArrowBack />}
-                    size="small"
-                    sx={{ py: 1 }}
-                    color="warning"
-                  >
-                    Preview
-                  </Button>
-                )}
-              </Box>
-              {(() => {
-                const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
-                return (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    {/* Flashcard/Multiple Choice Toggle - only show when not in quiz mode */}
-                    {!isQuizMode && (
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={isMultipleChoiceMode}
-                            onChange={(e) => setIsMultipleChoiceMode(e.target.checked)}
-                            size="small"
-                            sx={{
-                              '& .MuiSwitch-switchBase.Mui-checked': {
-                                color: 'warning.main',
-                                '&:hover': {
-                                  color: 'warning.dark',
-                                },
-                              },
-                              '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                                backgroundColor: 'warning.main',
-                              },
-                              '& .MuiSwitch-switchBase': {
-                                color: 'warning.main',
-                                '&:hover': {
-                                  color: 'warning.dark',
-                                },
-                              },
-                              '& .MuiSwitch-track': {
-                                backgroundColor: 'warning.light',
-                              },
-                            }}
-                          />
-                        }
-                        label={
-                          <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-                            {isMultipleChoiceMode ? 'Learn' : 'Recall'}
-                          </Typography>
-                        }
-                        labelPlacement="bottom"
-                        sx={{ 
-                          mr: 0,
-                          '& .MuiFormControlLabel-label': {
-                            fontSize: '0.75rem',
-                            color: 'text.secondary'
-                          }
-                        }}
-                      />
-                    )}
-                    <Typography 
-                      variant="body2" 
-                      color="primary"
-                      sx={{ 
-                        fontWeight: 600,
-                        bgcolor: isQuizMode ? 'primary.light' : 'success.main',
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: 1,
-                        color: 'text.primary'
-                      }}
-                    >
-                      {isQuizMode ? 'USMLE Mode' : 'Flashcard Mode'}
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  fontWeight: 600,
+                  bgcolor: isQuizMode ? 'primary.light' : 'success.main',
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: 1,
+                  color: 'text.primary',
+                  fontSize: '0.7rem'
+                }}
+              >
+                {isQuizMode ? 'USMLE' : 'Flash'}
+              </Typography>
+            </Box>
+
+            {/* Desktop Layout */}
+            <Box sx={{ display: { xs: 'none', sm: 'block' }, width: '100%' }}>
+              <Box>
+                <Toolbar sx={{ pb: 0, minHeight: '48px' }}>
+                  <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <img src="/favicon.png" alt="MedStudyAI Logo" style={{ width: 28, height: 28 }} />
+                    <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }}>
+                      MedStudyAI
                     </Typography>
                   </Box>
-                );
-              })()}
-            </Toolbar>
-          </Box>
+                  <Stack direction="row" spacing={2} alignItems="center">
+                    <Typography variant="body2" color="text.secondary">
+                      Welcome, {user?.name}
+                    </Typography>
+                    <ThemeToggle size="small" />
+                    <Button
+                      onClick={handleLogout}
+                      variant="outlined"
+                      color={isQuizMode ? "primary" : "success"}
+                      startIcon={<Logout />}
+                      size="small"
+                      sx={{ py: 0.5 }}
+                    >
+                      Logout
+                    </Button>
+                  </Stack>
+                </Toolbar>
+                <Toolbar sx={{ pt: 0, mt: -2.5, mb: 0.5, minHeight: '48px', width: '100%' }}>
+                  <Box sx={{ display: 'flex', gap: 1, flexGrow: 1 }}>
+                    <Button
+                      onClick={handleBack}
+                      variant="outlined"
+                      startIcon={<HomeIcon />}
+                      size="small"
+                      sx={{ py: 1 }}
+                      color={!isQuizMode ? "success" : "primary"}
+                    >
+                      Home
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        try {
+                          await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+                          if (setSummary) {
+                            setSummary('');
+                          }
+                          navigate('/upload_pdfs');
+                        } catch (err) {
+                          console.error('Failed to clear session and navigate:', err);
+                          navigate('/upload_pdfs');
+                        }
+                      }}
+                      variant="outlined"
+                      startIcon={<CloudUpload />}
+                      size="small"
+                      sx={{ py: 1 }}
+                      color={!isQuizMode ? "success" : "primary"}
+                    >
+                      Upload PDFs
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        try {
+                          await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+                          if (setSummary) {
+                            setSummary('');
+                          }
+                          navigate('/study_session');
+                        } catch (err) {
+                          console.error('Failed to clear session and navigate:', err);
+                          navigate('/study_session');
+                        }
+                      }}
+                      variant="outlined"
+                      startIcon={<DescriptionIcon />}
+                      size="small"
+                      sx={{ py: 1 }}
+                      color={!isQuizMode ? "success" : "primary"}
+                    >
+                      Study Session
+                    </Button>
+                    {(showResults || !isPreviewing) && (
+                      <Button
+                        onClick={handleBackToPreview}
+                        variant="outlined"
+                        startIcon={<ArrowBack />}
+                        size="small"
+                        sx={{ py: 1 }}
+                        color="warning"
+                      >
+                        Preview
+                      </Button>
+                    )}
+                  </Box>
+                  {(() => {
+                    const isQuizMode = sessionStorage.getItem('isQuizMode') === 'true';
+                    return (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        {!isQuizMode && (
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={isMultipleChoiceMode}
+                                onChange={(e) => setIsMultipleChoiceMode(e.target.checked)}
+                                size="small"
+                                sx={{
+                                  '& .MuiSwitch-switchBase.Mui-checked': {
+                                    color: 'warning.main',
+                                    '&:hover': {
+                                      color: 'warning.dark',
+                                    },
+                                  },
+                                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                    backgroundColor: 'warning.main',
+                                  },
+                                  '& .MuiSwitch-switchBase': {
+                                    color: 'warning.main',
+                                    '&:hover': {
+                                      color: 'warning.dark',
+                                    },
+                                  },
+                                  '& .MuiSwitch-track': {
+                                    backgroundColor: 'warning.light',
+                                  },
+                                }}
+                              />
+                            }
+                            label={
+                              <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                                {isMultipleChoiceMode ? 'Learn' : 'Recall'}
+                              </Typography>
+                            }
+                            labelPlacement="bottom"
+                            sx={{ 
+                              mr: 0,
+                              '& .MuiFormControlLabel-label': {
+                                fontSize: '0.75rem',
+                                color: 'text.secondary'
+                              }
+                            }}
+                          />
+                        )}
+                        <Typography 
+                          variant="body2" 
+                          color="primary"
+                          sx={{ 
+                            fontWeight: 600,
+                            bgcolor: isQuizMode ? 'primary.light' : 'success.main',
+                            px: 1.5,
+                            py: 0.5,
+                            borderRadius: 1,
+                            color: 'text.primary'
+                          }}
+                        >
+                          {isQuizMode ? 'USMLE Mode' : 'Flashcard Mode'}
+                        </Typography>
+                      </Box>
+                    );
+                  })()}
+                </Toolbar>
+              </Box>
+            </Box>
+          </Toolbar>
         </Container>
       </AppBar>
 
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="left"
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        sx={{
+          display: { xs: 'block', sm: 'none' },
+          '& .MuiDrawer-paper': {
+            width: 280,
+            boxSizing: 'border-box',
+          },
+        }}
+      >
+        <Box sx={{ p: 2, bgcolor: 'primary.main', color: 'white' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+            <img src="/favicon.png" alt="MedStudyAI Logo" style={{ width: 28, height: 28 }} />
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              MedStudyAI
+            </Typography>
+          </Box>
+          <Typography variant="body2" sx={{ opacity: 0.9 }}>
+            Welcome, {user?.name}
+          </Typography>
+        </Box>
+        
+        <List>
+          <ListItem button onClick={() => { handleBack(); setMobileMenuOpen(false); }}>
+            <ListItemIcon><HomeIcon /></ListItemIcon>
+            <ListItemText primary="Home" />
+          </ListItem>
+          
+          <ListItem button onClick={async () => {
+            try {
+              await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+              if (setSummary) {
+                setSummary('');
+              }
+              navigate('/upload_pdfs');
+            } catch (err) {
+              console.error('Failed to clear session and navigate:', err);
+              navigate('/upload_pdfs');
+            }
+            setMobileMenuOpen(false);
+          }}>
+            <ListItemIcon><CloudUpload /></ListItemIcon>
+            <ListItemText primary="Upload PDFs" />
+          </ListItem>
+          
+          <ListItem button onClick={async () => {
+            try {
+              await axios.post('/api/clear-session-content', {}, { withCredentials: true });
+              if (setSummary) {
+                setSummary('');
+              }
+              navigate('/study_session');
+            } catch (err) {
+              console.error('Failed to clear session and navigate:', err);
+              navigate('/study_session');
+            }
+            setMobileMenuOpen(false);
+          }}>
+            <ListItemIcon><DescriptionIcon /></ListItemIcon>
+            <ListItemText primary="Study Session" />
+          </ListItem>
+          
+          {(showResults || !isPreviewing) && (
+            <ListItem button onClick={() => { handleBackToPreview(); setMobileMenuOpen(false); }}>
+              <ListItemIcon><ArrowBack /></ListItemIcon>
+              <ListItemText primary="Preview" />
+            </ListItem>
+          )}
+          
+          <Divider />
+          
+          {!isQuizMode && (
+            <ListItem>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={isMultipleChoiceMode}
+                    onChange={(e) => setIsMultipleChoiceMode(e.target.checked)}
+                    size="small"
+                    color="warning"
+                  />
+                }
+                label={isMultipleChoiceMode ? 'Learn Mode' : 'Recall Mode'}
+                sx={{ width: '100%' }}
+              />
+            </ListItem>
+          )}
+          
+          <ListItem>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+              <Typography variant="body2">Mode:</Typography>
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  fontWeight: 600,
+                  bgcolor: isQuizMode ? 'primary.light' : 'success.main',
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 1,
+                  color: 'text.primary'
+                }}
+              >
+                {isQuizMode ? 'USMLE Mode' : 'Flashcard Mode'}
+              </Typography>
+            </Box>
+          </ListItem>
+          
+          <Divider />
+          
+          <ListItem>
+            <ThemeToggle />
+          </ListItem>
+          
+          <ListItem button onClick={() => { handleLogout(); setMobileMenuOpen(false); }}>
+            <ListItemIcon><Logout /></ListItemIcon>
+            <ListItemText primary="Logout" />
+          </ListItem>
+        </List>
+      </Drawer>
+
       {/* Main Content */}
-      <Container maxWidth="xl" sx={{ py: 4 }}>
-        <Card elevation={3} sx={{ maxWidth: 1000, mx: 'auto', alignItems: 'center'}}>
-          <CardContent sx={{ p: 4 }}>
+      <Container maxWidth="xl" sx={{ py: { xs: 0.5, sm: 4 }, px: { xs: 0, sm: 3 } }}>
+        <Card elevation={3} sx={{ 
+          maxWidth: { xs: '100%', sm: 1000 }, 
+          mx: 'auto', 
+          alignItems: 'center',
+          width: '100%'
+        }}>
+          <CardContent sx={{ p: { xs: 0, sm: 4 } }}>
 
             {/* Loading State */}
             {isLoading ? (
-              <Paper elevation={2} sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, width: 800 }}>
+              <Paper elevation={2} sx={{ 
+                p: { xs: 2, sm: 4 }, 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                minHeight: { xs: 200, sm: 300 }, 
+                width: { xs: '100%', sm: 800 },
+                maxWidth: '100%'
+              }}>
                 <CircularProgress size={48} sx={{ mb: 2 }} />
                 <Typography variant="h6" color="text.secondary">
                   {isQuizMode ? 'Creating empty USMLE set ...' : 'Creating empty flashcards set ...'}
@@ -1584,7 +1766,10 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                   <Box>
                     {/* Progress Bar */}
                     {questions.length > 0 && (
-                      <Box mb={4}>
+                      <Box mb={4} sx={{ 
+                        maxWidth: { xs: '95vw', sm: 'none' },
+                        mx: 'auto'
+                      }}>
                         <Typography variant="body2" color="text.secondary" gutterBottom>
                           Question {currentQuestion + 1} of {questions.length}
                         </Typography>
@@ -1600,14 +1785,23 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     {/* Current Question */}
                     {questions.length > 0 && (
                       <Box>
-                        <Card elevation={2} sx={{ mb: 4 }}>
-                          <CardContent sx={{ p: 4, position: 'relative' }}>
+                        <Card elevation={2} sx={{ 
+                          mb: 4,
+                          maxWidth: { xs: '95vw', sm: 'none' },
+                          mx: 'auto'
+                        }}>
+                          <CardContent sx={{ 
+                            p: { xs: 0.5, sm: 4 }, 
+                            position: 'relative',
+                            wordBreak: 'break-word',
+                            overflowWrap: 'break-word'
+                          }}>
                             <Button 
                               onClick={() => handleToggleStar(questions[currentQuestion].id)}
                               sx={{
                                 position: 'absolute',
-                                top: 16,
-                                right: 16,
+                                top: { xs: 4, sm: 16 },
+                                right: { xs: 4, sm: 16 },
                                 minWidth: 'auto', 
                                 p: 0,
                                 zIndex: 1,
@@ -1616,12 +1810,32 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                             >
                               {questions[currentQuestion].starred ? <Star color="warning" /> : <StarBorder color="warning" />}
                             </Button>
-                            <Typography variant="h5" fontWeight="500" gutterBottom>
+                            <Typography 
+                              variant="h5" 
+                              fontWeight="500" 
+                              gutterBottom
+                              sx={{
+                                fontSize: '1.5rem',
+                                lineHeight: 1.4,
+                                wordBreak: 'break-word',
+                                overflowWrap: 'break-word',
+                                pr: { xs: 3, sm: 6 } // Account for star button
+                              }}
+                            >
                               {questions[currentQuestion].text}
                             </Typography>
                             
                             {!isPreviewing && !showResults && (
-                              <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 3 }}>
+                              <Typography 
+                                variant="body2" 
+                                color="text.secondary" 
+                                sx={{ 
+                                  mt: 2, 
+                                  mb: 3,
+                                  fontSize: '0.875rem',
+                                  display: { xs: 'none', sm: 'block' } // Hide on mobile to save space
+                                }}
+                              >
                                 Keyboard shortcuts: {isQuizMode ? (
                                   <>
                                     Use <strong>1-4</strong> to select answers, <strong>Enter</strong> to submit,{' '}
@@ -1642,7 +1856,14 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                             
                             {(isQuizMode || isMultipleChoiceMode) ? (
                               <FormControl component="fieldset" sx={{ width: '100%', mt: 3 }}>
-                                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                                <Box sx={{ 
+                                  display: 'grid', 
+                                  gridTemplateColumns: { 
+                                    xs: '1fr', 
+                                    sm: 'repeat(2, 1fr)' 
+                                  }, 
+                                  gap: 2 
+                                }}>
                                   {questions[currentQuestion].options.map((option, index) => {
                                     const questionId = questions[currentQuestion].id;
                                     const isSelected = selectedAnswers[questionId] === index;
@@ -1658,8 +1879,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                         elevation={0}
                                         onClick={() => handleAnswerSelect(questionId, index)}
                                         sx={{
-                                          p: 2,
-                                          minHeight: '40px',
+                                          p: { xs: 0.5, sm: 2 },
+                                          minHeight: { xs: '45px', sm: '40px' },
                                           display: 'flex',
                                           alignItems: 'center',
                                           border: '2px solid',
@@ -1727,13 +1948,20 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                               ? (isCorrect || isCorrectAnswer ? 'success.dark' : isIncorrect ? 'error.dark' : 'text.primary')
                                               : (isSelected ? 'primary.dark' : 'text.primary')
                                             }
-                                            sx={{ textAlign: 'left' }}
+                                            sx={{ 
+                                              textAlign: 'left',
+                                              fontSize: '1rem',
+                                              wordBreak: 'break-word',
+                                              overflowWrap: 'break-word'
+                                            }}
                                           >
-                                            <Box display="flex" alignItems="flex-start" gap={1}>
-                                              <Box component="span" fontWeight="600">
+                                            <Box display="flex" alignItems="flex-start" gap={{ xs: 0.5, sm: 1 }}>
+                                              <Box component="span" fontWeight="600" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
                                                 {String.fromCharCode(65 + index)}.
                                               </Box>
-                                              {cleanOptionText(option)}
+                                              <Box sx={{ flex: 1, wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                                                {cleanOptionText(option)}
+                                              </Box>
                                             </Box>
                                           </Typography>
                                         </Box>
@@ -1787,7 +2015,17 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         </Card>
 
                         {/* Navigation Buttons */}
-                        <Box display="flex" justifyContent="space-between" mb={4}>
+                        <Box 
+                          display="flex" 
+                          justifyContent="space-between" 
+                          mb={4}
+                          flexDirection={{ xs: 'column', sm: 'row' }}
+                          gap={{ xs: 2, sm: 0 }}
+                          sx={{
+                            maxWidth: { xs: '95vw', sm: 'none' },
+                            mx: 'auto'
+                          }}
+                        >
                           <Button
                             onClick={moveToPreviousQuestion}
                             disabled={currentQuestion === 0}
@@ -1799,7 +2037,11 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                           </Button>
                           
                           {!submittedAnswers[questions[currentQuestion].id] ? (
-                            <Stack direction="row" spacing={2}>
+                            <Stack 
+                              direction={{ xs: 'column', sm: 'row' }} 
+                              spacing={2}
+                              sx={{ width: { xs: '100%', sm: 'auto' } }}
+                            >
                               <Button
                                 onClick={moveToNextQuestion}
                                 variant="outlined"
@@ -1844,11 +2086,15 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
 
                         {/* Explanation after submission */}
                         <Collapse in={!!visibleExplanation && submittedAnswers[questions[currentQuestion].id]}>
-                          {visibleExplanation && (
-                            <Alert
-                              severity={visibleExplanation.isCorrect ? 'success' : 'error'}
-                              sx={{ 
-                                mb: 2,
+                          <Box sx={{
+                            maxWidth: { xs: '95vw', sm: 'none' },
+                            mx: 'auto'
+                          }}>
+                            {visibleExplanation && (
+                              <Alert
+                                severity={visibleExplanation.isCorrect ? 'success' : 'error'}
+                                sx={{ 
+                                  mb: 2,
                                 bgcolor: theme => theme.palette.mode === 'dark'
                                   ? (visibleExplanation.isCorrect 
                                       ? alpha(theme.palette.success.main, 0.2)
@@ -1873,7 +2119,8 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                                 {visibleExplanation.reason}
                               </Typography>
                             </Alert>
-                          )}
+                            )}
+                          </Box>
                         </Collapse>
                       </Box>
                     )}
