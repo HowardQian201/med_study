@@ -56,7 +56,7 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
   const [deletingSetHash, setDeletingSetHash] = useState(null);
   
   // State for quiz filter
-  const [showQuizSets, setShowQuizSets] = useState(false);
+  const [showQuizSets, setShowQuizSets] = useState(true);
 
   useEffect(() => {
     const storedQuizMode = sessionStorage.getItem('isQuizMode');

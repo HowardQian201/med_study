@@ -55,7 +55,7 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [isContentLocked, setIsContentLocked] = useState(false);
 
-  const [isQuizMode, setIsQuizMode] = useState(false);
+  const [isQuizMode, setIsQuizMode] = useState(true);
 
   // New state for available and selected PDFs
   const [availablePdfs, setAvailablePdfs] = useState([]); // Stores { hash, filename, text } from backend

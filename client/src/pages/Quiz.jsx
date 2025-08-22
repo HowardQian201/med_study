@@ -55,7 +55,8 @@ import {
   Edit as EditIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  ContentCopy
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { alpha } from '@mui/material/styles';
@@ -95,6 +96,9 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   
   // State for mobile menu
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // State for copy success feedback
+  const [copySuccess, setCopySuccess] = useState(false);
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -744,6 +748,30 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   const handleBackToPreview = () => {
     setIsPreviewing(true);
     setShowResults(false);
+  };
+
+  // Copy content summary function
+  const handleCopyContentSummary = async () => {
+    try {
+      await navigator.clipboard.writeText(propSummary);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000); // Hide success message after 2 seconds
+    } catch (err) {
+      console.error('Failed to copy content:', err);
+      // Fallback for older browsers
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = propSummary;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+      } catch (fallbackErr) {
+        console.error('Fallback copy failed:', fallbackErr);
+      }
+    }
   };
 
   // Title editing functions
@@ -1687,9 +1715,25 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     </Stack>
 
                     <Paper elevation={1} sx={{ p: 3, bgcolor: 'background.paper' }}>
-                      <Typography variant="h2" component="h3" fontWeight="600" gutterBottom>
-                        Content Summary
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, mb: 2 }}>
+                        <Typography variant="h2" component="h3" fontWeight="600">
+                          Content Summary
+                        </Typography>
+                        <IconButton
+                          onClick={handleCopyContentSummary}
+                          size="small"
+                          color={isQuizMode ? "primary" : "success"}
+                          sx={{ 
+                            transition: 'all 0.2s ease',
+                            '&:hover': {
+                              bgcolor: copySuccess ? 'success.light' : (isQuizMode ? 'primary.light' : 'success.light')
+                            }
+                          }}
+                          title={copySuccess ? 'Copied!' : 'Copy content summary'}
+                        >
+                          <ContentCopy fontSize="small" />
+                        </IconButton>
+                      </Box>
                       <Box sx={{ 
                         textAlign: 'left',
                         '& h1': { fontSize: '1.7rem', fontWeight: 600, mb: 2, mt: 3, textAlign: 'left' },
