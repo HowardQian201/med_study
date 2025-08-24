@@ -56,7 +56,9 @@ import {
   Save as SaveIcon,
   Cancel as CancelIcon,
   Menu as MenuIcon,
-  ContentCopy
+  ContentCopy,
+  KeyboardArrowUp,
+  Article
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { alpha } from '@mui/material/styles';
@@ -771,6 +773,25 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
       } catch (fallbackErr) {
         console.error('Fallback copy failed:', fallbackErr);
       }
+    }
+  };
+
+  // Scroll to top function
+  const handleScrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  };
+
+  // Scroll to content summary function
+  const handleScrollToContentSummary = () => {
+    const contentSummaryElement = document.querySelector('[data-content-summary]');
+    if (contentSummaryElement) {
+      contentSummaryElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
     }
   };
 
@@ -1714,7 +1735,7 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                       ))}
                     </Stack>
 
-                    <Paper elevation={1} sx={{ p: 3, bgcolor: 'background.paper' }}>
+                    <Paper elevation={1} sx={{ p: 3, bgcolor: 'background.paper' }} data-content-summary>
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, mb: 2 }}>
                         <Typography variant="h2" component="h3" fontWeight="600">
                           Content Summary
@@ -2175,6 +2196,57 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
           </CardContent>
         </Card>
       </Container>
+      
+      {/* Navigation Buttons - Only show in preview mode */}
+      {isPreviewing && (
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: 80, // 16 (feedback button bottom) + 56 (button height) + 16 (spacing)
+            right: 16, // Match feedback button right position
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1, // Consistent 16px spacing between buttons (gap: 2 = 16px)
+            zIndex: 1000
+          }}
+        >
+                    <IconButton
+            onClick={handleScrollToTop}
+            color="primary"
+            sx={{
+              width: 56,
+              height: 56,
+              bgcolor: 'primary.main',
+              color: 'white',
+              boxShadow: 3,
+              '&:hover': {
+                bgcolor: 'primary.dark',
+                boxShadow: 6
+              }
+            }}
+          >
+            <KeyboardArrowUp />
+          </IconButton>
+          <IconButton
+            onClick={handleScrollToContentSummary}
+            color="primary"
+            sx={{
+              width: 56,
+              height: 56,
+              bgcolor: 'primary.main',
+              color: 'white',
+              boxShadow: 3,
+              '&:hover': {
+                bgcolor: 'primary.dark',
+                boxShadow: 6
+              }
+            }}
+          >
+            <Article />
+          </IconButton>
+        </Box>
+      )}
+      
       <FeedbackButton />
       
       {/* Snackbar for 429 error */}

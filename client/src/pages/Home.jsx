@@ -287,7 +287,10 @@ const Home = ({ user, setIsAuthenticated, setSummary }) => {
                   color={showQuizSets ? "primary" : "success"}
                   size="small"
                   startIcon={<CloudUpload />}
-                  onClick={() => navigate('/upload_pdfs')}
+                  onClick={() => {
+                    sessionStorage.setItem('isQuizMode', showQuizSets.toString());
+                    navigate('/upload_pdfs');
+                  }}
                   sx={{ py: 1 }}
                 >
                   Upload PDFs
