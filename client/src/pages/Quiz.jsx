@@ -307,10 +307,35 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
               hideNavigationWarningPopup(); // Hide warning on success
               return true; // Success
             } else if (response.data.error === "Quiz set already exists") {
-              setError("Quiz set for that material already exists. Here it is!");
-              setContentHash(response.data.content_hash);
-              hideNavigationWarningPopup(); // Hide warning on success
-              return true; // Handled
+              // Automatically load the existing set instead of showing error
+              try {
+                const loadResponse = await axios.post('/api/load-study-set', 
+                  { content_hash: response.data.content_hash }, 
+                  { withCredentials: true }
+                );
+                if (loadResponse.data.success) {
+                  setSummary(loadResponse.data.summary || '');
+                  const quizResponse = await axios.get('/api/get-quiz', { withCredentials: true });
+                  if (quizResponse.data.success) {
+                    setQuestions(quizResponse.data.questions);
+                    setContentHash(response.data.content_hash);
+                    hideNavigationWarningPopup(); // Hide warning on success
+                    return true; // Success
+                  }
+                }
+                // If loading fails, fall back to showing error
+                setError("Quiz set for that material already exists. Here it is!");
+                setContentHash(response.data.content_hash);
+                hideNavigationWarningPopup();
+                return true;
+              } catch (loadErr) {
+                console.error('Error auto-loading existing set:', loadErr);
+                // Fall back to showing error with button
+                setError("Quiz set for that material already exists. Here it is!");
+                setContentHash(response.data.content_hash);
+                hideNavigationWarningPopup();
+                return true;
+              }
             } else {
               setError('Failed to generate quiz questions');
               hideNavigationWarningPopup(); // Hide warning on error

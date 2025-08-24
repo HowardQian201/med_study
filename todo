@@ -19,6 +19,8 @@ Stripe payment on login (free for basic tier and 14.99 for pro)
 
 
 ### LATER:
+Add tool tips
+
 upgrade instances and increase workers
 
 manual realtime stats using posthog
