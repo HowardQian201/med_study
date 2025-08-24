@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Fab, Modal, Typography, TextField, Button, IconButton, Paper } from '@mui/material';
+import { Box, Fab, Modal, Typography, TextField, Button, IconButton, Paper, Tooltip } from '@mui/material';
 import { Feedback as FeedbackIcon, Close as CloseIcon } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -51,19 +51,21 @@ const FeedbackButton = () => {
 
   return (
     <>
-      <Fab
-        color="primary"
-        aria-label="feedback"
-        sx={{
-          position: 'fixed',
-          bottom: 16,
-          right: 16,
-          zIndex: 1300,
-        }}
-        onClick={handleOpen}
-      >
-        <FeedbackIcon />
-      </Fab>
+      <Tooltip title="Submit Feedback" arrow placement="left">
+        <Fab
+          color="primary"
+          aria-label="feedback"
+          sx={{
+            position: 'fixed',
+            bottom: 16,
+            right: 16,
+            zIndex: 1300,
+          }}
+          onClick={handleOpen}
+        >
+          <FeedbackIcon />
+        </Fab>
+      </Tooltip>
 
       <Modal
         open={open}

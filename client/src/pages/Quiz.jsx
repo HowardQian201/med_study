@@ -33,7 +33,8 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Divider
+  Divider,
+  Tooltip
 } from '@mui/material';
 import {
   ArrowBack,
@@ -1632,41 +1633,55 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     {currentSessionShortSummary && (
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 0 }}>
                         {isEditingTitle ? (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%', maxWidth: 600 }}>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%', maxWidth: 900, px: 2 }}>
                             <TextField
                               value={editingTitle}
                               onChange={(e) => setEditingTitle(e.target.value)}
                               variant="outlined"
-                              size="small"
+                              size="medium"
                               fullWidth
                               autoFocus
                               multiline
-                              rows={2}
+                              rows={3}
                               sx={{
                                 '& .MuiInputBase-input': {
                                   textAlign: 'center',
                                   fontSize: '1.5rem',
                                   fontWeight: 600,
-                                  lineHeight: 1.2
+                                  lineHeight: 1.3,
+                                  padding: '16px'
+                                },
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: 2,
+                                  bgcolor: 'background.paper',
+                                  '&:hover': {
+                                    bgcolor: 'action.hover',
+                                  },
+                                  '&.Mui-focused': {
+                                    bgcolor: 'background.paper',
+                                  }
                                 }
                               }}
+                              placeholder="Enter quiz set title..."
                             />
-                            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+                            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
                               <Button
                                 onClick={handleEditTitleCancel}
                                 variant="outlined"
-                                size="small"
+                                size="medium"
                                 startIcon={<CancelIcon />}
                                 color="error"
+                                sx={{ minWidth: 120 }}
                               >
                                 Cancel
                               </Button>
                               <Button
                                 onClick={handleEditTitleSave}
                                 variant="contained"
-                                size="small"
+                                size="medium"
                                 startIcon={<SaveIcon />}
                                 color={isQuizMode ? "primary" : "success"}
+                                sx={{ minWidth: 120 }}
                               >
                                 Save
                               </Button>
@@ -2235,43 +2250,46 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
             zIndex: 1000
           }}
         >
-                    <IconButton
-            onClick={handleScrollToTop}
-            color="primary"
-            sx={{
-              width: 56,
-              height: 56,
-              bgcolor: 'primary.main',
-              color: 'white',
-              boxShadow: 3,
-              '&:hover': {
-                bgcolor: 'primary.dark',
-                boxShadow: 6
-              }
-            }}
-          >
-            <KeyboardArrowUp />
-          </IconButton>
-          <IconButton
-            onClick={handleScrollToContentSummary}
-            color="primary"
-            sx={{
-              width: 56,
-              height: 56,
-              bgcolor: 'primary.main',
-              color: 'white',
-              boxShadow: 3,
-              '&:hover': {
-                bgcolor: 'primary.dark',
-                boxShadow: 6
-              }
-            }}
-          >
-            <Article />
-          </IconButton>
+          <Tooltip title="Scroll to Top" arrow placement="left">
+            <IconButton
+              onClick={handleScrollToTop}
+              color="primary"
+              sx={{
+                width: 56,
+                height: 56,
+                bgcolor: 'primary.main',
+                color: 'white',
+                boxShadow: 3,
+                '&:hover': {
+                  bgcolor: 'primary.dark',
+                  boxShadow: 6
+                }
+              }}
+            >
+              <KeyboardArrowUp />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Go to Content Summary" arrow placement="left">
+            <IconButton
+              onClick={handleScrollToContentSummary}
+              color="primary"
+              sx={{
+                width: 56,
+                height: 56,
+                bgcolor: 'primary.main',
+                color: 'white',
+                boxShadow: 3,
+                '&:hover': {
+                  bgcolor: 'primary.dark',
+                  boxShadow: 6
+                }
+              }}
+            >
+              <Article />
+            </IconButton>
+          </Tooltip>
         </Box>
       )}
-      
       <FeedbackButton />
       
       {/* Snackbar for 429 error */}
