@@ -67,6 +67,10 @@ class UpdateSetTitleRequest(BaseModel):
 class DeleteQuestionSetRequest(BaseModel):
     content_hash: str
 
+class DeleteQuestionsRequest(BaseModel):
+    content_hash: str
+    question_hashes: List[str]
+
 class LoadStudySetResponse(BaseModel):
     success: bool
     summary: str

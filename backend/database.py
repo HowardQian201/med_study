@@ -754,6 +754,80 @@ def delete_question_set_and_questions(content_hash: str, user_id: str) -> Dict[s
         print(f"Error deleting question set {content_hash}: {e}")
         return {"success": False, "error": str(e)}
 
+def delete_questions_from_set(content_hash: str, user_id: str, question_hashes_to_delete: List[str]) -> Dict[str, Any]:
+    """
+    Deletes specific questions from a question set and updates the question set metadata.
+    
+    Args:
+        content_hash (str): The hash of the content/question set
+        user_id (str): The ID of the user (for verification)
+        question_hashes_to_delete (List[str]): List of question hashes to delete
+    
+    Returns:
+        Dict containing the result of the delete operation
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        if not question_hashes_to_delete:
+            return {"success": True, "deleted_count": 0, "message": "No questions to delete"}
+        
+        # First, get the question set to retrieve and update the metadata
+        set_result = supabase.table('question_sets').select("metadata").eq('hash', content_hash).eq('user_id', user_id).maybe_single().execute()
+        
+        if not set_result.data:
+            return {"success": False, "error": "Question set not found or you don't have permission to modify it"}
+        
+        current_metadata = set_result.data.get('metadata', {})
+        current_question_hashes = current_metadata.get('question_hashes', [])
+        
+        # Filter out the questions to be deleted from the metadata
+        updated_question_hashes = [
+            hash for hash in current_question_hashes 
+            if hash not in question_hashes_to_delete
+        ]
+        
+        # Only delete questions that actually exist in the set
+        questions_to_delete = [
+            hash for hash in question_hashes_to_delete 
+            if hash in current_question_hashes
+        ]
+        
+        deleted_count = 0
+        
+        # Delete the questions from the quiz_questions table
+        if questions_to_delete:
+            questions_delete_result = supabase.table('quiz_questions').delete().in_('hash', questions_to_delete).execute()
+            deleted_count = len(questions_delete_result.data) if questions_delete_result.data else 0
+            print(f"Deleted {deleted_count} questions from quiz_questions table")
+        
+        # Update the question set metadata to remove the deleted question hashes
+        updated_metadata = {
+            **current_metadata,
+            'question_hashes': updated_question_hashes
+        }
+        
+        update_result = supabase.table('question_sets').update({
+            'metadata': updated_metadata,
+            'created_at': datetime.now(timezone.utc).isoformat()  # Update timestamp
+        }).eq('hash', content_hash).eq('user_id', user_id).execute()
+        
+        if not update_result.data:
+            return {"success": False, "error": "Failed to update question set metadata"}
+        
+        print(f"Updated question set metadata. Removed {len(current_question_hashes) - len(updated_question_hashes)} question hashes")
+        
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "remaining_questions": len(updated_question_hashes),
+            "message": f"Successfully deleted {deleted_count} questions from the question set"
+        }
+        
+    except Exception as e:
+        print(f"Error deleting questions from set {content_hash}: {e}")
+        return {"success": False, "error": str(e), "deleted_count": 0}
+
 def check_question_set_exists(content_hash: str, user_id: str) -> Dict[str, Any]:
     """
     Check if a question set exists for a given user and content hash.

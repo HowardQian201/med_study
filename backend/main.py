@@ -18,7 +18,7 @@ from .utils.pydantic_models import (
     UserPdfsResponse, QuestionSetsResponse, QuizResponse, CurrentSessionSourcesResponse,
     UserTasksResponse, UploadResponse, TaskStatusResponse, UpdateSetTitleResponse,
     QuestionResponse, ShuffleQuizResponse, StarredQuizResponse, StarAllQuestionsResponse,
-    LoadStudySetResponse,
+    LoadStudySetResponse, DeleteQuestionsRequest,
     SignUpRequest
 )
 from .open_ai_calls import randomize_answer_choices, gpt_summarize_transcript_chunked, generate_quiz_questions, generate_short_title
@@ -30,7 +30,7 @@ from .database import (
     touch_question_set, update_question_starred_status, delete_question_set_and_questions, insert_feedback, 
     append_pdf_hash_to_user_pdfs, get_user_associated_pdf_metadata, get_pdf_text_by_hashes,
     update_user_task_status, get_user_tasks, delete_user_tasks_by_status, remove_pdf_hashes_from_user,
-    create_user, redis_client
+    create_user, redis_client, delete_questions_from_set
 )
 # Import the main Celery app instance from worker.py
 from .background.worker import app as celery_app
@@ -1043,6 +1043,56 @@ async def star_all_questions(
         raise
     except Exception as e:
         print(f"Error {request.action}ring all questions: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post('/api/delete-questions', response_model=SuccessResponse)
+async def delete_questions(
+    request: DeleteQuestionsRequest,
+    user_id: str = Depends(require_auth),
+    session: SessionManager = Depends(get_session)
+):
+    print("delete_questions()")
+    try:
+        content_hash = request.content_hash
+        question_hashes = request.question_hashes
+        
+        if not content_hash or not question_hashes:
+            raise HTTPException(status_code=400, detail='content_hash and question_hashes are required')
+        
+        # Delete questions from database and update question set
+        delete_result = delete_questions_from_set(content_hash, user_id, question_hashes)
+        
+        if not delete_result['success']:
+            raise HTTPException(status_code=500, detail=delete_result.get('error', 'Failed to delete questions'))
+        
+        # Update session if this is the currently loaded set
+        current_content_hash = session.get('content_hash')
+        if current_content_hash == content_hash:
+            quiz_questions_sets = session.get('quiz_questions', [])
+            
+            if quiz_questions_sets:
+                # Remove questions from the latest question set in session
+                latest_questions = quiz_questions_sets[-1]
+                updated_questions = [
+                    q for q in latest_questions 
+                    if q.get('hash') not in question_hashes
+                ]
+                
+                quiz_questions_sets[-1] = updated_questions
+                session['quiz_questions'] = quiz_questions_sets
+                
+                print(f"Removed {len(latest_questions) - len(updated_questions)} questions from session")
+        
+        return SuccessResponse(
+            success=True, 
+            message=f'Successfully deleted {delete_result.get("deleted_count", 0)} questions from the question set'
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting questions: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 

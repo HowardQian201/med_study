@@ -34,7 +34,8 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
-  Tooltip
+  Tooltip,
+  Checkbox
 } from '@mui/material';
 import {
   ArrowBack,
@@ -59,7 +60,9 @@ import {
   Menu as MenuIcon,
   ContentCopy,
   KeyboardArrowUp,
-  Article
+  Article,
+  Delete as DeleteIcon,
+  SelectAll
 } from '@mui/icons-material';
 import ThemeToggle from '../components/ThemeToggle';
 import { alpha } from '@mui/material/styles';
@@ -102,6 +105,11 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
   
   // State for copy success feedback
   const [copySuccess, setCopySuccess] = useState(false);
+  
+  // State for edit mode and question selection
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedQuestions, setSelectedQuestions] = useState(new Set());
+  const [isDeletingQuestions, setIsDeletingQuestions] = useState(false);
 
   // Use refs to prevent duplicate calls
   const isFetching = useRef(false);
@@ -818,6 +826,82 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
         behavior: 'smooth',
         block: 'start'
       });
+    }
+  };
+
+  // Edit mode functions
+  const handleToggleEditMode = () => {
+    setIsEditMode(!isEditMode);
+    setSelectedQuestions(new Set()); // Clear selections when toggling edit mode
+  };
+
+  const handleQuestionSelect = (questionHash) => {
+    const newSelected = new Set(selectedQuestions);
+    if (newSelected.has(questionHash)) {
+      newSelected.delete(questionHash);
+    } else {
+      newSelected.add(questionHash);
+    }
+    setSelectedQuestions(newSelected);
+  };
+
+  const handleSelectAllQuestions = () => {
+    if (selectedQuestions.size === questions.length) {
+      // If all are selected, deselect all
+      setSelectedQuestions(new Set());
+    } else {
+      // Select all questions
+      const allHashes = new Set(questions.map(q => q.hash).filter(hash => hash));
+      setSelectedQuestions(allHashes);
+    }
+  };
+
+  const handleDeleteSelectedQuestions = async () => {
+    if (selectedQuestions.size === 0) {
+      setError('No questions selected for deletion.');
+      return;
+    }
+
+    // Confirm deletion
+    const confirmMessage = `Are you sure you want to delete ${selectedQuestions.size} question${selectedQuestions.size > 1 ? 's' : ''}? This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setIsDeletingQuestions(true);
+      setError('');
+
+      const response = await axios.post('/api/delete-questions', {
+        content_hash: contentHash,
+        question_hashes: Array.from(selectedQuestions)
+      }, {
+        withCredentials: true
+      });
+
+      if (response.data.success) {
+        // Remove deleted questions from the current questions array
+        const updatedQuestions = questions.filter(q => !selectedQuestions.has(q.hash));
+        setQuestions(updatedQuestions);
+        
+        // Clear selections and exit edit mode
+        setSelectedQuestions(new Set());
+        setIsEditMode(false);
+        
+        // Show success message briefly
+        const deletedCount = questions.length - updatedQuestions.length;
+        setError(''); // Clear any previous errors
+        
+        // You could add a success toast here if you have a toast system
+        console.log(`Successfully deleted ${deletedCount} question${deletedCount > 1 ? 's' : ''}`);
+      } else {
+        setError(response.data.error || 'Failed to delete questions');
+      }
+    } catch (err) {
+      console.error('Error deleting questions:', err);
+      setError(err.response?.data?.error || 'Failed to delete questions');
+    } finally {
+      setIsDeletingQuestions(false);
     }
   };
 
@@ -1631,9 +1715,9 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                     </Box>
                     
                     {currentSessionShortSummary && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 0 }}>
+                      <Box sx={{ position: 'relative', mb: 0 }}>
                         {isEditingTitle ? (
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%', maxWidth: 900, px: 2 }}>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%', maxWidth: 900, px: 2, mx: 'auto' }}>
                             <TextField
                               value={editingTitle}
                               onChange={(e) => setEditingTitle(e.target.value)}
@@ -1688,37 +1772,46 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                             </Box>
                           </Box>
                         ) : (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography 
-                              variant="h2" 
-                              color="text.primary" 
-                              sx={{ 
-                                textAlign: 'center',
-                                cursor: 'pointer',
-                                '&:hover': {
-                                  color: isQuizMode ? 'primary.main' : 'success.main'
-                                },
-                                transition: 'color 0.2s ease'
-                              }}
-                              onClick={handleEditTitleStart}
-                            >
-                              {currentSessionShortSummary}
-                            </Typography>
-                            <Button
-                              onClick={handleEditTitleStart}
-                              sx={{
-                                minWidth: 'auto',
-                                p: 0.5,
-                                color: 'text.secondary',
-                                '&:hover': {
-                                  color: isQuizMode ? 'primary.main' : 'success.main',
-                                  bgcolor: 'transparent'
-                                }
-                              }}
-                            >
-                              <EditIcon fontSize="small" />
-                            </Button>
-                          </Box>
+                          <>
+                            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                              <Typography 
+                                variant="h2" 
+                                color="text.primary" 
+                                sx={{ 
+                                  textAlign: 'center',
+                                  cursor: 'pointer',
+                                  '&:hover': {
+                                    color: isQuizMode ? 'primary.main' : 'success.main'
+                                  },
+                                  transition: 'color 0.2s ease'
+                                }}
+                                onClick={handleEditTitleStart}
+                              >
+                                {currentSessionShortSummary}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ 
+                              position: 'absolute', 
+                              right: 0, 
+                              top: '50%', 
+                              transform: 'translateY(-50%)'
+                            }}>
+                              <Button
+                                onClick={handleEditTitleStart}
+                                sx={{
+                                  minWidth: 'auto',
+                                  p: 0.5,
+                                  color: 'text.secondary',
+                                  '&:hover': {
+                                    color: isQuizMode ? 'primary.main' : 'success.main',
+                                    bgcolor: 'transparent'
+                                  }
+                                }}
+                              >
+                                <EditIcon fontSize="small" />
+                              </Button>
+                            </Box>
+                          </>
                         )}
                       </Box>
                     )}
@@ -1729,9 +1822,75 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                         ))}
                       </Typography>
                     )}
-                    <Typography variant="h2" component="h3" fontWeight="600" mb={2}>
-                      Questions in this {isQuizMode ? 'USMLE' : 'Flashcard'} Set ({questions.length})
-                    </Typography>
+                    <Box sx={{ position: 'relative', mb: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                        <Typography variant="h2" component="h3" fontWeight="600">
+                          Questions in this {isQuizMode ? 'USMLE' : 'Flashcard'} Set ({questions.length})
+                        </Typography>
+                      </Box>
+                      <Box sx={{ 
+                        position: 'absolute', 
+                        right: 0, 
+                        top: '50%', 
+                        transform: 'translateY(-50%)',
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 1 
+                      }}>
+                        {isEditMode && (
+                          <>
+                            <Button
+                              onClick={handleSelectAllQuestions}
+                              disabled={questions.length === 0}
+                              title={selectedQuestions.size === questions.length ? 'Deselect All' : 'Select All'}
+                              sx={{
+                                minWidth: 'auto',
+                                p: 0.5,
+                                color: 'text.secondary',
+                                '&:hover': {
+                                  color: isQuizMode ? 'primary.main' : 'success.main',
+                                  bgcolor: 'transparent'
+                                }
+                              }}
+                            >
+                              <SelectAll fontSize="small" />
+                            </Button>
+                            <Button
+                              onClick={handleDeleteSelectedQuestions}
+                              disabled={selectedQuestions.size === 0 || isDeletingQuestions}
+                              title={`Delete Selected (${selectedQuestions.size})`}
+                              sx={{
+                                minWidth: 'auto',
+                                p: 0.5,
+                                color: 'text.secondary',
+                                '&:hover': {
+                                  color: 'error.main',
+                                  bgcolor: 'transparent'
+                                }
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          onClick={handleToggleEditMode}
+                          disabled={isGeneratingMoreQuestions || questions.length === 0}
+                          title={isEditMode ? 'Cancel Edit' : 'Edit Questions'}
+                          sx={{
+                            minWidth: 'auto',
+                            p: 0.5,
+                            color: 'text.secondary',
+                            '&:hover': {
+                              color: isQuizMode ? 'primary.main' : 'success.main',
+                              bgcolor: 'transparent'
+                            }
+                          }}
+                        >
+                          {isEditMode ? <CancelIcon fontSize="small" /> : <EditIcon fontSize="small" />}
+                        </Button>
+                      </Box>
+                    </Box>
                     <Stack spacing={2} mb={4}>
                       {questions.map((question, index) => (
                         <Paper 
@@ -1761,16 +1920,36 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                               )}
                             </Box>
                           </Box>
-                          <Button 
-                            onClick={() => handleToggleStar(question.id)}
-                            sx={{
-                              minWidth: 'auto', 
-                              p: 0, 
-                              '&:hover': { bgcolor: 'transparent' },
-                            }}
-                          >
-                            {question.starred ? <Star color="warning" /> : <StarBorder color="warning" />}
-                          </Button>
+                          {isEditMode ? (
+                            <Button
+                              onClick={() => handleQuestionSelect(question.hash)}
+                              sx={{
+                                minWidth: 'auto', 
+                                p: 0, 
+                                '&:hover': { bgcolor: 'transparent' },
+                              }}
+                              disabled={!question.hash || isDeletingQuestions}
+                            >
+                              <Checkbox
+                                checked={selectedQuestions.has(question.hash)}
+                                onChange={() => handleQuestionSelect(question.hash)}
+                                color="error"
+                                disabled={!question.hash || isDeletingQuestions}
+                                sx={{ p: 0 }}
+                              />
+                            </Button>
+                          ) : (
+                            <Button 
+                              onClick={() => handleToggleStar(question.id)}
+                              sx={{
+                                minWidth: 'auto', 
+                                p: 0, 
+                                '&:hover': { bgcolor: 'transparent' },
+                              }}
+                            >
+                              {question.starred ? <Star color="warning" /> : <StarBorder color="warning" />}
+                            </Button>
+                          )}
                         </Paper>
                       ))}
                     </Stack>

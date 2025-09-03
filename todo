@@ -1,9 +1,7 @@
 
 ###URGENT:
 
-Change mobile ui for all pages
-use async clients for supabase
-delete questions from quiz set
+Implement diagram generation using Gemini 2.5 Flash Image Preview
 
 Stripe payment on login (free for basic tier and 14.99 for pro)
     - method to check user's total number of questions
@@ -20,6 +18,8 @@ Stripe payment on login (free for basic tier and 14.99 for pro)
 
 ### LATER:
 Add tool tips
+use async clients for supabase
+Change mobile ui for all pages
 
 upgrade instances and increase workers
 
