@@ -16,3 +16,7 @@ docker run --name medstudy-redis -p 6379:6379 -d redis
 docker ps # check if running
 docker exec -it medstudy-redis redis-cli
 FLUSHALL
+
+
+### if terminal is stuck
+Get-Process python, uvicorn -ErrorAction SilentlyContinue | Stop-Process -Force
