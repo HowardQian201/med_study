@@ -593,4 +593,4 @@ async def generate_short_title(text_to_summarize: str, model: str = "gpt-5-nano"
     except Exception as e:
         print(f"Error generating short title: {e}")
         # Fallback title in case of an error
-        return "Untitled" 
+        return "Untitled PDF" 

@@ -978,7 +978,7 @@ def get_user_associated_pdf_metadata(user_id: str) -> Dict[str, Any]:
             pdf_hash = pdf['hash']
             pdf['created_at'] = pdfs_object[pdf_hash].get('updated_at')
             # Only append if the short_summary is not "Untitled" and the text is not empty
-            if pdf.get('short_summary') != "Untitled" and pdf.get('text') != "":
+            if pdf.get('text') != "":
                 pdf['text'] = ""  # Set text to empty to avoid sending large text data
                 enriched_metadata.append(pdf)
             

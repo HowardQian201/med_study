@@ -1,6 +1,8 @@
 
 ###URGENT:
 
+Allow users to reupload files that have no text 
+Add pdf short title edits in upload pdf page
 Implement diagram generation using Gemini 2.5 Flash Image Preview
 
 Stripe payment on login (free for basic tier and 14.99 for pro)
