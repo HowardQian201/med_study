@@ -1,6 +1,7 @@
 ### Start frontend
 cd client
 npm run dev
+npm run build
 
 ### Start backend
 .venv\Scripts\activate

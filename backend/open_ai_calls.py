@@ -85,14 +85,14 @@ async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False,
     Returns:
         str: Comprehensive summary or streaming response
     """
-    text_tokens = count_tokens(text)
+    text_tokens = await asyncio.to_thread(count_tokens, text)
     print(f"gpt_summarize_transcript_chunked called with {text_tokens} tokens, stream: {stream}")
     
     if text_tokens > 100000:
         raise ValueError("Text is too long. Please select fewer PDFs or select smaller PDFs.")
 
     # Split text into chunks
-    chunks = split_text_into_chunks(text, max_tokens=1000)
+    chunks = await asyncio.to_thread(split_text_into_chunks, text, 1000)
     print(f"Split text into {len(chunks)} chunks")
     
     # Summarize each chunk in parallel while maintaining order

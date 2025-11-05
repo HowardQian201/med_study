@@ -198,15 +198,25 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let finalSummary = '';
+        let hasRealContent = false;
         
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
+
+          // Skip initial whitespace-only flush
+          if (finalSummary === '' && chunk.trim() === '') {
+            continue;
+          }
+
+          // Compute non-heartbeat portion
+          const nonHeartbeat = chunk.replace(/^\[processing\][^\n]*\n?/gm, '');
+          const hasNonHeartbeat = nonHeartbeat.trim() !== '';
           
           // Check if this chunk is an error response
           try {
-            const parsedChunk = JSON.parse(chunk);
+            const parsedChunk = JSON.parse(nonHeartbeat);
             if (parsedChunk.type === 'streaming_error') {
               console.log('Received streaming error:', parsedChunk.error);
               throw new Error(parsedChunk.error);
@@ -214,8 +224,25 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
           } catch (parseError) {
             // If it's not valid JSON, treat it as normal content
             if (parseError instanceof SyntaxError) {
-              finalSummary += chunk;
-              setSummary(finalSummary);
+              if (!hasRealContent) {
+                if (hasNonHeartbeat) {
+                  // First real content: clear any previously shown heartbeats
+                  hasRealContent = true;
+                  finalSummary = '';
+                  finalSummary += nonHeartbeat;
+                  setSummary(finalSummary);
+                } else {
+                  // Only heartbeat content for now; show it until real content arrives
+                  finalSummary += chunk;
+                  setSummary(finalSummary);
+                }
+              } else {
+                // After real content has started, drop future heartbeat lines
+                if (hasNonHeartbeat) {
+                  finalSummary += nonHeartbeat;
+                  setSummary(finalSummary);
+                }
+              }
             } else {
               // It's a valid JSON but contains an error
               console.log('Throwing parsed error:', parseError);
@@ -303,15 +330,25 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let finalSummary = '';
+        let hasRealContent = false;
         
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
+
+          // Skip initial whitespace-only flush
+          if (finalSummary === '' && chunk.trim() === '') {
+            continue;
+          }
+
+          // Compute non-heartbeat portion
+          const nonHeartbeat = chunk.replace(/^\[processing\][^\n]*\n?/gm, '');
+          const hasNonHeartbeat = nonHeartbeat.trim() !== '';
           
           // Check if this chunk is an error response
           try {
-            const parsedChunk = JSON.parse(chunk);
+            const parsedChunk = JSON.parse(nonHeartbeat);
             if (parsedChunk.type === 'streaming_error') {
               console.log('Received streaming error (regenerate):', parsedChunk.error);
               throw new Error(parsedChunk.error);
@@ -319,8 +356,25 @@ const Study_session = ({ setIsAuthenticated, user, summary, setSummary }) => {
           } catch (parseError) {
             // If it's not valid JSON, treat it as normal content
             if (parseError instanceof SyntaxError) {
-              finalSummary += chunk;
-              setSummary(finalSummary);
+              if (!hasRealContent) {
+                if (hasNonHeartbeat) {
+                  // First real content: clear any previously shown heartbeats
+                  hasRealContent = true;
+                  finalSummary = '';
+                  finalSummary += nonHeartbeat;
+                  setSummary(finalSummary);
+                } else {
+                  // Only heartbeat content for now; show it until real content arrives
+                  finalSummary += chunk;
+                  setSummary(finalSummary);
+                }
+              } else {
+                // After real content has started, drop future heartbeat lines
+                if (hasNonHeartbeat) {
+                  finalSummary += nonHeartbeat;
+                  setSummary(finalSummary);
+                }
+              }
             } else {
               // It's a valid JSON but contains an error
               console.log('Throwing parsed error (regenerate):', parseError);

@@ -3,9 +3,9 @@ import os
 # gunicorn.conf.py
 bind = f"0.0.0.0:{os.environ.get('PORT', '5000')}"  # Use the PORT env var
 workers = 1 
-timeout = 180  # 3 minutes for AI processing
+timeout = 240  # 4 minutes for AI processing
 keepalive = 2
-max_requests = 200  # Restart worker after 100 requests to prevent memory buildup
+max_requests = 200  # Restart worker after 200 requests to prevent memory buildup
 max_requests_jitter = 20
 preload_app = True
 

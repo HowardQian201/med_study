@@ -42,6 +42,7 @@ import gc
 import random
 import json
 import gzip
+import asyncio
 from celery.result import AsyncResult # Import this to interact with task results
 import tempfile # Import tempfile for creating temporary files
 from datetime import datetime, timezone # Import timezone for UTC
@@ -352,12 +353,26 @@ async def generate_summary(
         # --- Streaming Response ---
         async def stream_generator(text_to_summarize): # Change to async def
             try:
-                stream_gen = await gpt_summarize_transcript_chunked(text_to_summarize, stream=STREAMING_ENABLED) # Await the async function
+                # 1) Immediately flush bytes to start the stream and defeat proxy buffering
+                yield " " * 2048 + "\n"
+
+                # 2) Kick off heavy work in the background
+                task = asyncio.create_task(
+                    gpt_summarize_transcript_chunked(text_to_summarize, stream=STREAMING_ENABLED)
+                )
+
+                # 3) Periodic heartbeats to keep the connection alive until the stream is ready
+                while not task.done():
+                    yield "[processing] summarizing chunks...\n"
+                    await asyncio.sleep(5)
+
+                # 4) When ready, stream the final summary
+                stream_gen = await task
                 async for chunk in stream_gen: # Await for chunks in streaming
                     content = chunk.choices[0].delta.content
                     if content:
                         yield content
-                
+
                 # The session cannot be modified here. The client will send the final summary
                 # to a different endpoint to be saved.
                 gc.collect()
@@ -372,7 +387,11 @@ async def generate_summary(
         # Before streaming, save file-related info to the session. This is okay
         # because it happens within the initial request context.
 
-        return StreamingResponse(stream_generator(total_extracted_text), media_type='text/plain')
+        return StreamingResponse(
+            stream_generator(total_extracted_text),
+            media_type='text/plain',
+            headers={'X-Accel-Buffering': 'no'}
+        )
 
     except HTTPException:
         raise
@@ -682,7 +701,21 @@ async def regenerate_summary(
         # --- Streaming Response ---
         async def stream_generator(text_to_summarize):
             try:
-                stream_gen = await gpt_summarize_transcript_chunked(text_to_summarize, temperature=0.4, stream=STREAMING_ENABLED)
+                # 1) Immediately flush bytes to start the stream
+                yield " " * 2048 + "\n"
+
+                # 2) Kick off heavy work in the background
+                task = asyncio.create_task(
+                    gpt_summarize_transcript_chunked(text_to_summarize, temperature=0.4, stream=STREAMING_ENABLED)
+                )
+
+                # 3) Periodic heartbeats
+                while not task.done():
+                    yield "[processing] summarizing chunks...\n"
+                    await asyncio.sleep(5)
+
+                # 4) When ready, stream the final summary
+                stream_gen = await task
                 async for chunk in stream_gen:
                     content = chunk.choices[0].delta.content
                     if content:
@@ -701,7 +734,11 @@ async def regenerate_summary(
         # Clear old questions
         session['quiz_questions'] = []
 
-        return StreamingResponse(stream_generator(total_extracted_text), media_type='text/plain')
+        return StreamingResponse(
+            stream_generator(total_extracted_text),
+            media_type='text/plain',
+            headers={'X-Accel-Buffering': 'no'}
+        )
 
     except HTTPException:
         raise
