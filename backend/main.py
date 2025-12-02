@@ -123,7 +123,7 @@ app.add_middleware(
 )
 
 # Add Redis session middleware
-app.add_middleware(RedisSessionMiddleware, session_cookie_name="session_id", session_ttl_hours=1)
+app.add_middleware(RedisSessionMiddleware, session_cookie_name="session_id", session_ttl_hours=24)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=static_folder), name="static")
