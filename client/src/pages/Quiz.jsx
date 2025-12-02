@@ -1580,17 +1580,17 @@ const Quiz = ({ user, summary: propSummary, setSummary, setIsAuthenticated }) =>
                       >
                         <TextField
                           type="number"
-                          value={Math.min(numAdditionalQuestions, isQuizMode ? 30 : 100)}
+                          value={Math.min(numAdditionalQuestions, isQuizMode ? 100 : 200)}
                           onChange={(e) => {
                             e.stopPropagation();
-                            const maxQuestions = isQuizMode ? 30 : 100;
+                            const maxQuestions = isQuizMode ? 100 : 200;
                             setNumAdditionalQuestions(Math.max(1, Math.min(maxQuestions, parseInt(e.target.value) || 1)));
                           }}
                           onClick={(e) => e.stopPropagation()}
                           disabled={isGeneratingMoreQuestions}
                           inputProps={{ 
                             min: 1, 
-                            max: isQuizMode ? 30 : 100,
+                            max: isQuizMode ? 100 : 200,
                             style: { textAlign: 'center', width: '40px', fontSize: '14px', fontWeight: 'bold' }
                           }}
                           size="small"
