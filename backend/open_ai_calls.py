@@ -188,6 +188,10 @@ async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False,
     </Chunk Summaries>
     """
     
+    # Wait 30 seconds before final API call to avoid 200,000 TPM rate limit
+    print("Waiting 30 seconds before final comprehensive summary API call to avoid rate limits...")
+    await asyncio.sleep(30)
+    
     if stream:
         # Return streaming response for the final comprehensive summary
         return await openai_client.chat.completions.create(
