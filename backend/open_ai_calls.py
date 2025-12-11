@@ -88,11 +88,11 @@ async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False,
     text_tokens = await asyncio.to_thread(count_tokens, text)
     print(f"gpt_summarize_transcript_chunked called with {text_tokens} tokens, stream: {stream}")
     
-    if text_tokens > 150000:
-        raise ValueError("Text is too long. Please select fewer PDFs or select smaller PDFs.")
+    if text_tokens > 500000:
+        raise ValueError(f"Text is too long. Please select fewer PDFs or select smaller PDFs. {text_tokens} tokens is too long.")
 
     # Split text into chunks
-    chunks = await asyncio.to_thread(split_text_into_chunks, text, 1000)
+    chunks = await asyncio.to_thread(split_text_into_chunks, text, 5000)
     print(f"Split text into {len(chunks)} chunks")
     
     # Summarize each chunk in parallel while maintaining order
@@ -113,6 +113,8 @@ async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False,
         """
         
         try:
+            # Add random delay to avoid rate limiting
+            await asyncio.sleep(random.uniform(15, 90))
             chunk_completion = await openai_client.chat.completions.create(
                 model=model,
                 messages=[
@@ -188,9 +190,9 @@ async def gpt_summarize_transcript_chunked(text, temperature=0.15, stream=False,
     </Chunk Summaries>
     """
     
-    # Wait 30 seconds before final API call to avoid 200,000 TPM rate limit
-    print("Waiting 30 seconds before final comprehensive summary API call to avoid rate limits...")
-    await asyncio.sleep(30)
+    # Wait 60 seconds before final API call to avoid 200,000 TPM rate limit
+    print("Waiting 60 seconds before final comprehensive summary API call to avoid rate limits...")
+    await asyncio.sleep(60)
     
     if stream:
         # Return streaming response for the final comprehensive summary
