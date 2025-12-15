@@ -336,6 +336,8 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             2. Question stems must be in the style of a USMLE clinical vignette 
             3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
             4. Aim for clarity, clinical relevance, and high-yield facts
+            5. Each question must test a **specific factoid** (mechanism, lab value, dianosis, etc.)
+            6. Each question should vary in wording and format to test the student's understanding of the material (next step, diagnosis, treatment, etc.)
             </Requirements>
 
             <Example question fromat>
@@ -405,6 +407,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
             4. Aim for clarity, clinical relevance, and high-yield facts
             5. Each flashcard must contain one clear fact.
+            6. Each question must test a **unique factoid** (mechanism, lab value, dianosis, etc.)
             </Requirements>
 
             <Example flashcard format>
