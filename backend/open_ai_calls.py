@@ -354,6 +354,18 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                     "correctAnswer": 1,
                     "reason": "The patient presents with signs of acute heart failure and pericardial effusion (dyspnea, JVD, low-voltage ECG, enlarged cardiac silhouette). These findings raise concern for cardiac tamponade, which can be rapidly fatal. The most appropriate next step is a transthoracic echocardiogram to evaluate for pericardial fluid and assess for signs of tamponade physiology such as diastolic collapse of the right heart chambers."
                 }},
+                {{
+                    "id": 2,
+                    "text": "A 5-year-old boy presents with painless, gross hematuria three days following an upper respiratory tract infection. Urinalysis shows dysmorphic red blood cells and red blood cell casts. Serum complement levels (C3 and C4) are within normal limits. Renal biopsy is performed, revealing mesangial hypercellularity and mesangial deposits primarily consisting of IgA. Which specific immune mechanism is **most characteristically associated** with the pathogenesis of this condition?",
+                    "options": [
+                        "Anti-glomerular basement membrane antibodies (Anti-GBM)",
+                        "Systemic immune complex deposition (Type III Hypersensitivity)",
+                        "Abnormal O-glycosylation of the IgA1 hinge region",
+                        "Cytotoxic T-cell mediated injury (Type IV Hypersensitivity)"
+                    ],
+                    "correctAnswer": 2,
+                    "reason": "The patient presents with the classic triad of IgA Nephropathy (Berger disease): recurrent gross hematuria following an upper respiratory infection (synpharyngitic), normal complement levels, and IgA deposits on biopsy. The fundamental mechanism of IgA nephropathy is an abnormality in the IgA molecule itself. Specifically, the disease is characterized by circulating complexes of galactose-deficient IgA1 (Gd-IgA1) due to abnormal O-glycosylation of the IgA1 hinge region. These abnormal IgA complexes are poorly cleared and deposit in the glomerular mesangium, triggering inflammation. The other options are incorrect: Anti-GBM is associated with Goodpasture syndrome; systemic immune complex deposition is associated with Post-infectious glomerulonephritis (which would have low C3) and Lupus; Cytotoxic T-cells are less central to this pathogenesis."
+                }},
                 ...
             ]
             </Example question fromat>
