@@ -456,6 +456,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             - Each question must test a **unique fact** not yet assessed, even if phrased differently.
             - **Do not reuse** the same conditions, complications, lab findings, mechanisms, or drug classes from earlier questions.
             - Prioritize **coverage gaps**—review previous questions to identify what's missing, then fill in those gaps.
+            - Must include balanced representation of Pathophysiology/Mechanism, High-Yield Factoid/Association, Diagnosis, and Treatment/Management vignettes
 
             You may reference the summary content below to ensure all concepts are grounded in the original source.
 
