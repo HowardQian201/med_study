@@ -337,7 +337,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
             4. Aim for clarity, clinical relevance, and high-yield facts
             5. Each question must test a **specific factoid** (mechanism, lab value, dianosis, etc.)
-            6. Each question should vary in wording and format to test the student's understanding of the material (next step, diagnosis, treatment, etc.)
+            6. Must include balanced representation of Diagnosis, Treatment/Management, Pathophysiology/Mechanism, and High-Yield Factoid/Association vignettes
             </Requirements>
 
             <Example question fromat>
