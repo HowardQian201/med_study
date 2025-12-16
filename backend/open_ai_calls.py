@@ -458,6 +458,8 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             - **Do not reuse** the same conditions, complications, lab findings, mechanisms, or drug classes from earlier questions.
             - Prioritize **coverage gaps**—review previous questions to identify what's missing, then fill in those gaps.
             - Must include balanced representation of Pathophysiology/Mechanism, High-Yield Factoid/Association, Diagnosis, and Treatment vignettes
+            - **Explicitly vary the question lead-ins.** Do not default to "What is the next best step in management?" for every question. Ensure a mix of lead-ins asking for the underlying mechanism, the most likely diagnosis, or the adverse effect.
+
 
             You may reference the summary content below to ensure all concepts are grounded in the original source.
 
