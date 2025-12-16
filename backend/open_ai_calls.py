@@ -337,7 +337,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
             4. Aim for clarity, clinical relevance, and high-yield facts
             5. Each question must test a **specific factoid** (mechanism, lab value, dianosis, etc.)
-            6. Must include balanced representation of Pathophysiology/Mechanism, High-Yield Factoid/Association, Diagnosis, and Treatment/Management vignettes
+            6. Must include balanced representation of Pathophysiology/Mechanism, High-Yield Factoid/Association, Diagnosis, and Treatment vignettes
             7. Question stems should not include information that makes the correct answer choice obvious or directly identifiable without requiring the test-taker to synthesize the entire clinical picture.
             </Requirements>
 
@@ -357,16 +357,16 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                 }},
                 {{
                     "id": 2,
-                    "text": "A 34-year-old man presents to the emergency department with 5 days of worsening shortness of breath, orthopnea, and a nonproductive cough. He has no significant past medical history. Vitals show BP 110/70 mmHg, HR 105/min, and RR 22/min. Jugular venous distention is noted, and auscultation reveals bilateral crackles. ECG shows low-voltage QRS complexes. A chest x-ray demonstrates an enlarged cardiac silhouette. What is the most appropriate next step?",
+                    "text": "A 34-year-old man comes to the emergency department due to 5 days of progressive dyspnea and orthopnea. He has no chronic medical conditions. His blood pressure is 110/70 mm Hg, pulse is 105/min, and respirations are 22/min. Physical examination demonstrates jugular venous distention and bilateral basilar crackles. A chest radiograph reveals a cardiothoracic ratio >0.60 with a \"water-bottle\" configuration. The electrocardiogram shows sinus tachycardia with QRS amplitudes measuring <5 mm in the limb leads and <10 mm in the precordial leads. Which of the following is the most likely diagnosis?",
                     "options": [
-                        "Start loop diuretics",
-                        "Order a transthoracic echocardiogram",
-                        "Begin corticosteroid therapy",
-                        "Perform emergent cardiac catheterization"
+                        "Dilated cardiomyopathy",
+                        "Pericardial effusion",
+                        "Restrictive cardiomyopathy",
+                        "Constrictive pericarditis"
                     ],
                     "correctAnswer": 1,
-                    "reason": "The patient presents with signs of acute heart failure and pericardial effusion (dyspnea, JVD, low-voltage ECG, enlarged cardiac silhouette). These findings raise concern for cardiac tamponade, which can be rapidly fatal. The most appropriate next step is a transthoracic echocardiogram to evaluate for pericardial fluid and assess for signs of tamponade physiology such as diastolic collapse of the right heart chambers."
-                }},
+                    "reason": "The key to this diagnosis is the discordance between the large cardiac silhouette on imaging and the small electrical signals on ECG. The patient presents with signs of right-sided failure (JVD) and an enlarged heart (cardiothoracic ratio >0.50), which could suggest dilated cardiomyopathy. However, dilated cardiomyopathy typically presents with normal or increased QRS voltage due to ventricular hypertrophy. The presence of low-voltage QRS complexes indicates an insulating substance, such as fluid, between the myocardium and the chest wall, dampening the electrical signal. This combination is highly specific for a large pericardial effusion."
+                }}
                 ...
             ]
             </Example question fromat>
@@ -457,7 +457,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             - Each question must test a **unique fact** not yet assessed, even if phrased differently.
             - **Do not reuse** the same conditions, complications, lab findings, mechanisms, or drug classes from earlier questions.
             - Prioritize **coverage gaps**—review previous questions to identify what's missing, then fill in those gaps.
-            - Must include balanced representation of Pathophysiology/Mechanism, High-Yield Factoid/Association, Diagnosis, and Treatment/Management vignettes
+            - Must include balanced representation of Pathophysiology/Mechanism, High-Yield Factoid/Association, Diagnosis, and Treatment vignettes
 
             You may reference the summary content below to ensure all concepts are grounded in the original source.
 
