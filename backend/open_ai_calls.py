@@ -337,9 +337,9 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             3. Include a thorough explanation (about 500 characters) for why the correct answer is right and why others are wrong. Do not include the answer index in the reason.
             4. Aim for clarity, clinical relevance, and high-yield facts
             5. Each question must test a **specific factoid** (mechanism, lab value, dianosis, etc.)
-            6. Must include balanced representation of Pathophysiology/Mechanism, High-Yield Factoid/Association, Diagnosis, and Treatment vignettes
+            6. Must include a balanced representation of question types. Ensure the final questions vary between asking for Pathophysiology/Mechanism, Diagnosis, Risk Factors, and Management/Treatment.
             7. Question stems should not include information that makes the correct answer choice obvious or directly identifiable without requiring the test-taker to synthesize the entire clinical picture.
-            </Requirements>
+            8. **Explicitly vary the question lead-ins.** Do not default to "What is the next best step in management?" for every question. Ensure a mix of lead-ins asking for the underlying mechanism, the most likely diagnosis, or the adverse effect.            </Requirements>
 
             <Example question fromat>
             [
