@@ -338,13 +338,14 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             4. Aim for clarity, clinical relevance, and high-yield facts
             5. Each question must test a **specific factoid** (mechanism, lab value, dianosis, etc.)
             6. Must include balanced representation of Pathophysiology/Mechanism, High-Yield Factoid/Association, Diagnosis, and Treatment/Management vignettes
+            7. Question stems should not include information that makes the correct answer choice obvious or directly identifiable without requiring the test-taker to synthesize the entire clinical picture.
             </Requirements>
 
             <Example question fromat>
             [
                 {{
                     "id": 1,
-                    "text": "A 5-year-old boy presents with painless, gross hematuria three days following an upper respiratory tract infection. Urinalysis shows dysmorphic red blood cells and red blood cell casts. Serum complement levels (C3 and C4) are within normal limits. Renal biopsy is performed, revealing mesangial hypercellularity and mesangial deposits primarily consisting of IgA. Which specific immune mechanism is **most characteristically associated** with the pathogenesis of this condition?",
+                    "text": "A 5-year-old boy presents with painless, gross hematuria three days following an upper respiratory tract infection. Urinalysis shows dysmorphic red blood cells and red blood cell casts. Serum complement levels (C3 and C4) are within normal limits. Based on the clinical presentation and laboratory findings, which specific immune mechanism is **most characteristically associated** with the pathogenesis of this patient's likely condition?",
                     "options": [
                         "Anti-glomerular basement membrane antibodies (Anti-GBM)",
                         "Systemic immune complex deposition (Type III Hypersensitivity)",
@@ -352,7 +353,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
                         "Cytotoxic T-cell mediated injury (Type IV Hypersensitivity)"
                     ],
                     "correctAnswer": 2,
-                    "reason": "The patient presents with the classic triad of IgA Nephropathy (Berger disease): recurrent gross hematuria following an upper respiratory infection (synpharyngitic), normal complement levels, and IgA deposits on biopsy. The fundamental mechanism of IgA nephropathy is an abnormality in the IgA molecule itself. Specifically, the disease is characterized by circulating complexes of galactose-deficient IgA1 (Gd-IgA1) due to abnormal O-glycosylation of the IgA1 hinge region. These abnormal IgA complexes are poorly cleared and deposit in the glomerular mesangium, triggering inflammation. The other options are incorrect: Anti-GBM is associated with Goodpasture syndrome; systemic immune complex deposition is associated with Post-infectious glomerulonephritis (which would have low C3) and Lupus; Cytotoxic T-cells are less central to this pathogenesis."
+                    "reason": "The patient presents with the classic clinical triad of IgA Nephropathy (Berger disease): recurrent gross hematuria following an upper respiratory infection (synpharyngitic), and normal complement levels. The definitive biopsy finding of IgA deposition has been removed from the stem, requiring the test-taker to synthesize the clinical data (hematuria 3 days after URI + normal complements) to arrive at the likely diagnosis (IgA Nephropathy). The fundamental mechanism of IgA nephropathy is an abnormality in the IgA molecule itself, specifically circulating complexes of galactose-deficient IgA1 (Gd-IgA1) due to abnormal O-glycosylation of the IgA1 hinge region."
                 }},
                 {{
                     "id": 2,
