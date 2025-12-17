@@ -340,7 +340,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             6. Must include a balanced representation of question types. Ensure the final questions vary between asking for Pathophysiology/Mechanism, Diagnosis, Risk Factors, and Management/Treatment.
             7. Question stems should not include information that makes the correct answer choice obvious or directly identifiable without requiring the test-taker to synthesize the entire clinical picture.
             8. **Explicitly vary the question lead-ins.** Do not default to "What is the next best step in management?" for every question. Ensure a mix of lead-ins asking for the underlying mechanism, the most likely diagnosis, or the adverse effect.            </Requirements>
-
+            9. **Zero-Based Indexing:** The `correctAnswer` field must be the 0-based index of the correct option from the `options` array (e.g., if the first option is correct, `correctAnswer` is 0).
             <Example question fromat>
             [
                 {{
@@ -459,7 +459,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             - Prioritize **coverage gaps**—review previous questions to identify what's missing, then fill in those gaps.
             - Must include balanced representation of Pathophysiology/Mechanism, High-Yield Factoid/Association, Diagnosis, and Treatment vignettes
             - **Explicitly vary the question lead-ins.** Do not default to "What is the next best step in management?" for every question. Ensure a mix of lead-ins asking for the underlying mechanism, the most likely diagnosis, or the adverse effect.
-
+            - **Zero-Based Indexing:** The `correctAnswer` field must be the 0-based index of the correct option from the `options` array (e.g., if the first option is correct, `correctAnswer` is 0).
 
             You may reference the summary content below to ensure all concepts are grounded in the original source.
 
