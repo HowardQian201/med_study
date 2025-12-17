@@ -341,9 +341,9 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             7. Question stems should not include information that makes the correct answer choice obvious or directly identifiable without requiring the test-taker to synthesize the entire clinical picture.
             8. **Explicitly vary the question lead-ins.** Do not default to "What is the next best step in management?" for every question. Ensure a mix of lead-ins asking for the underlying mechanism, the most likely diagnosis, or the adverse effect.            
             9. **Zero-Based Indexing:** The `correctAnswer` field must be the 0-based index of the correct option from the `options` array (e.g., if the first option is correct, `correctAnswer` is 0).
-            10. **Homogeneous Answer Lengths:** Ensure all answer choices within a specific question are of approximately equal length and complexity. Do not make the correct answer significantly longer or more detailed than the distractors to avoid "length bias."
+            10. **Strict Homogeneity in Answer Choices:** All options within a single question must be of **identical or nearly identical length** (±2 words). If the correct answer requires a long description, you must pad or expand the distractors to match it. Do not create "short vs. long" discrepancies that allow the student to guess based on length.            
             </Requirements>
-            
+
             <Example question fromat>
             [
                 {{
@@ -464,8 +464,7 @@ async def generate_quiz_questions(summary_text, user_id, content_hash, incorrect
             - **Explicitly vary the question lead-ins.** Do not default to "What is the next best step in management?" for every question. Ensure a mix of lead-ins asking for the underlying mechanism, the most likely diagnosis, or the adverse effect.
             - **Zero-Based Indexing:** The `correctAnswer` field must be the 0-based index of the correct option from the `options` array (e.g., if the first option is correct, `correctAnswer` is 0).
             - Question stems should not include information that makes the correct answer choice obvious or directly identifiable without requiring the test-taker to synthesize the entire clinical picture.
-            - **Homogeneous Answer Lengths:** Ensure all answer choices within a specific question are of approximately equal length and complexity. Do not make the correct answer significantly longer or more detailed than the distractors to avoid "length bias."
-
+            - **Strict Homogeneity in Answer Choices:** All options within a single question must be of **identical or nearly identical length** (±2 words). If the correct answer requires a long description, you must pad or expand the distractors to match it. Do not create "short vs. long" discrepancies that allow the student to guess based on length.
             You may reference the summary content below to ensure all concepts are grounded in the original source.
 
             <Previous question answers>
